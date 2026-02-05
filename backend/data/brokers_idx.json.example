@@ -1,0 +1,170 @@
+{
+  "brokers": [
+    {
+      "code": "MG",
+      "name": "Mandiri Sekuritas",
+      "category": ["institutional"]
+    },
+    {
+      "code": "BB",
+      "name": "BCA Sekuritas",
+      "category": ["institutional"]
+    },
+    {
+      "code": "RX",
+      "name": "RHB Sekuritas",
+      "category": ["institutional"]
+    },
+    {
+      "code": "AK",
+      "name": "Trimegah Sekuritas",
+      "category": ["institutional"]
+    },
+    {
+      "code": "BK",
+      "name": "BNI Sekuritas",
+      "category": ["institutional"]
+    },
+    {
+      "code": "CC",
+      "name": "CGS-CIMB Sekuritas",
+      "category": ["institutional"]
+    },
+    {
+      "code": "SS",
+      "name": "Samuel Sekuritas",
+      "category": ["institutional"]
+    },
+    {
+      "code": "RH",
+      "name": "RHB Sekuritas",
+      "category": ["institutional"]
+    },
+    {
+      "code": "OP",
+      "name": "OCBC Sekuritas",
+      "category": ["institutional"]
+    },
+    {
+      "code": "KE",
+      "name": "Kresna Sekuritas",
+      "category": ["institutional"]
+    },
+    {
+      "code": "UB",
+      "name": "UBS Sekuritas",
+      "category": ["foreign", "institutional"]
+    },
+    {
+      "code": "MS",
+      "name": "Morgan Stanley",
+      "category": ["foreign", "institutional"]
+    },
+    {
+      "code": "GS",
+      "name": "Goldman Sachs",
+      "category": ["foreign", "institutional"]
+    },
+    {
+      "code": "CS",
+      "name": "Credit Suisse",
+      "category": ["foreign", "institutional"]
+    },
+    {
+      "code": "DB",
+      "name": "Deutsche Bank",
+      "category": ["foreign", "institutional"]
+    },
+    {
+      "code": "ML",
+      "name": "Merrill Lynch",
+      "category": ["foreign", "institutional"]
+    },
+    {
+      "code": "JP",
+      "name": "JP Morgan",
+      "category": ["foreign", "institutional"]
+    },
+    {
+      "code": "SC",
+      "name": "Standard Chartered",
+      "category": ["foreign", "institutional"]
+    },
+    {
+      "code": "HS",
+      "name": "HSBC",
+      "category": ["foreign", "institutional"]
+    },
+    {
+      "code": "BA",
+      "name": "Bank of America",
+      "category": ["foreign", "institutional"]
+    },
+    {
+      "code": "CI",
+      "name": "Citigroup",
+      "category": ["foreign", "institutional"]
+    },
+    {
+      "code": "MC",
+      "name": "Macquarie",
+      "category": ["foreign", "institutional"]
+    },
+    {
+      "code": "YP",
+      "name": "Yuanta Sekuritas",
+      "category": ["retail"]
+    },
+    {
+      "code": "XL",
+      "name": "XL Axiata",
+      "category": ["retail"]
+    },
+    {
+      "code": "PD",
+      "name": "Panin Sekuritas",
+      "category": ["retail"]
+    },
+    {
+      "code": "XC",
+      "name": "Mirae Asset Sekuritas",
+      "category": ["retail"]
+    },
+    {
+      "code": "AG",
+      "name": "Anugerah Sekuritas",
+      "category": ["retail"]
+    },
+    {
+      "code": "PH",
+      "name": "Phillip Sekuritas",
+      "category": ["retail"]
+    },
+    {
+      "code": "KK",
+      "name": "Kim Eng Sekuritas",
+      "category": ["retail"]
+    },
+    {
+      "code": "IM",
+      "name": "Indo Premier Sekuritas",
+      "category": ["retail"]
+    },
+    {
+      "code": "IB",
+      "name": "Indopremier Sekuritas",
+      "category": ["retail"]
+    },
+    {
+      "code": "BN",
+      "name": "BNP Paribas",
+      "category": ["retail"]
+    }
+  ],
+  "categories": {
+    "institutional": "Institutional brokers - typically used by fund managers, institutions, and smart money",
+    "foreign": "Foreign brokers - international investment banks and securities firms",
+    "retail": "Retail brokers - primarily serving individual retail investors",
+    "mixed": "Mixed brokers - serving both retail and institutional clients"
+  }
+}
