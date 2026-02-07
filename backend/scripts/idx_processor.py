@@ -17,7 +17,7 @@ from langchain_chroma import Chroma
 DB_PATH = os.path.join(BASE_DIR, "data", "market_sentinel.db")
 CHROMA_PATH = os.path.join(BASE_DIR, "chroma_db")
 COLLECTION_NAME = "idx_rag"
-LLM_MODEL = "llama3.2:1b"
+LLM_MODEL = "qwen2.5:7b"
 EMBED_MODEL = "nomic-embed-text:latest"
 
 def run_processor():

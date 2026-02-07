@@ -36,7 +36,8 @@ if not exist "backend\venv\" (
     python -m venv venv
     call venv\Scripts\activate
     echo [SETUP] Installing Python dependencies...
-    pip install --upgrade pip
+    @REM pip install --upgrade pip
+    python.exe -m pip install --upgrade pip
     pip install -r requirements.txt
     echo [SETUP] Installing Playwright browsers...
     playwright install chromium

@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api", tags=["news"])
 @functools.lru_cache()
 def get_llm():
     """Get cached LLM instance for news insights."""
-    return ChatOllama(model="llama3.2:1b", temperature=0)
+    return ChatOllama(model="qwen2.5:7b", temperature=0)
 
 
 @router.get("/news")

@@ -17,7 +17,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "data", "market_sentinel.db")
 CHROMA_PATH = os.path.join(BASE_DIR, "chroma_db")
 COLLECTION_NAME = "idx_rag"
-LLM_MODEL = "llama3.2:1b"
+LLM_MODEL = "qwen2.5:7b"
 EMBED_MODEL = "nomic-embed-text:latest"
 
 # Logging
