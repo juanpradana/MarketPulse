@@ -37,12 +37,12 @@ export default function DashboardPage() {
             const stats = await api.getDashboardStats(ticker, dateRange.start, dateRange.end);
             // Map API response to local state structure
             setMetrics({
-                price: stats.current_price || 0,
-                price_delta: stats.price_change || 0,
+                price: stats.price ?? stats.current_price ?? 0,
+                price_delta: stats.price_delta ?? stats.price_change ?? 0,
                 mood_score: stats.mood_score || 0,
-                mood_label: stats.market_mood || 'Netral 😐',
+                mood_label: stats.mood_label ?? stats.market_mood ?? 'Netral 😐',
                 correlation: stats.correlation || 0,
-                volume: stats.news_volume || 0,
+                volume: stats.volume ?? stats.news_volume ?? 0,
                 trends: stats.trends || {
                     price: [],
                     mood: [],
@@ -199,7 +199,7 @@ function MetricCard({ title, value, delta, icon: Icon, trend, sparklineData, too
                     </div>
                     {chartData.length > 0 && (
                         <div className="h-10 w-20 mb-1 opacity-50 group-hover:opacity-100 transition-opacity">
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                 <LineChart data={chartData}>
                                     <Line
                                         type="monotone"
