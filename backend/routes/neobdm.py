@@ -600,7 +600,7 @@ async def get_broker_summary_api(
             
         scraped_data = await scraper.get_broker_summary(ticker.upper(), trade_date)
         
-        if scraped_data and (scraped_data['buy'] or scraped_data['sell']):
+        if scraped_data and (scraped_data.get('buy') or scraped_data.get('sell')):
             # Save to DB, then return normalized DB output
             db_manager.save_broker_summary_batch(
                 ticker=ticker,

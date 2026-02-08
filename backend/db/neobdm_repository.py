@@ -841,6 +841,7 @@ class NeoBDMRepository(BaseRepository):
     def _parse_numeric(self, value) -> float:
         """
         Safely parse numeric value with fallback.
+        Handles suffixes: B (billions), M (millions), K (thousands).
         
         Args:
             value: Value to parse (string, number, or None)
@@ -852,8 +853,21 @@ class NeoBDMRepository(BaseRepository):
             return 0.0
         
         try:
-            val_str = str(value).split('|')[0].replace(',', '').replace('B', '').strip()
-            return float(val_str) if val_str else 0.0
+            val_str = str(value).split('|')[0].replace(',', '').strip()
+            
+            # Handle suffix multipliers (e.g. "21.7B", "253M", "1.5K")
+            multiplier = 1.0
+            if val_str.endswith('B'):
+                val_str = val_str[:-1]
+                multiplier = 1.0  # Already in billions context
+            elif val_str.endswith('M'):
+                val_str = val_str[:-1]
+                multiplier = 0.001  # Convert millions to billions
+            elif val_str.endswith('K'):
+                val_str = val_str[:-1]
+                multiplier = 0.000001  # Convert thousands to billions
+            
+            return float(val_str) * multiplier if val_str else 0.0
         except (ValueError, AttributeError):
             return 0.0
     

@@ -39,6 +39,7 @@ cache/
 
 # Data files
 data/*.json
+!data/brokers_idx.json
 data/*.csv
 downloads/
 

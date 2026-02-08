@@ -47,6 +47,7 @@ backend/*.sqlite3
 backend/downloads/
 backend/chroma_db/
 backend/data/*.json
+!backend/data/brokers_idx.json
 backend/data/*.csv
 backend/stockbit_storage.json
 

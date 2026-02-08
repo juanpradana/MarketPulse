@@ -388,13 +388,15 @@ class NeoBDMScraper:
         try:
             fingerprint = await self.page.evaluate("""
                 () => {
-                    const cells = Array.from(document.querySelectorAll('.dash-cell'));
+                    const table = document.querySelector('#broker-summary-table');
+                    if (!table) return [];
+                    const rows = table.querySelectorAll('tbody tr');
                     const brokers = [];
-                    // Get first 3 broker codes (every 4th cell starting from 0)
-                    for (let i = 0; i < Math.min(12, cells.length); i += 4) {
-                        brokers.push(cells[i].textContent.trim());
+                    for (let i = 0; i < Math.min(3, rows.length); i++) {
+                        const span = rows[i].querySelector('.broksum-broker');
+                        if (span) brokers.push(span.textContent.trim());
                     }
-                    return brokers.slice(0, 3);
+                    return brokers;
                 }
             """)
             return fingerprint if fingerprint else []
@@ -403,7 +405,8 @@ class NeoBDMScraper:
 
     async def _select_ticker_robust(self, ticker: str, retry_count: int = 3) -> bool:
         """
-        Robustly select ticker from dropdown with retry logic.
+        Robustly select ticker from Selectize.js dropdown with retry logic.
+        Site uses Selectize.js (not React-Select).
         """
         if not self.page:
             return False
@@ -412,60 +415,66 @@ class NeoBDMScraper:
             try:
                 print(f"   [TICKER] Selecting {ticker} (attempt {attempt+1})...")
                 
-                # Method 1: Click dropdown, type, and select option
+                # Method 1: Selectize.js API via JavaScript (most reliable)
                 try:
-                    # Wait for dropdown to be ready
-                    await self.page.wait_for_selector('.Select-control', state='visible', timeout=10000)
+                    success = await self.page.evaluate("""
+                        (ticker) => {
+                            const selectEl = document.querySelector('#input-broksum-ticker');
+                            if (selectEl && selectEl.selectize) {
+                                selectEl.selectize.setValue(ticker, false);
+                                return selectEl.selectize.getValue() === ticker;
+                            }
+                            return false;
+                        }
+                    """, ticker)
                     
-                    # Click to open dropdown
-                    await self.page.click('.Select-control', force=True)
-                    await asyncio.sleep(1.5)
-                    
-                    # Type ticker to filter
-                    await self.page.keyboard.type(ticker)
-                    await asyncio.sleep(2)
-                    
-                    # Wait for option to appear with longer timeout
-                    option_selector = f".Select-option:has-text('{ticker}')"
-                    try:
-                        await self.page.wait_for_selector(option_selector, state='visible', timeout=10000)
-                        await self.page.click(option_selector, force=True)
-                        print(f"   [TICKER] Successfully selected {ticker} from dropdown")
-                        
-                        # Click away to close dropdown
-                        await asyncio.sleep(1)
-                        await self.page.click('body', force=True)
+                    if success:
+                        print(f"   [TICKER] Successfully selected {ticker} via Selectize API")
                         await asyncio.sleep(1)
                         return True
-                    except Exception as e:
-                        print(f"   [TICKER] Option not found: {e}. Trying Enter key...")
-                        await self.page.keyboard.press('Enter')
-                        await asyncio.sleep(2)
-                        await self.page.click('body', force=True)
+                except Exception as e:
+                    print(f"   [TICKER] Selectize API method failed: {e}")
+                
+                # Method 2: Click input, type, select from dropdown
+                try:
+                    print(f"   [TICKER] Trying input click method...")
+                    input_selector = '#input-broksum-ticker-selectized'
+                    await self.page.wait_for_selector(input_selector, state='visible', timeout=10000)
+                    
+                    # Clear existing value first
+                    await self.page.evaluate("""
+                        () => {
+                            const selectEl = document.querySelector('#input-broksum-ticker');
+                            if (selectEl && selectEl.selectize) {
+                                selectEl.selectize.clear(true);
+                            }
+                        }
+                    """)
+                    await asyncio.sleep(0.5)
+                    
+                    # Click and type
+                    await self.page.click(input_selector)
+                    await asyncio.sleep(0.5)
+                    await self.page.keyboard.type(ticker, delay=100)
+                    await asyncio.sleep(2)
+                    
+                    # Click the matching option
+                    option_selector = f'.selectize-dropdown-content .option[data-value="{ticker}"]'
+                    try:
+                        await self.page.wait_for_selector(option_selector, state='visible', timeout=5000)
+                        await self.page.click(option_selector)
+                        print(f"   [TICKER] Successfully selected {ticker} from dropdown")
                         await asyncio.sleep(1)
-                        # Assume success if no error
+                        return True
+                    except Exception:
+                        # Try pressing Enter as fallback
+                        await self.page.keyboard.press('Enter')
+                        await asyncio.sleep(1)
+                        print(f"   [TICKER] Used Enter key to confirm selection")
                         return True
                         
                 except Exception as e:
-                    print(f"   [TICKER] Method 1 failed: {e}")
-                    
-                # Method 2: Direct input field approach (fallback)
-                try:
-                    print(f"   [TICKER] Trying direct input method...")
-                    input_field = self.page.locator('.Select-control input')
-                    if await input_field.count() > 0:
-                        await input_field.click()
-                        await asyncio.sleep(0.5)
-                        await input_field.fill('')
-                        await input_field.type(ticker)
-                        await asyncio.sleep(1.5)
-                        await self.page.keyboard.press('Enter')
-                        await asyncio.sleep(2)
-                        await self.page.click('body', force=True)
-                        print(f"   [TICKER] Direct input method completed")
-                        return True
-                except Exception as e2:
-                    print(f"   [TICKER] Method 2 also failed: {e2}")
+                    print(f"   [TICKER] Input click method failed: {e}")
                     
             except Exception as e:
                 print(f"   [TICKER] Attempt {attempt+1} failed completely: {e}")
@@ -478,19 +487,48 @@ class NeoBDMScraper:
         return False
 
     async def _get_broker_summary_date_value(self):
+        """Get current start date value from the broker summary page.
+        New site uses #broksum-start-date with format 'DD MMM YYYY'."""
         if not self.page:
             return None
-        date_input = self.page.locator('#broksum-date')
-        if await date_input.count() == 0:
-            return None
         try:
-            return await date_input.input_value()
+            raw_date = await self.page.evaluate("""
+                () => {
+                    const el = document.querySelector('#broksum-start-date');
+                    return el ? el.value : null;
+                }
+            """)
+            if not raw_date:
+                return None
+            # Convert 'DD MMM YYYY' to 'YYYY-MM-DD'
+            return self._parse_display_date(raw_date)
         except Exception:
             return None
+
+    @staticmethod
+    def _parse_display_date(display_date: str) -> str:
+        """Convert 'DD MMM YYYY' (e.g. '06 Feb 2026') to 'YYYY-MM-DD'."""
+        from datetime import datetime
+        try:
+            dt = datetime.strptime(display_date.strip(), '%d %b %Y')
+            return dt.strftime('%Y-%m-%d')
+        except Exception:
+            return display_date
+
+    @staticmethod
+    def _format_display_date(iso_date: str) -> str:
+        """Convert 'YYYY-MM-DD' to 'DD MMM YYYY' (e.g. '06 Feb 2026')."""
+        from datetime import datetime
+        try:
+            dt = datetime.strptime(iso_date.strip(), '%Y-%m-%d')
+            return dt.strftime('%d %b %Y')
+        except Exception:
+            return iso_date
 
     async def _navigate_to_date_via_arrows(self, target_date: str, max_clicks: int = 30) -> bool:
         """
         Navigate to target date using arrow buttons with JavaScript fallback.
+        New site uses #broksum-button-back / #broksum-button-forward.
         Returns True if successfully navigated to target date.
         """
         if not self.page:
@@ -523,7 +561,7 @@ class NeoBDMScraper:
                 print(f"   [DATE] Already at target date")
                 return True
             
-            # If difference is too large (>5 days) or arrow method is unreliable, use JS directly
+            # If difference is too large (>5 days), use JS directly
             if abs(diff_days) > 5:
                 print(f"   [DATE] Large date difference ({diff_days} days), using direct JS method...")
                 return await self._set_date_via_javascript(target_date)
@@ -531,17 +569,16 @@ class NeoBDMScraper:
             # Try arrow method for small differences
             print(f"   [DATE] Attempting arrow navigation for {abs(diff_days)} days...")
             
-            # Determine direction and button
+            # Determine direction and button (new IDs)
             if diff_days > 0:
-                arrow_selector = '#right-button'
+                arrow_selector = '#broksum-button-forward'
                 direction = "forward"
             else:
-                arrow_selector = '#left-button'
+                arrow_selector = '#broksum-button-back'
                 direction = "backward"
                 diff_days = abs(diff_days)
             
             # Attempt arrow navigation (quick attempt, 3 clicks max)
-            clicks_made = 0
             last_seen_date = current_date_str
             
             for i in range(min(diff_days, 3)):
@@ -549,19 +586,16 @@ class NeoBDMScraper:
                     arrow_button = self.page.locator(arrow_selector).first
                     if await arrow_button.count() > 0:
                         await arrow_button.click(force=True)
-                        clicks_made += 1
                         await asyncio.sleep(1.0)
                         
                         new_date = await self._get_broker_summary_date_value()
                         print(f"   [DATE] After click {i+1}, date is: {new_date}")
                         
-                        # Check if we reached target
                         if new_date == target_date:
                             print(f"   [DATE] Successfully reached target via arrows")
                             await asyncio.sleep(1.5)
                             return True
                         
-                        # If date didn't change, give up on arrow method
                         if new_date == last_seen_date:
                             print(f"   [DATE] Arrow method not working, switching to JS fallback...")
                             break
@@ -583,56 +617,42 @@ class NeoBDMScraper:
 
     async def _set_date_via_javascript(self, target_date: str) -> bool:
         """
-        Directly set date value using JavaScript and trigger Dash callbacks.
-        This is more reliable than clicking arrow buttons.
+        Directly set date value using JavaScript.
+        New site uses #broksum-start-date and #broksum-end-date with 'DD MMM YYYY' format.
         """
         if not self.page:
             return False
         
         try:
-            print(f"   [JS] Setting date to {target_date} via JavaScript...")
+            display_date = self._format_display_date(target_date)
+            print(f"   [JS] Setting date to {target_date} (display: {display_date}) via JavaScript...")
             
-            # Method 1: Find the date input and set its value directly
-            # Then trigger all necessary events for Dash to detect the change
+            # Set both start and end date inputs to the same value
             await self.page.evaluate("""
-                (targetDate) => {
-                    // Find the date input field
-                    const dateInput = document.querySelector('input[placeholder="Tanggal"]') || 
-                                     document.querySelector('#broksum-date') ||
-                                     document.querySelector('input[type="date"]');
+                (displayDate) => {
+                    const startInput = document.querySelector('#broksum-start-date');
+                    const endInput = document.querySelector('#broksum-end-date');
                     
-                    if (!dateInput) {
-                        console.error('Date input not found!');
-                        return false;
+                    if (startInput) {
+                        const nativeSetter = Object.getOwnPropertyDescriptor(
+                            window.HTMLInputElement.prototype, 'value'
+                        ).set;
+                        nativeSetter.call(startInput, displayDate);
+                        startInput.dispatchEvent(new Event('input', { bubbles: true }));
+                        startInput.dispatchEvent(new Event('change', { bubbles: true }));
                     }
-                    
-                    // Set the value
-                    dateInput.value = targetDate;
-                    
-                    // Trigger multiple events to ensure Dash catches the change
-                    const events = ['input', 'change', 'blur'];
-                    events.forEach(eventType => {
-                        const event = new Event(eventType, { bubbles: true, cancelable: true });
-                        dateInput.dispatchEvent(event);
-                    });
-                    
-                    // Also try triggering React's internal change handler if it exists
-                    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-                        window.HTMLInputElement.prototype, 'value'
-                    ).set;
-                    nativeInputValueSetter.call(dateInput, targetDate);
-                    
-                    const inputEvent = new Event('input', { bubbles: true });
-                    dateInput.dispatchEvent(inputEvent);
-                    
-                    console.log('Date set to:', targetDate);
-                    return true;
+                    if (endInput) {
+                        const nativeSetter = Object.getOwnPropertyDescriptor(
+                            window.HTMLInputElement.prototype, 'value'
+                        ).set;
+                        nativeSetter.call(endInput, displayDate);
+                        endInput.dispatchEvent(new Event('input', { bubbles: true }));
+                        endInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
                 }
-            """, target_date)
+            """, display_date)
             
-            # Wait for Dash to process the change
-            print(f"   [JS] Waiting for Dash to process date change...")
-            await asyncio.sleep(3)
+            await asyncio.sleep(1)
             
             # Verify the date was set correctly
             final_date = await self._get_broker_summary_date_value()
@@ -640,40 +660,36 @@ class NeoBDMScraper:
             
             if final_date == target_date:
                 print(f"   [JS] Successfully set date to {target_date}")
-                # Extra wait for data to load
-                await asyncio.sleep(2)
                 return True
             else:
-                print(f"   [JS] Warning: Date mismatch after JS set. Expected {target_date}, got {final_date}")
-                # Try one more time with a different approach
-                await self.page.fill('input[placeholder="Tanggal"]', target_date)
-                await self.page.press('input[placeholder="Tanggal"]', 'Enter')
-                await asyncio.sleep(3)
+                # Fallback: use Playwright fill method
+                print(f"   [JS] Mismatch. Trying Playwright fill method...")
+                try:
+                    await self.page.fill('#broksum-start-date', display_date)
+                    await self.page.fill('#broksum-end-date', display_date)
+                    await asyncio.sleep(1)
+                    
+                    verify_date = await self._get_broker_summary_date_value()
+                    if verify_date == target_date:
+                        print(f"   [JS] Successfully set date on second attempt")
+                        return True
+                except Exception:
+                    pass
                 
-                verify_date = await self._get_broker_summary_date_value()
-                if verify_date == target_date:
-                    print(f"   [JS] Successfully set date on second attempt")
-                    await asyncio.sleep(2)
-                    return True
-                else:
-                    print(f"   [JS] Failed to set date even with fill method")
-                    return False
+                print(f"   [JS] Failed to set date. Current: {final_date}, Expected: {target_date}")
+                return False
                 
         except Exception as e:
             print(f"   [JS] JavaScript date setting failed: {e}")
             return False
 
     async def _wait_for_broker_summary_render(self):
+        """Wait for broker summary table to finish rendering after loading data."""
         if not self.page:
             return
+        # New site uses standard HTML table, wait for it to appear
         try:
-            await self.page.wait_for_selector('.dash-spreadsheet-inner.dash-loading', timeout=1500)
-            await self.page.wait_for_selector('.dash-spreadsheet-inner.dash-loading', state='hidden', timeout=20000)
-        except Exception:
-            pass
-        try:
-            await self.page.wait_for_selector('._dash-loading-callback', timeout=1500)
-            await self.page.wait_for_selector('._dash-loading-callback', state='hidden', timeout=20000)
+            await self.page.wait_for_selector('#broker-summary-table tbody tr', timeout=15000)
         except Exception:
             pass
         await asyncio.sleep(1.5)
@@ -682,210 +698,125 @@ class NeoBDMScraper:
         """
         Scrapes the Broker Summary table for a specific ticker and date.
         date_str: 'YYYY-MM-DD'
+        
+        New site (2026+) uses:
+        - Selectize.js for ticker dropdown
+        - #broksum-start-date / #broksum-end-date (format 'DD MMM YYYY')
+        - #broksum-button-load to trigger data fetch
+        - #broker-summary-table (standard HTML table, not Dash)
         """
         if not self.page:
-            return None, None
+            return None
 
         try:
             target_url = f"{self.base_url}/broker_summary/"
             
-            # Optimization: Only navigate if NOT already on the page
-            if self.page.url != target_url:
+            # Navigate if NOT already on the page
+            current = self.page.url.rstrip('/')
+            target = target_url.rstrip('/')
+            if current != target:
                 print(f"   [SYNC] Navigating to {target_url}...", flush=True)
                 await self.page.goto(target_url, wait_until='networkidle', timeout=60000)
-                # Wait for main controls initially
-                await self.page.wait_for_selector('.Select-control', state='visible', timeout=20000)
+                # Wait for Selectize.js ticker input to be ready
+                await self.page.wait_for_selector('#input-broksum-ticker-selectized', state='visible', timeout=20000)
             else:
                 print(f"   [SYNC] Already on {target_url}, skipping navigation.", flush=True)
 
-            # 1. Select Ticker using robust method
+            # 1. Select Ticker
             if not await self._select_ticker_robust(ticker):
                 print(f"   [ERROR] Failed to select ticker {ticker}")
                 return None
 
-            # CRITICAL: Store data fingerprint BEFORE changing date
-            previous_fingerprint = await self._get_data_fingerprint()
-            print(f"   [VERIFY] Previous data fingerprint: {previous_fingerprint}")
+            # 2. Set Date
+            print(f"   [SYNC] Setting date to {date_str}...", flush=True)
+            if not await self._set_date_via_javascript(date_str):
+                # Try arrow navigation as fallback
+                if not await self._navigate_to_date_via_arrows(date_str):
+                    actual_date = await self._get_broker_summary_date_value()
+                    print(f"   [WARNING] Failed to set date {date_str}. Currently at: {actual_date}")
+                    return None
 
-            # 2. Navigate to Date using arrow buttons
-            print(f"   [SYNC] Navigating to date {date_str}...", flush=True)
-            if not await self._navigate_to_date_via_arrows(date_str):
-                actual_date = await self._get_broker_summary_date_value()
-                print(f"   [WARNING] Failed to navigate to {date_str}. Currently at: {actual_date}")
-                return None
+            # 3. Click Load button to fetch data
+            print(f"   [SYNC] Clicking Load button...", flush=True)
+            try:
+                load_btn = self.page.locator('#broksum-button-load')
+                await load_btn.click()
+            except Exception as e:
+                print(f"   [WARNING] Could not click Load button: {e}")
 
-            # CRITICAL: Wait for Dash to process and fetch new data
-            #  Don't just wait for spinner to disappear, wait for DATA to change!
+            # 4. Wait for table to render
             await self._wait_for_broker_summary_render()
             
-            # Poll until data changes (up to 15 seconds)
-            print(f"   [WAIT] Polling until data changes for date {date_str}...")
-            data_changed = False
-            for poll_attempt in range(15):  # 15 attempts x 1sec = 15 seconds max
-                await asyncio.sleep(1)
-                current_fingerprint = await self._get_data_fingerprint()
-                
-                if current_fingerprint != previous_fingerprint:
-                    print(f"   [SUCCESS] Data changed after {poll_attempt+1} seconds!")
-                    print(f"   [VERIFY] New fingerprint: {current_fingerprint}")
-                    data_changed = True
-                    break
-                    
-                if poll_attempt % 3 == 0:  # Log every 3 seconds
-                    print(f"   [WAIT] Still waiting... ({poll_attempt+1}s)")
-            
-            if not data_changed:
-                print(f"   [WARNING] Data did not change after 15 seconds!")
-                print(f"   [WARNING] Current fingerprint still: {current_fingerprint}")
-                print(f"   [RELOAD] Forcing full page reload to try again...")
-                
-                # Force reload as last resort
-                await self.page.goto(f"{self.base_url}/broker_summary/", wait_until='networkidle', timeout=60000)
-                await self.page.wait_for_selector('.Select-control', state='visible', timeout=20000)
-                await asyncio.sleep(3)
-                
-                # Re-select ticker
-                if not await self._select_ticker_robust(ticker):
-                    print(f"   [ERROR] Failed to re-select ticker {ticker} after reload")
-                    return None
-                
-                # Re-navigate to date using arrows
-                print(f"   [RELOAD] Re-navigating to date {date_str} after reload...")
-                if not await self._navigate_to_date_via_arrows(date_str):
-                    print(f"   [ERROR] Failed to navigate to date even after reload")
-                    return None
-                
-                await self._wait_for_broker_summary_render()
-                
-                # Poll again after reload
-                print(f"   [WAIT] Polling after reload...")
-                for poll_attempt in range(10):
-                    await asyncio.sleep(1)
-                    final_fingerprint = await self._get_data_fingerprint()
-                    
-                    if final_fingerprint != previous_fingerprint:
-                        print(f"   [SUCCESS] Data changed after reload! ({poll_attempt+1}s)")
-                        print(f"   [VERIFY] Final fingerprint: {final_fingerprint}")
-                        data_changed = True
-                        break
-                
-                if not data_changed:
-                    print(f"   [ERROR] Data still did not change even after reload!")
-                    print(f"   [ERROR] This date may not have data available: {date_str}")
-                    # Continue anyway and extract whatever is shown
-            
-            # Extra safety wait
+            # Extra wait for data to fully load
             await asyncio.sleep(2)
 
-            # 4. Extract Data
-            print("   [DATA] Extracting rows from tables...")
+            # 5. Check if data is available (site shows "Data tidak tersedia" when no data)
+            no_data = await self.page.evaluate("""
+                () => {
+                    const container = document.querySelector('#broksum-table-container');
+                    if (!container) return true;
+                    const text = container.innerText.trim();
+                    return text.includes('Data tidak tersedia') || text.includes('tidak tersedia');
+                }
+            """)
+            
+            if no_data:
+                print(f"   [DATA] No data available for {ticker} on {date_str}")
+                return None
+
+            # 6. Extract Data from standard HTML table
+            print("   [DATA] Extracting rows from #broker-summary-table...")
             data = await self.page.evaluate(r"""
                 () => {
-                    const normalize = (text) => text.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
-                    const headerKey = (header, avgKey) => {
-                        const norm = normalize(header);
-                        if (!norm) return null;
-                        if (norm.includes('broker') || norm === 'brk') return 'broker';
-                        if (norm.includes('nlot') || norm.includes('netlot') || norm === 'lot') return 'nlot';
-                        if (norm.includes('nval') || norm.includes('netval') || norm === 'val' || norm.includes('value')) return 'nval';
-                        if (norm.includes('bavg') || norm.includes('savg') || norm.includes('avg')) return avgKey;
-                        return null;
-                    };
-
-                    const dedupeConsecutive = (items) => {
-                        const result = [];
-                        for (const item of items) {
-                            if (result.length === 0 || result[result.length - 1] !== item) {
-                                result.push(item);
-                            }
-                        }
-                        return result;
-                    };
-
-                    const extract = (table, avgKey) => {
-                        if (!table) return [];
-                        const headers = Array.from(table.querySelectorAll('th, .dash-header span'))
-                            .map(s => s.innerText.trim())
-                            .filter(s => s.length > 0);
-
-                        // Find data rows - rows that contain .dash-cell
-                        const rows = Array.from(table.querySelectorAll('tr')).filter(tr => tr.querySelector('.dash-cell'));
-                        const cellCount = rows.length ? rows[0].querySelectorAll('td.dash-cell').length : 0;
-                        const dedupedHeaders = dedupeConsecutive(headers);
-                        let effectiveHeaders = headers;
-                        if (cellCount && dedupedHeaders.length === cellCount) {
-                            effectiveHeaders = dedupedHeaders;
-                        } else if (cellCount && headers.length > cellCount) {
-                            effectiveHeaders = headers.slice(headers.length - cellCount);
-                        }
-                        const keyMap = effectiveHeaders.map(h => headerKey(h, avgKey));
+                    const table = document.querySelector('#broker-summary-table');
+                    if (!table) return null;
+                    
+                    const rows = table.querySelectorAll('tbody tr');
+                    if (rows.length === 0) return null;
+                    
+                    const buyData = [];
+                    const sellData = [];
+                    
+                    rows.forEach(tr => {
+                        const cells = tr.querySelectorAll('td');
+                        if (cells.length < 8) return;
                         
-                        return rows.map(tr => {
-                            const cells = Array.from(tr.querySelectorAll('td.dash-cell'));
-                            let rowData = {};
-                            keyMap.forEach((key, index) => {
-                                if (key && cells[index]) {
-                                    rowData[key] = cells[index].textContent.trim();
-                                }
+                        // Table structure: BY | nlot | nval | bavg | SL | nlot | nval | savg
+                        // Buy side (columns 0-3)
+                        const buyBrokerSpan = cells[0].querySelector('.broksum-broker');
+                        const buyBroker = buyBrokerSpan ? buyBrokerSpan.textContent.trim() : cells[0].textContent.trim();
+                        if (buyBroker) {
+                            buyData.push({
+                                broker: buyBroker,
+                                nlot: cells[1].textContent.trim(),
+                                nval: cells[2].textContent.trim(),
+                                bavg: cells[3].textContent.trim()
                             });
-                            return rowData;
-                        }).filter(r => r.broker && r.broker.length > 0);
-                    };
-
-                    const isBrokerTable = (table) => {
-                        const headers = Array.from(table.querySelectorAll('th, .dash-header span'))
-                            .map(h => h.innerText.trim());
-                        const keys = headers.map(h => headerKey(h, 'avg')).filter(Boolean);
-                        return keys.includes('broker') && (keys.includes('nlot') || keys.includes('nval'));
-                    };
-
-                    const allTables = Array.from(document.querySelectorAll('table'));
-                    const candidateTables = allTables.filter(isBrokerTable);
-                    const dashTables = Array.from(document.querySelectorAll('.dash-spreadsheet-container table'));
-
-                    const tables = candidateTables.length >= 2 ? candidateTables : dashTables;
-                    if (tables.length < 2) return null;
-
+                        }
+                        
+                        // Sell side (columns 4-7)
+                        const sellBrokerSpan = cells[4].querySelector('.broksum-broker');
+                        const sellBroker = sellBrokerSpan ? sellBrokerSpan.textContent.trim() : cells[4].textContent.trim();
+                        if (sellBroker) {
+                            sellData.push({
+                                broker: sellBroker,
+                                nlot: cells[5].textContent.trim(),
+                                nval: cells[6].textContent.trim(),
+                                savg: cells[7].textContent.trim()
+                            });
+                        }
+                    });
+                    
                     return {
-                        buy: extract(tables[0], 'bavg'),
-                        sell: extract(tables[1], 'savg')
+                        buy: buyData,
+                        sell: sellData
                     };
                 }
             """)
 
-            if not data or (not data['buy'] and not data['sell']):
-                # Final attempt: just grab all dash-cells and group them by 4
-                print("   [DATA] Specific table match failed. Trying generic cell extraction...")
-                data = await self.page.evaluate("""
-                    () => {
-                        const cells = Array.from(document.querySelectorAll('td.dash-cell'));
-                        if (cells.length === 0) return null;
-                        
-                        // Usually 4 columns: broker, nlot, nval, avg
-                        const rows = [];
-                        for (let i = 0; i < cells.length; i += 4) {
-                            rows.push({
-                                broker: cells[i] ? cells[i].textContent.trim() : '',
-                                nlot: cells[i+1] ? cells[i+1].textContent.trim() : '',
-                                nval: cells[i+2] ? cells[i+2].textContent.trim() : '',
-                                avg: cells[i+3] ? cells[i+3].textContent.trim() : ''
-                            });
-                        }
-                        
-                        // If we have rows, split them (left table for BUY, right table for SELL)
-                        // This assumes the tables are rendered sequentially in the DOM
-                        const firstSellIndex = rows.findIndex((r, idx) => idx > 0 && r.broker === rows[0].broker);
-                        // Actually, better: just split in half if we have two headers
-                        // In the screenshot, they are two separate tables but cells might be flat
-                        
-                        // Let's just return a flat list if we can't distinguish, 
-                        // but the headers approach usually works.
-                        return null; // Let the caller decide or retry
-                    }
-                """)
-                if not data:
-                    print(f"   [DATA] No broker summary data found for {ticker} on {date_str}")
-                    return None
+            if not data or (not data.get('buy') and not data.get('sell')):
+                print(f"   [DATA] No broker summary data found for {ticker} on {date_str}")
+                return None
 
             print(f"   [DATA] Extracted {len(data['buy'])} buy rows and {len(data['sell'])} sell rows.")
             return data
@@ -914,14 +845,14 @@ class NeoBDMScraper:
             print(f"[*] Navigating to {target_url}...")
             await self.page.goto(target_url, wait_until='networkidle', timeout=60000)
             
-            # Wait for page to be ready with retry logic
+            # Wait for page to be ready with retry logic (Selectize.js)
             selector_found = False
             for attempt in range(3):
                 try:
-                    print(f"[*] Waiting for .Select-control selector (attempt {attempt+1}/3)...")
-                    await self.page.wait_for_selector('.Select-control', state='visible', timeout=20000)
+                    print(f"[*] Waiting for Selectize ticker input (attempt {attempt+1}/3)...")
+                    await self.page.wait_for_selector('#input-broksum-ticker-selectized', state='visible', timeout=20000)
                     selector_found = True
-                    print(f"[*] Selector found, page is ready")
+                    print(f"[*] Selectize input found, page is ready")
                     break
                 except Exception as e:
                     print(f"[!] Attempt {attempt+1} failed: {e}")
@@ -930,8 +861,8 @@ class NeoBDMScraper:
                         await self.page.reload(wait_until='networkidle', timeout=30000)
                         await asyncio.sleep(3)
                     else:
-                        print(f"[!] Failed to find .Select-control after 3 attempts")
-                        return [{"error": "Page failed to load properly - selector not found"}]
+                        print(f"[!] Failed to find Selectize input after 3 attempts")
+                        return [{"error": "Page failed to load properly - Selectize input not found"}]
 
             if not selector_found:
                 return [{"error": "Page not ready for scraping"}]
@@ -963,7 +894,7 @@ class NeoBDMScraper:
                             "error": "No data found or date mismatch"
                         })
                     
-                    # Small cooldown between ticker/date changes to let Dash breathe
+                    # Small cooldown between requests
                     await asyncio.sleep(2)
 
             return results
