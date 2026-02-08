@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -10,18 +10,28 @@ import {
     XCircle,
     AlertCircle,
     Loader2,
-    Pause,
     Play,
     Square,
     TrendingUp,
     Shield,
     Users,
-    ArrowRightLeft
+    ArrowRightLeft,
+    Calendar,
+    Database
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAlphaHunter } from "../AlphaHunterContext";
 import StageCard from "./StageCard";
-import { PriceLadder, ScrapingQueueItem } from "../types";
+
+interface TradingDateInfo {
+    date: string;
+    has_data: boolean;
+    selected: boolean;
+    status: 'pending' | 'scraping' | 'complete' | 'error' | 'skipped';
+    error?: string;
+    buy_count?: number;
+    sell_count?: number;
+}
 
 interface Stage3FlowCardProps {
     ticker: string;
@@ -32,171 +42,140 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
         investigations,
         updateStageStatus,
         updateStage3Data,
-        setRecommendedLadders,
-        toggleLadderSelection,
-        updateScrapingQueue,
         canProceedToStage
     } = useAlphaHunter();
 
     const investigation = investigations[ticker];
     const stage2 = investigation?.stage2;
     const stage3 = investigation?.stage3;
-    const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
+    const [isLoadingDates, setIsLoadingDates] = useState(false);
+    const [tradingDates, setTradingDates] = useState<TradingDateInfo[]>([]);
     const [isScraping, setIsScraping] = useState(false);
-    const [scrapingPaused, setScrapingPaused] = useState(false);
+    const [scrapeLog, setScrapeLog] = useState<string[]>([]);
+    const [analysisStep, setAnalysisStep] = useState("");
+    const cancelRef = useRef(false);
 
     if (!investigation) return null;
 
-    // Check if Stage 2 is complete
     const canStart = canProceedToStage(ticker, 3);
 
-    // Fetch price ladder recommendations
-    const fetchRecommendations = useCallback(async () => {
-        if (!stage2?.data) return;
-
-        setIsLoadingRecommendations(true);
-
+    // Fetch trading dates from backend
+    const fetchTradingDates = useCallback(async () => {
+        setIsLoadingDates(true);
         try {
-            // Generate recommendations based on price range
-            // This would typically come from an API
-            const currentPrice = stage2.data.compression.avg_close || 0;
-            const priceStep = currentPrice * 0.05; // 5% steps
+            const res = await fetch(`http://localhost:8000/api/alpha-hunter/stage3/trading-dates/${ticker}?days=7`);
+            if (!res.ok) throw new Error("Failed to fetch trading dates");
+            const data = await res.json();
 
-            const ladders: PriceLadder[] = [
-                {
-                    id: 'support_strong',
-                    range_start: Math.floor((currentPrice - priceStep * 3) / 50) * 50,
-                    range_end: Math.floor((currentPrice - priceStep * 2) / 50) * 50,
-                    label: 'Strong Support',
-                    importance: 'recommended',
-                    estimated_time_minutes: 4,
-                    is_current_price: false
-                },
-                {
-                    id: 'support_zone',
-                    range_start: Math.floor((currentPrice - priceStep * 2) / 50) * 50,
-                    range_end: Math.floor((currentPrice - priceStep) / 50) * 50,
-                    label: 'Support Zone',
-                    importance: 'recommended',
-                    estimated_time_minutes: 4,
-                    is_current_price: false
-                },
-                {
-                    id: 'current_price',
-                    range_start: Math.floor((currentPrice - priceStep / 2) / 50) * 50,
-                    range_end: Math.floor((currentPrice + priceStep / 2) / 50) * 50,
-                    label: 'Current Price',
-                    importance: 'critical',
-                    estimated_time_minutes: 5,
-                    is_current_price: true
-                },
-                {
-                    id: 'resistance_approach',
-                    range_start: Math.floor((currentPrice + priceStep / 2) / 50) * 50,
-                    range_end: Math.floor((currentPrice + priceStep * 1.5) / 50) * 50,
-                    label: 'Resistance Approach',
-                    importance: 'recommended',
-                    estimated_time_minutes: 4,
-                    is_current_price: false
-                },
-                {
-                    id: 'first_resistance',
-                    range_start: Math.floor((currentPrice + priceStep * 1.5) / 50) * 50,
-                    range_end: Math.floor((currentPrice + priceStep * 2.5) / 50) * 50,
-                    label: 'First Resistance',
-                    importance: 'optional',
-                    estimated_time_minutes: 4,
-                    is_current_price: false
-                },
-                {
-                    id: 'second_resistance',
-                    range_start: Math.floor((currentPrice + priceStep * 2.5) / 50) * 50,
-                    range_end: Math.floor((currentPrice + priceStep * 3.5) / 50) * 50,
-                    label: 'Second Resistance',
-                    importance: 'optional',
-                    estimated_time_minutes: 4,
-                    is_current_price: false
-                }
-            ];
-
-            setRecommendedLadders(ticker, ladders);
+            const dates: TradingDateInfo[] = (data.dates || []).map((d: any) => ({
+                date: d.date,
+                has_data: d.has_data,
+                selected: !d.has_data, // Auto-select dates that need scraping
+                status: d.has_data ? 'skipped' : 'pending'
+            }));
+            setTradingDates(dates);
         } catch (error) {
-            console.error("Failed to fetch recommendations:", error);
+            console.error("Failed to fetch trading dates:", error);
         } finally {
-            setIsLoadingRecommendations(false);
+            setIsLoadingDates(false);
         }
-    }, [ticker, stage2?.data, setRecommendedLadders]);
+    }, [ticker]);
 
-    // Load recommendations when Stage 2 completes
+    // Load dates when Stage 2 completes
     useEffect(() => {
-        if (canStart && stage3?.status === 'idle' && stage3.recommendedLadders.length === 0) {
-            fetchRecommendations();
+        if (canStart && stage3?.status === 'idle' && tradingDates.length === 0) {
+            fetchTradingDates();
         }
-    }, [canStart, stage3?.status, stage3?.recommendedLadders.length, fetchRecommendations]);
+    }, [canStart, stage3?.status, tradingDates.length, fetchTradingDates]);
 
-    // Start scraping selected ladders
+    // Toggle date selection
+    const toggleDateSelection = (date: string) => {
+        setTradingDates(prev => prev.map(d =>
+            d.date === date && !d.has_data ? { ...d, selected: !d.selected } : d
+        ));
+    };
+
+    // Start real NeoBDM scraping
     const startScraping = async () => {
-        const selectedLadders = stage3.recommendedLadders.filter(
-            l => stage3.selectedLadders.includes(l.id)
-        );
-
-        if (selectedLadders.length === 0) return;
+        const datesToScrape = tradingDates.filter(d => d.selected && !d.has_data);
+        if (datesToScrape.length === 0) {
+            // No dates to scrape - just run analysis directly
+            await runFlowAnalysis();
+            return;
+        }
 
         updateStageStatus(ticker, 3, 'loading');
         setIsScraping(true);
-        setScrapingPaused(false);
+        cancelRef.current = false;
+        setScrapeLog([`Starting broker summary scraping for ${ticker}...`]);
 
-        // Initialize queue
-        const initialQueue: ScrapingQueueItem[] = selectedLadders.map(ladder => ({
-            ladder,
-            status: 'pending',
-            progress: 0,
-            transactions_scraped: 0,
-            time_elapsed_seconds: 0
-        }));
+        // Scrape each date sequentially using the backend API
+        const updatedDates = [...tradingDates];
 
-        updateScrapingQueue(ticker, initialQueue);
+        for (let i = 0; i < updatedDates.length; i++) {
+            if (cancelRef.current) break;
+            const dateInfo = updatedDates[i];
 
-        // Process queue sequentially
-        for (let i = 0; i < selectedLadders.length; i++) {
-            if (scrapingPaused) break;
+            if (dateInfo.has_data || !dateInfo.selected) {
+                continue; // Skip dates that already have data or aren't selected
+            }
 
-            const ladder = selectedLadders[i];
-            const queue = [...initialQueue];
-
-            // Update current item to scraping
-            queue[i] = { ...queue[i], status: 'scraping' };
-            updateScrapingQueue(ticker, queue);
+            // Mark as scraping
+            updatedDates[i] = { ...updatedDates[i], status: 'scraping' };
+            setTradingDates([...updatedDates]);
+            setScrapeLog(prev => [...prev, `Scraping ${dateInfo.date}...`]);
 
             try {
-                // Simulate scraping with progress
-                // In real implementation, this would call the backend API
-                for (let p = 0; p <= 100; p += 10) {
-                    await new Promise(r => setTimeout(r, 300));
-                    queue[i] = {
-                        ...queue[i],
-                        progress: p,
-                        transactions_scraped: Math.floor(p * 2),
-                        time_elapsed_seconds: Math.floor(p / 10)
-                    };
-                    updateScrapingQueue(ticker, [...queue]);
+                const res = await fetch(
+                    `http://localhost:8000/api/neobdm-broker-summary?ticker=${ticker}&trade_date=${dateInfo.date}&scrape=true`
+                );
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({ error: "Unknown error" }));
+                    throw new Error(errData.error || `HTTP ${res.status}`);
                 }
 
-                // Mark complete
-                queue[i] = { ...queue[i], status: 'complete', progress: 100 };
-                updateScrapingQueue(ticker, [...queue]);
+                const result = await res.json();
+                const buyCount = (result.buy || []).length;
+                const sellCount = (result.sell || []).length;
 
-            } catch (error) {
-                queue[i] = {
-                    ...queue[i],
-                    status: 'error',
-                    error_message: String(error)
+                updatedDates[i] = {
+                    ...updatedDates[i],
+                    status: 'complete',
+                    has_data: true,
+                    buy_count: buyCount,
+                    sell_count: sellCount
                 };
-                updateScrapingQueue(ticker, [...queue]);
+                setTradingDates([...updatedDates]);
+                setScrapeLog(prev => [...prev, `  ✓ ${dateInfo.date}: ${buyCount} buyers, ${sellCount} sellers`]);
+
+            } catch (error: any) {
+                updatedDates[i] = {
+                    ...updatedDates[i],
+                    status: 'error',
+                    error: error.message || String(error)
+                };
+                setTradingDates([...updatedDates]);
+                setScrapeLog(prev => [...prev, `  ✗ ${dateInfo.date}: ${error.message || error}`]);
             }
         }
 
-        // Fetch flow analysis after scraping
+        if (cancelRef.current) {
+            setIsScraping(false);
+            updateStageStatus(ticker, 3, 'idle');
+            return;
+        }
+
+        // After scraping, run flow analysis
+        await runFlowAnalysis();
+        setIsScraping(false);
+    };
+
+    // Run flow analysis after scraping
+    const runFlowAnalysis = async () => {
+        setAnalysisStep("Running smart money flow analysis...");
+        setScrapeLog(prev => [...prev, "Running flow analysis..."]);
+
         try {
             const response = await fetch(`http://localhost:8000/api/alpha-hunter/flow/${ticker}?days=7`);
             const data = await response.json();
@@ -213,170 +192,148 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
                     smart_vs_retail: data.smart_vs_retail,
                     checks_passed: data.checks_passed || 0,
                     total_checks: data.total_checks || 4,
-                    scraped_ranges: selectedLadders,
+                    scraped_ranges: [],
                     last_scraped_at: new Date().toISOString()
                 });
+                setScrapeLog(prev => [...prev, `✓ Analysis complete. Conviction: ${data.overall_conviction}`]);
             } else {
-                updateStageStatus(ticker, 3, 'error', 'No broker data available after scraping');
+                updateStageStatus(ticker, 3, 'error', 'No broker data available. Try scraping more dates.');
+                setScrapeLog(prev => [...prev, "✗ No broker data available for analysis."]);
             }
         } catch (error) {
             updateStageStatus(ticker, 3, 'error', String(error));
+            setScrapeLog(prev => [...prev, `✗ Analysis failed: ${error}`]);
         }
-
-        setIsScraping(false);
-    };
-
-    // Toggle pause
-    const togglePause = () => {
-        setScrapingPaused(!scrapingPaused);
+        setAnalysisStep("");
     };
 
     // Cancel scraping
     const cancelScraping = () => {
+        cancelRef.current = true;
         setIsScraping(false);
-        setScrapingPaused(false);
         updateStageStatus(ticker, 3, 'idle');
-        updateScrapingQueue(ticker, []);
     };
 
-    // Get importance color
-    const getImportanceColor = (importance: PriceLadder['importance']) => {
-        switch (importance) {
-            case 'critical':
-                return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50';
-            case 'recommended':
-                return 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50';
-            default:
-                return 'bg-slate-700 text-slate-400 border-slate-600';
-        }
-    };
-
-    // Calculate estimated time
-    const getEstimatedTime = () => {
-        const selected = stage3.recommendedLadders.filter(
-            l => stage3.selectedLadders.includes(l.id)
-        );
-        const totalMinutes = selected.reduce((sum, l) => sum + l.estimated_time_minutes, 0);
-        return totalMinutes;
-    };
+    // Count stats
+    const selectedCount = tradingDates.filter(d => d.selected && !d.has_data).length;
+    const alreadyScrapedCount = tradingDates.filter(d => d.has_data).length;
+    const completedCount = tradingDates.filter(d => d.status === 'complete').length;
+    const totalToScrape = tradingDates.filter(d => d.selected && d.status !== 'skipped').length;
 
     // Render content based on status
     const renderContent = () => {
-        // LOCKED state is handled by StageCard
-
-        // IDLE state - show recommendations
+        // IDLE state - show trading dates for scraping
         if (stage3.status === 'idle') {
-            const currentPrice = stage2?.data?.compression.avg_close || 0;
-
             return (
                 <div className="space-y-6">
-                    {/* Price context */}
+                    {/* Info banner */}
                     <div className="bg-slate-950/50 rounded-lg p-4 border border-slate-800">
                         <h4 className="text-sm font-semibold text-slate-400 uppercase mb-3">
-                            💡 Recommended Scraping Strategy
+                            📊 Broker Flow Data Collection
                         </h4>
-                        <div className="grid grid-cols-3 gap-4 mb-4">
+                        <p className="text-xs text-slate-500 mb-3">
+                            Scrape broker summary data from NeoBDM for recent trading dates to analyze smart money flow patterns.
+                        </p>
+                        <div className="grid grid-cols-3 gap-4">
                             <div>
-                                <div className="text-xs text-slate-500">Current Price</div>
-                                <div className="text-lg font-bold text-white">
-                                    Rp {currentPrice.toLocaleString()}
-                                </div>
+                                <div className="text-xs text-slate-500">Total Dates</div>
+                                <div className="text-lg font-bold text-white">{tradingDates.length}</div>
                             </div>
                             <div>
-                                <div className="text-xs text-slate-500">Support Zone</div>
-                                <div className="text-lg font-bold text-emerald-400">
-                                    Rp {Math.floor(currentPrice * 0.9).toLocaleString()}
-                                </div>
+                                <div className="text-xs text-slate-500">Already in DB</div>
+                                <div className="text-lg font-bold text-emerald-400">{alreadyScrapedCount}</div>
                             </div>
                             <div>
-                                <div className="text-xs text-slate-500">Resistance</div>
-                                <div className="text-lg font-bold text-amber-400">
-                                    Rp {Math.floor(currentPrice * 1.1).toLocaleString()}
-                                </div>
+                                <div className="text-xs text-slate-500">Need Scraping</div>
+                                <div className="text-lg font-bold text-amber-400">{selectedCount}</div>
                             </div>
                         </div>
-                        <p className="text-xs text-slate-500">
-                            Based on 50-120 day price action analysis
-                        </p>
                     </div>
 
-                    {/* Ladder selection */}
-                    {isLoadingRecommendations ? (
+                    {/* Date selection */}
+                    {isLoadingDates ? (
                         <div className="text-center py-8">
                             <Loader2 className="w-8 h-8 mx-auto animate-spin text-slate-500" />
-                            <p className="text-slate-500 mt-2">Loading recommendations...</p>
+                            <p className="text-slate-500 mt-2">Fetching trading dates...</p>
+                        </div>
+                    ) : tradingDates.length === 0 ? (
+                        <div className="text-center py-8">
+                            <AlertCircle className="w-8 h-8 mx-auto text-amber-400 mb-2" />
+                            <p className="text-slate-400">No trading dates found.</p>
+                            <Button onClick={fetchTradingDates} variant="outline" size="sm" className="mt-2">
+                                <RefreshCw className="w-3 h-3 mr-1" /> Retry
+                            </Button>
                         </div>
                     ) : (
                         <div className="space-y-2">
                             <div className="text-sm text-slate-400 mb-3">
-                                Select price ladders to scrape:
+                                Select dates to scrape broker summary:
                             </div>
 
-                            {stage3.recommendedLadders.map((ladder) => {
-                                const isSelected = stage3.selectedLadders.includes(ladder.id);
+                            {tradingDates.map((dateInfo) => (
+                                <div
+                                    key={dateInfo.date}
+                                    className={cn(
+                                        "flex items-center gap-4 p-3 rounded-lg border transition-all",
+                                        dateInfo.has_data
+                                            ? "bg-emerald-950/10 border-emerald-500/20 opacity-70"
+                                            : dateInfo.selected
+                                                ? "bg-slate-800/50 border-emerald-500/30 cursor-pointer"
+                                                : "bg-slate-950/30 border-slate-800 hover:border-slate-700 cursor-pointer"
+                                    )}
+                                    onClick={() => !dateInfo.has_data && toggleDateSelection(dateInfo.date)}
+                                >
+                                    <Checkbox
+                                        checked={dateInfo.has_data || dateInfo.selected}
+                                        disabled={dateInfo.has_data}
+                                        className="data-[state=checked]:bg-emerald-500"
+                                    />
 
-                                return (
-                                    <div
-                                        key={ladder.id}
-                                        className={cn(
-                                            "flex items-center gap-4 p-3 rounded-lg border transition-all cursor-pointer",
-                                            isSelected
-                                                ? "bg-slate-800/50 border-emerald-500/30"
-                                                : "bg-slate-950/30 border-slate-800 hover:border-slate-700"
-                                        )}
-                                        onClick={() => toggleLadderSelection(ticker, ladder.id)}
-                                    >
-                                        <Checkbox
-                                            checked={isSelected}
-                                            className="data-[state=checked]:bg-emerald-500"
-                                        />
-
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-medium text-slate-200">
-                                                    Rp {ladder.range_start.toLocaleString()} - {ladder.range_end.toLocaleString()}
-                                                </span>
-                                                {ladder.is_current_price && (
-                                                    <span className="text-amber-400">⭐</span>
-                                                )}
-                                            </div>
-                                            <div className="text-xs text-slate-500">
-                                                {ladder.label}
-                                            </div>
-                                        </div>
-
-                                        <Badge variant="outline" className={getImportanceColor(ladder.importance)}>
-                                            {ladder.importance}
-                                        </Badge>
-
-                                        <div className="text-xs text-slate-500">
-                                            ~{ladder.estimated_time_minutes}min
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                                            <span className="font-medium text-slate-200 font-mono">
+                                                {dateInfo.date}
+                                            </span>
                                         </div>
                                     </div>
-                                );
-                            })}
+
+                                    {dateInfo.has_data ? (
+                                        <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/50">
+                                            <Database className="w-3 h-3 mr-1" /> In DB
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="outline" className="bg-amber-500/20 text-amber-400 border-amber-500/50">
+                                            Need Scrape
+                                        </Badge>
+                                    )}
+                                </div>
+                            ))}
                         </div>
                     )}
 
-                    {/* Selection summary */}
+                    {/* Action bar */}
                     <div className="bg-slate-950/50 rounded-lg p-4 border border-slate-800">
                         <div className="flex items-center justify-between">
                             <div>
                                 <div className="text-sm text-slate-400">
-                                    Selected: <span className="text-white font-bold">{stage3.selectedLadders.length}</span> ranges
-                                </div>
-                                <div className="text-xs text-slate-500">
-                                    Estimated time: ~{getEstimatedTime()} minutes
+                                    {selectedCount > 0 ? (
+                                        <>To scrape: <span className="text-white font-bold">{selectedCount}</span> dates (~{selectedCount * 2} min)</>
+                                    ) : alreadyScrapedCount > 0 ? (
+                                        <span className="text-emerald-400">All dates already have data</span>
+                                    ) : (
+                                        <span>Select dates to scrape</span>
+                                    )}
                                 </div>
                             </div>
 
                             <Button
                                 onClick={startScraping}
-                                disabled={stage3.selectedLadders.length === 0}
+                                disabled={tradingDates.length === 0}
                                 className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500"
                             >
                                 <Play className="w-4 h-4 mr-2" />
-                                Start NeoBDM Scraping
+                                {selectedCount > 0 ? "Scrape & Analyze" : "Run Analysis"}
                             </Button>
                         </div>
                     </div>
@@ -385,7 +342,7 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
                     <div className="flex items-start gap-2 text-xs text-amber-400/70">
                         <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                         <div>
-                            Scraping will be sequential (one-by-one). You can switch to other tickers while waiting.
+                            Each date takes ~1-2 minutes to scrape from NeoBDM. Dates already in the database will be skipped.
                         </div>
                     </div>
                 </div>
@@ -394,19 +351,19 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
 
         // LOADING state - show scraping progress
         if (stage3.status === 'loading') {
-            const queue = stage3.scrapingQueue;
-            const completed = queue.filter(q => q.status === 'complete').length;
-            const total = queue.length;
+            const scrapingDates = tradingDates.filter(d => !d.has_data || d.status !== 'skipped');
+            const completed = tradingDates.filter(d => d.status === 'complete').length;
+            const total = tradingDates.filter(d => d.selected && d.status !== 'skipped').length;
             const overallProgress = total > 0 ? (completed / total) * 100 : 0;
-            const currentItem = queue.find(q => q.status === 'scraping');
+            const currentDate = tradingDates.find(d => d.status === 'scraping');
 
             return (
                 <div className="space-y-6">
                     {/* Overall progress */}
                     <div className="bg-slate-950/50 rounded-lg p-4 border border-slate-800">
                         <div className="flex justify-between text-sm mb-2">
-                            <span className="text-slate-400">Overall Progress</span>
-                            <span className="text-white font-bold">{completed}/{total} ranges</span>
+                            <span className="text-slate-400">Scraping Progress</span>
+                            <span className="text-white font-bold">{completed}/{total} dates</span>
                         </div>
                         <div className="h-3 bg-slate-800 rounded-full overflow-hidden">
                             <div
@@ -416,56 +373,49 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
                         </div>
                     </div>
 
-                    {/* Queue visualization */}
+                    {/* Date queue */}
                     <div className="space-y-2">
-                        <div className="text-sm text-slate-400 mb-2">Scraping Queue:</div>
-
-                        {queue.map((item, idx) => (
+                        {tradingDates.map((dateInfo) => (
                             <div
-                                key={item.ladder.id}
+                                key={dateInfo.date}
                                 className={cn(
                                     "flex items-center gap-4 p-3 rounded-lg border transition-all",
-                                    item.status === 'complete' && "bg-emerald-950/20 border-emerald-500/30",
-                                    item.status === 'scraping' && "bg-amber-950/20 border-amber-500/30",
-                                    item.status === 'pending' && "bg-slate-950/30 border-slate-800",
-                                    item.status === 'error' && "bg-red-950/20 border-red-500/30"
+                                    dateInfo.status === 'complete' && "bg-emerald-950/20 border-emerald-500/30",
+                                    dateInfo.status === 'scraping' && "bg-amber-950/20 border-amber-500/30",
+                                    dateInfo.status === 'pending' && "bg-slate-950/30 border-slate-800",
+                                    dateInfo.status === 'error' && "bg-red-950/20 border-red-500/30",
+                                    dateInfo.status === 'skipped' && "bg-slate-950/20 border-slate-800 opacity-50"
                                 )}
                             >
-                                {/* Status icon */}
                                 <div className="w-6 h-6 flex items-center justify-center">
-                                    {item.status === 'complete' && <CheckCircle2 className="w-5 h-5 text-emerald-400" />}
-                                    {item.status === 'scraping' && <Loader2 className="w-5 h-5 text-amber-400 animate-spin" />}
-                                    {item.status === 'pending' && <div className="w-2 h-2 rounded-full bg-slate-600" />}
-                                    {item.status === 'error' && <XCircle className="w-5 h-5 text-red-400" />}
+                                    {dateInfo.status === 'complete' && <CheckCircle2 className="w-5 h-5 text-emerald-400" />}
+                                    {dateInfo.status === 'scraping' && <Loader2 className="w-5 h-5 text-amber-400 animate-spin" />}
+                                    {dateInfo.status === 'pending' && <div className="w-2 h-2 rounded-full bg-slate-600" />}
+                                    {dateInfo.status === 'error' && <XCircle className="w-5 h-5 text-red-400" />}
+                                    {dateInfo.status === 'skipped' && <CheckCircle2 className="w-5 h-5 text-slate-500" />}
                                 </div>
 
-                                {/* Ladder info */}
                                 <div className="flex-1">
-                                    <div className="text-sm text-slate-200">
-                                        Rp {item.ladder.range_start.toLocaleString()} - {item.ladder.range_end.toLocaleString()}
-                                    </div>
-                                    <div className="text-xs text-slate-500">
-                                        {item.ladder.label}
-                                    </div>
+                                    <span className="text-sm text-slate-200 font-mono">{dateInfo.date}</span>
                                 </div>
 
-                                {/* Status text */}
                                 <div className="text-xs">
-                                    {item.status === 'complete' && (
+                                    {dateInfo.status === 'complete' && (
                                         <span className="text-emerald-400">
-                                            {item.transactions_scraped} transactions
+                                            {dateInfo.buy_count}B / {dateInfo.sell_count}S
                                         </span>
                                     )}
-                                    {item.status === 'scraping' && (
-                                        <span className="text-amber-400">
-                                            {item.progress}%
-                                        </span>
+                                    {dateInfo.status === 'scraping' && (
+                                        <span className="text-amber-400">Scraping...</span>
                                     )}
-                                    {item.status === 'pending' && (
+                                    {dateInfo.status === 'pending' && (
                                         <span className="text-slate-500">Waiting...</span>
                                     )}
-                                    {item.status === 'error' && (
-                                        <span className="text-red-400">Failed</span>
+                                    {dateInfo.status === 'error' && (
+                                        <span className="text-red-400" title={dateInfo.error}>Failed</span>
+                                    )}
+                                    {dateInfo.status === 'skipped' && (
+                                        <span className="text-slate-500">Already in DB</span>
                                     )}
                                 </div>
                             </div>
@@ -473,37 +423,39 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
                     </div>
 
                     {/* Current operation */}
-                    {currentItem && (
+                    {currentDate && (
                         <div className="bg-slate-950/50 rounded-lg p-4 border border-amber-500/30">
-                            <div className="text-xs text-slate-500 uppercase mb-2">Current Operation</div>
                             <div className="flex items-center gap-3">
                                 <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
-                                <span className="text-slate-300">
-                                    Fetching broker transactions for {currentItem.ladder.label}...
+                                <span className="text-slate-300 text-sm">
+                                    Scraping broker summary for {currentDate.date} from NeoBDM...
                                 </span>
-                            </div>
-                            <div className="mt-2 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                <div
-                                    className="h-full bg-amber-500 transition-all"
-                                    style={{ width: `${currentItem.progress}%` }}
-                                />
                             </div>
                         </div>
                     )}
 
-                    {/* Control buttons */}
-                    <div className="flex items-center justify-center gap-3">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={togglePause}
-                        >
-                            {scrapingPaused ? (
-                                <><Play className="w-4 h-4 mr-2" /> Resume</>
-                            ) : (
-                                <><Pause className="w-4 h-4 mr-2" /> Pause</>
-                            )}
-                        </Button>
+                    {analysisStep && (
+                        <div className="bg-slate-950/50 rounded-lg p-4 border border-indigo-500/30">
+                            <div className="flex items-center gap-3">
+                                <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
+                                <span className="text-slate-300 text-sm">{analysisStep}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Log */}
+                    {scrapeLog.length > 0 && (
+                        <div className="bg-slate-950 rounded-lg p-3 border border-slate-800 max-h-32 overflow-y-auto">
+                            <div className="text-xs font-mono text-slate-500 space-y-0.5">
+                                {scrapeLog.map((log, i) => (
+                                    <div key={i}>{log}</div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Cancel button */}
+                    <div className="flex items-center justify-center">
                         <Button
                             variant="outline"
                             size="sm"
@@ -513,11 +465,6 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
                             <Square className="w-4 h-4 mr-2" />
                             Cancel
                         </Button>
-                    </div>
-
-                    {/* Tip */}
-                    <div className="text-xs text-slate-500 text-center">
-                        💡 Tip: You can switch to other tickers while scraping continues in background
                     </div>
                 </div>
             );
@@ -529,12 +476,12 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
                 <div className="text-center py-8">
                     <XCircle className="w-12 h-12 mx-auto text-red-400 mb-4" />
                     <h4 className="text-lg font-semibold text-red-400 mb-2">
-                        Scraping Failed
+                        Analysis Failed
                     </h4>
                     <p className="text-slate-500 text-sm mb-4">
-                        {stage3.error || "An error occurred during scraping"}
+                        {stage3.error || "An error occurred during analysis"}
                     </p>
-                    <Button onClick={() => updateStageStatus(ticker, 3, 'idle')} variant="outline">
+                    <Button onClick={() => { updateStageStatus(ticker, 3, 'idle'); setTradingDates([]); }} variant="outline">
                         <RefreshCw className="w-4 h-4 mr-2" />
                         Retry
                     </Button>
@@ -665,7 +612,7 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
                         <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => updateStageStatus(ticker, 3, 'idle')}
+                            onClick={() => { updateStageStatus(ticker, 3, 'idle'); setTradingDates([]); }}
                         >
                             <RefreshCw className="w-4 h-4 mr-2" />
                             Re-scrape
@@ -682,7 +629,7 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
 
                 {/* Metadata */}
                 <div className="text-xs text-slate-600 text-right">
-                    Scraped {data.scraped_ranges.length} ranges • Last updated: {new Date(data.last_scraped_at).toLocaleString()}
+                    Last updated: {new Date(data.last_scraped_at).toLocaleString()}
                 </div>
             </div>
         );

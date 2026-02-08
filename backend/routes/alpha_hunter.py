@@ -313,27 +313,102 @@ async def get_smart_money_flow(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/stage3/trading-dates/{ticker}")
+async def get_stage3_trading_dates(
+    ticker: str,
+    days: int = Query(7, ge=3, le=14, description="Number of recent trading days to return")
+):
+    """
+    Get recent trading dates for Stage 3 broker summary scraping.
+    Also checks which dates already have broker data in the database.
+    """
+    from modules.volume_fetcher import VolumeFetcher
+    
+    ticker = ticker.upper()
+    db = DatabaseManager()
+    
+    try:
+        fetcher = VolumeFetcher()
+        records = fetcher.get_volume_data(ticker, start_date=None, end_date=None)
+        
+        if not records:
+            raise HTTPException(status_code=404, detail=f"No trading data found for {ticker}")
+        
+        # Get the most recent N trading dates
+        all_dates = sorted([r['trade_date'] for r in records], reverse=True)
+        recent_dates = all_dates[:days]
+        
+        # Check which dates already have broker data
+        existing_dates = set(db.get_available_dates_for_ticker(ticker))
+        
+        dates_info = []
+        for d in recent_dates:
+            dates_info.append({
+                "date": d,
+                "has_data": d in existing_dates
+            })
+        
+        return {
+            "ticker": ticker,
+            "dates": dates_info,
+            "total": len(dates_info),
+            "already_scraped": sum(1 for d in dates_info if d["has_data"]),
+            "needs_scraping": sum(1 for d in dates_info if not d["has_data"])
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/scrape-broker/{ticker}")
 async def trigger_broker_scrape(
     ticker: str,
     dates: List[str] = Body(...)
 ):
-    """Trigger broker summary scrape for specific dates."""
-    from scrapers.neobdm_scraper import scrape_broker_summary
+    """Trigger broker summary scrape for specific dates using NeoBDM."""
+    from modules.scraper_neobdm import NeoBDMScraper
     
     ticker = ticker.upper()
+    db = DatabaseManager()
     results = []
     errors = []
+    scraper = None
     
-    for date in dates:
-        try:
-            result = await scrape_broker_summary(ticker, date)
-            if result:
-                results.append({"date": date, "status": "success"})
-            else:
-                errors.append({"date": date, "error": "No data returned"})
-        except Exception as e:
-            errors.append({"date": date, "error": str(e)})
+    try:
+        scraper = NeoBDMScraper()
+        await scraper.init_browser(headless=True)
+        login_success = await scraper.login()
+        
+        if not login_success:
+            raise HTTPException(status_code=401, detail="Failed to login to NeoBDM")
+        
+        for date in dates:
+            try:
+                data = await scraper.get_broker_summary(ticker, date)
+                if data and (data.get('buy') or data.get('sell')):
+                    db.save_broker_summary_batch(
+                        ticker, date,
+                        data.get('buy', []),
+                        data.get('sell', [])
+                    )
+                    results.append({
+                        "date": date,
+                        "status": "success",
+                        "buy_count": len(data.get('buy', [])),
+                        "sell_count": len(data.get('sell', []))
+                    })
+                else:
+                    errors.append({"date": date, "error": "No data returned"})
+            except Exception as e:
+                errors.append({"date": date, "error": str(e)})
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if scraper:
+            await scraper.close()
     
     return {
         "ticker": ticker,
