@@ -103,14 +103,23 @@ class NewsRepository(BaseRepository):
                 base_query += " AND date(timestamp) <= date(?)"
                 params.append(str(end_date))
 
+            # Sentiment Filter
+            if sentiment_label:
+                base_query += " AND sentiment_label = ?"
+                params.append(sentiment_label)
+
             # Source Filter (Based on domain parsing)
             if source and source != "All":
                 if source == "CNBC":
-                    base_query += " AND url LIKE '%cnbc.com%'"
+                    base_query += " AND url LIKE '%cnbc%'"
                 elif source == "EmitenNews":
                     base_query += " AND url LIKE '%emitennews.com%'"
                 elif source == "IDX":
                     base_query += " AND (url LIKE '%idx.co.id%' OR source = 'IDX')"
+                elif source == "Bisnis.com":
+                    base_query += " AND url LIKE '%bisnis.com%'"
+                elif source == "Investor.id":
+                    base_query += " AND url LIKE '%investor.id%'"
 
             # Order by latest
             base_query += " ORDER BY timestamp DESC"

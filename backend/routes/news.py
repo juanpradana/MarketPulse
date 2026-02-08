@@ -94,7 +94,16 @@ async def get_news(
                 "url": row['url'],
                 "source": s_name
             })
-        return result
+
+        # Deduplicate by title (same article may appear with different URL paths)
+        seen_titles = set()
+        unique_result = []
+        for item in result:
+            title_key = item['title'].strip().lower()
+            if title_key not in seen_titles:
+                seen_titles.add(title_key)
+                unique_result.append(item)
+        return unique_result
     except Exception as e:
         import traceback
         error_msg = f"News API Error: {str(e)}\n{traceback.format_exc()}"
@@ -442,6 +451,23 @@ async def get_story_finder(
                     "source": source,
                     "url": url
                 })
+        
+        # Deduplicate by title (same article may appear with different URL paths)
+        seen_titles = set()
+        unique_stories = []
+        for story in stories:
+            title_key = story['title'].strip().lower()
+            if title_key not in seen_titles:
+                seen_titles.add(title_key)
+                unique_stories.append(story)
+        stories = unique_stories
+        
+        # Recalculate keyword_stats after dedup
+        keyword_stats = {kw: 0 for kw in keyword_list}
+        for story in stories:
+            for kw in story.get('matched_keywords', []):
+                if kw in keyword_stats:
+                    keyword_stats[kw] += 1
         
         # Sort by date descending
         stories.sort(key=lambda x: x['date'], reverse=True)
