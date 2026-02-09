@@ -83,6 +83,9 @@ async def run_scraper(request: ScrapeRequest):
                 message = "Tidak ada berita baru ditemukan di CNBC Indonesia."
 
         elif request.source == "IDX (Keterbukaan Informasi)":
+            import logging
+            idx_logger = logging.getLogger("scraper_idx_route")
+            
             from modules.scraper_idx import fetch_and_save_pipeline
             
             final_start = start_dt.date()
@@ -92,20 +95,37 @@ async def run_scraper(request: ScrapeRequest):
                 final_start = datetime(2010, 1, 1).date()
                 final_end = datetime.now().date()
             
-            fetch_and_save_pipeline(
+            # Step 1: Download pipeline
+            pipeline_result = fetch_and_save_pipeline(
                 ticker=request.ticker if request.ticker and request.ticker.strip() != "" else None,
                 start_date=final_start,
                 end_date=final_end,
                 download_dir="downloads"
             )
             
-            # Auto-run Indexing
-            from idx_processor import IDXProcessor
-            processor = IDXProcessor()
-            processor.run_processor()
+            new_count = pipeline_result.get("downloaded", 0)
+            fetched = pipeline_result.get("fetched", 0)
+            failed_dl = pipeline_result.get("failed", 0)
             
-            message = "Pipeline IDX Selesai. Data telah terdownload dan terindeks untuk RAG."
-            new_count = -1  # Special code for IDX
+            # Step 2: Auto-run Indexing (wrapped in try/except so download success isn't lost)
+            process_msg = ""
+            try:
+                from idx_processor import IDXProcessor
+                processor = IDXProcessor()
+                proc_result = processor.run_processor()
+                
+                proc_success = proc_result.get("success", 0)
+                proc_failed = proc_result.get("failed", 0)
+                process_msg = f" Diproses: {proc_success} berhasil, {proc_failed} gagal."
+            except Exception as proc_err:
+                idx_logger.error(f"IDX Processor error (non-fatal): {proc_err}")
+                process_msg = f" Indexing dilewati: {str(proc_err)[:100]}"
+            
+            message = (
+                f"Pipeline IDX Selesai. "
+                f"Ditemukan: {fetched}, Terdownload: {new_count}, Gagal download: {failed_dl}."
+                f"{process_msg}"
+            )
             
         elif request.source == "Bisnis.com":
             from modules.scraper_bisnis import BisnisScraper

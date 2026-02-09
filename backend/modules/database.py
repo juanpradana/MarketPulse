@@ -61,6 +61,9 @@ class DatabaseManager:
     def get_all_disclosures_paths(self):
         return self.disclosure_repo.get_all_disclosures_paths()
     
+    def delete_disclosures_by_ids(self, doc_ids):
+        return self.disclosure_repo.delete_disclosures_by_ids(doc_ids)
+    
     # NeoBDM operations - delegate to NeoBDMRepository
     def save_neobdm_summary(self, method, period, data_list):
         return self.neobdm_repo.save_neobdm_summary(method, period, data_list)

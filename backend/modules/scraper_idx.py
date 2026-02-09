@@ -3,13 +3,33 @@ import datetime
 import os
 import json
 import time
+import logging
 from modules.database import DatabaseManager
 
+logger = logging.getLogger(__name__)
+
 # Constants
-# Correct Endpoint identified by Browser Subagent
 IDX_API_URL = "https://www.idx.co.id/primary/ListedCompany/GetAnnouncement"
 REFERER_URL = "https://www.idx.co.id/id/perusahaan-tercatat/keterbukaan-informasi/"
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
+def _create_session():
+    """Create a reusable curl_cffi session with proper headers."""
+    s = requests.Session(impersonate="chrome120")
+    s.headers.update({
+        "User-Agent": USER_AGENT,
+        "Referer": REFERER_URL,
+        "Accept": "application/json, text/plain, */*",
+    })
+    return s
+
+def _format_date(d):
+    """Convert date input to YYYYMMDD string format."""
+    if not d:
+        return datetime.date.today().strftime("%Y%m%d")
+    if isinstance(d, (datetime.date, datetime.datetime)):
+        return d.strftime("%Y%m%d")
+    return str(d).replace("-", "")
 
 def fetch_idx_disclosures(ticker=None, date_from=None, date_to=None, limit=None, save_to_db=False):
     """
@@ -25,44 +45,25 @@ def fetch_idx_disclosures(ticker=None, date_from=None, date_to=None, limit=None,
     Returns:
         list: List of dictionaries containing disclosure details.
     """
-    
-    # Handle dates
-    if not date_from:
-        date_from = datetime.date.today().strftime("%Y%m%d")
-    elif isinstance(date_from, (datetime.date, datetime.datetime)):
-        date_from = date_from.strftime("%Y%m%d")
-    else:
-        date_from = date_from.replace("-", "")
+    date_from = _format_date(date_from)
+    date_to = _format_date(date_to)
 
-    if not date_to:
-        date_to = datetime.date.today().strftime("%Y%m%d")
-    elif isinstance(date_to, (datetime.date, datetime.datetime)):
-        date_to = date_to.strftime("%Y%m%d")
-    else:
-        date_to = date_to.replace("-", "")
-
-    # Session setup
-    s = requests.Session(impersonate="chrome120")
-    s.headers.update({
-        "User-Agent": USER_AGENT,
-        "Referer": REFERER_URL,
-        "Accept": "application/json, text/plain, */*",
-    })
+    session = _create_session()
     
-    # Warm up
+    # Warm up session with cookies
     try:
-        s.get(REFERER_URL, timeout=10)
+        session.get(REFERER_URL, timeout=15)
     except Exception:
-        pass
+        logger.warning("IDX warm-up request failed, continuing anyway...")
 
-    # DB Init if needed
     db = DatabaseManager() if save_to_db else None
 
     results = []
     current_index = 0
     page_size = 100 
+    max_retries = 3
     
-    print(f"Fetching IDX disclosures for ticker={ticker}, range={date_from}-{date_to}...")
+    logger.info(f"Fetching IDX disclosures for ticker={ticker}, range={date_from}-{date_to}...")
 
     while True:
         if limit and len(results) >= limit:
@@ -85,143 +86,196 @@ def fetch_idx_disclosures(ticker=None, date_from=None, date_to=None, limit=None,
             "keyword": ""
         }
         
+        # Retry logic for transient failures
+        response = None
+        for attempt in range(max_retries):
+            try:
+                response = session.get(IDX_API_URL, params=params, timeout=30)
+                if response.status_code == 200:
+                    break
+                logger.warning(f"IDX API returned status {response.status_code}, attempt {attempt+1}/{max_retries}")
+                time.sleep(2 * (attempt + 1))
+            except Exception as e:
+                logger.warning(f"IDX API request failed (attempt {attempt+1}/{max_retries}): {e}")
+                time.sleep(2 * (attempt + 1))
+        
+        if not response or response.status_code != 200:
+            logger.error(f"IDX API failed after {max_retries} retries at index {current_index}")
+            break
+        
         try:
-            response = s.get(IDX_API_URL, params=params, timeout=30)
-            if response.status_code != 200:
-                print(f"Error: Received status code {response.status_code}")
-                break
-                
             data = response.json()
-            replies = data.get("Replies", [])
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.error(f"Failed to parse IDX API response: {e}")
+            break
             
-            if not replies:
-                break
+        replies = data.get("Replies", [])
+        
+        if not replies:
+            break
+            
+        for item in replies:
+            pengumuman = item.get("pengumuman", {})
+            attachments = item.get("attachments", [])
+            
+            if not attachments:
+                continue
                 
-            for item in replies:
-                pengumuman = item.get("pengumuman", {})
-                attachments = item.get("attachments", [])
+            title = pengumuman.get("JudulPengumuman", "No Title")
+            pub_date = pengumuman.get("TglPengumuman", "") 
+            item_ticker = pengumuman.get("Kode_Emiten", ticker or "")
+            
+            for att in attachments:
+                download_url = att.get("FullSavePath", "")
+                original_filename = att.get("OriginalFilename", "")
                 
-                if not attachments:
+                if not download_url:
                     continue
                     
-                title = pengumuman.get("JudulPengumuman", "No Title")
-                pub_date = pengumuman.get("TglPengumuman", "") 
-                item_ticker = pengumuman.get("Kode_Emiten", ticker)
+                file_id = download_url.split("/")[-1]
+
+                record = {
+                    "date": pub_date,
+                    "ticker": item_ticker.strip() if item_ticker else "",
+                    "title": title,
+                    "download_url": download_url,
+                    "file_id": file_id,
+                    "filename": original_filename,
+                    "local_path": ""
+                }
                 
-                for att in attachments:
-                    download_url = att.get("FullSavePath", "")
-                    original_filename = att.get("OriginalFilename", "")
-                    
-                    if not download_url:
-                        continue
-                        
-                    file_id = download_url.split("/")[-1]
+                results.append(record)
 
-                    record = {
-                        "date": pub_date,
-                        "ticker": item_ticker,
-                        "title": title,
-                        "download_url": download_url,
-                        "file_id": file_id,
-                        "filename": original_filename,
-                        "local_path": "" # Initially empty until downloaded
-                    }
-                    
-                    results.append(record)
+                if save_to_db and db:
+                    db.insert_disclosure(record)
 
-                    # Save to DB immediately if requested
-                    if save_to_db and db:
-                        db.insert_disclosure(record)
-
-            print(f"  Fetched items {current_index+1} to {current_index + len(replies)}...")
-            current_index += len(replies)
-            
-            if len(replies) < current_request_size:
-                break
-                
-            time.sleep(0.5)
-            
-        except Exception as e:
-            print(f"Error fetching page {current_index}: {e}")
+        logger.info(f"  Fetched items {current_index+1} to {current_index + len(replies)}...")
+        current_index += len(replies)
+        
+        if len(replies) < current_request_size:
             break
+            
+        time.sleep(0.5)
 
-    print(f"Total PDFs found: {len(results)}")
+    logger.info(f"Total disclosures found: {len(results)}")
     return results
 
-def download_pdf(url, save_dir):
+def download_pdf(url, save_dir, session=None):
     """
     Downloads a PDF using curl_cffi.
+    
+    Args:
+        url: Download URL
+        save_dir: Directory to save the file
+        session: Optional reusable session (creates new one if None)
+    
+    Returns:
+        str: Local file path if successful, None otherwise
     """
     if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
+        os.makedirs(save_dir, exist_ok=True)
 
     filename = url.split("/")[-1]
     filename = "".join([c for c in filename if c.isalpha() or c.isdigit() or c in (' ', '.', '_', '-')]).strip()
+    
+    if not filename:
+        filename = f"idx_doc_{int(time.time())}.pdf"
+    
     save_path = os.path.join(save_dir, filename)
 
+    # Skip if already downloaded
+    if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
+        logger.info(f"  Already exists, skipping: {filename}")
+        return save_path
+
     try:
-        s = requests.Session(impersonate="chrome120")
-        s.headers.update({"Referer": REFERER_URL})
+        if session is None:
+            session = _create_session()
         
-        response = s.get(url, timeout=30)
+        response = session.get(url, timeout=60)
         
         if response.status_code == 200:
+            content = response.content
+            # Validate we got actual content (not an error page)
+            if len(content) < 100:
+                logger.warning(f"  Downloaded file too small ({len(content)} bytes), skipping: {filename}")
+                return None
+            
             with open(save_path, "wb") as f:
-                f.write(response.content)
+                f.write(content)
             return save_path
         else:
-            print(f"Failed to download {url}: Status {response.status_code}")
+            logger.warning(f"  Failed to download {filename}: Status {response.status_code}")
             return None
     except Exception as e:
-        print(f"Failed to download {url}: {e}")
+        logger.error(f"  Failed to download {filename}: {e}")
         return None
 
 def fetch_and_save_pipeline(ticker=None, days=30, download_dir="downloads", start_date=None, end_date=None):
+    """
+    Full pipeline: fetch metadata -> download PDFs -> update DB.
+    
+    Returns:
+        dict: Pipeline result with counts and status
+    """
     db = DatabaseManager()
     
     # Determine date range
     if start_date and end_date:
-        # Use provided dates
         s_date = start_date
         e_date = end_date
     else:
-        # Default to 'days' lookback
         s_date = datetime.date.today() - datetime.timedelta(days=days)
         e_date = datetime.date.today()
     
-    print(f"[*] Starting IDX Scraper Pipeline for ticker: {ticker or 'ALL'}")
-    print(f"[*] Date Range: {s_date} to {e_date}")
+    logger.info(f"[*] Starting IDX Scraper Pipeline for ticker: {ticker or 'ALL'}")
+    logger.info(f"[*] Date Range: {s_date} to {e_date}")
+    
+    result = {
+        "fetched": 0,
+        "downloaded": 0,
+        "skipped": 0,
+        "failed": 0,
+        "status": "success"
+    }
     
     # 1. Fetch & Save Metadata
-    disclosures = fetch_idx_disclosures(
-        ticker=ticker, 
-        date_from=s_date, 
-        date_to=e_date, 
-        save_to_db=True
-    )
+    try:
+        disclosures = fetch_idx_disclosures(
+            ticker=ticker, 
+            date_from=s_date, 
+            date_to=e_date, 
+            save_to_db=True
+        )
+    except Exception as e:
+        logger.error(f"Failed to fetch IDX disclosures: {e}")
+        result["status"] = "error"
+        result["error"] = str(e)
+        return result
     
     if not disclosures:
-        print("[-] No disclosures found.")
-        return []
+        logger.info("[-] No disclosures found.")
+        result["status"] = "empty"
+        return result
     
-    # 2. Download and Update DB
-    downloaded_count = 0
+    result["fetched"] = len(disclosures)
+    
+    # 2. Download PDFs with reused session
+    download_session = _create_session()
+    
     for item in disclosures:
         url = item['download_url']
-        print(f"Downloading {item['filename']}...")
-        local_path = download_pdf(url, download_dir)
+        fname = item.get('filename', url.split('/')[-1])
+        logger.info(f"  Downloading: {fname}")
+        
+        local_path = download_pdf(url, download_dir, session=download_session)
         
         if local_path:
-            # Update DB with local path
-            # We can use insert_disclosure again since it likely does nothing on conflict? 
-            # Or better, run a specific UPDATE query. 
-            # For simplicity, let's use a quick SQL execution here or add update method.
-            # Since insert_disclosure uses IGNORE, we need an UPDATE method.
-            # But for this task, I'll direct SQL update.
-            with db._get_conn() as conn:
-                conn.execute(
-                    "UPDATE idx_disclosures SET local_path = ?, processed_status = 'DOWNLOADED' WHERE download_url = ?",
-                    (local_path, url)
-                )
+            # Update DB with local path using proper repository method
+            db.disclosure_repo.update_local_path(url, local_path, 'DOWNLOADED')
+            result["downloaded"] += 1
+        else:
+            result["failed"] += 1
     
-    print("Pipeline complete.")
+    logger.info(f"[*] Pipeline complete. Fetched={result['fetched']}, Downloaded={result['downloaded']}, Failed={result['failed']}")
+    return result

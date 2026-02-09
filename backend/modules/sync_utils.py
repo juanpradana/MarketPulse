@@ -1,7 +1,7 @@
 import os
 import logging
+from datetime import datetime
 from modules.database import DatabaseManager
-from rag_client import rag_client
 from config import DOWNLOADS_DIR, BASE_DIR
 
 logger = logging.getLogger(__name__)
@@ -48,11 +48,12 @@ def sync_disclosures_with_filesystem():
             
     if orphans:
         logger.info(f"Found {len(orphans)} orphaned disclosures (files missing). Cleaning up...")
-        # 1. Delete from ChromaDB
+        # 1. Delete from ChromaDB (if available)
         try:
+            from rag_client import rag_client
             rag_client.delete_documents(orphans)
         except Exception as e:
-            logger.error(f"Failed to sync ChromaDB: {e}")
+            logger.warning(f"Failed to sync ChromaDB (non-fatal): {e}")
             
         # 2. Delete from SQL
         try:
@@ -102,12 +103,10 @@ def sync_filesystem_with_db():
             }
             db_manager.insert_disclosure(record)
             
-            # Mark as DOWNLOADED
-            with db_manager._get_conn() as conn:
-                conn.execute(
-                    "UPDATE idx_disclosures SET processed_status = 'DOWNLOADED' WHERE local_path = ?",
-                    (file_path,)
-                )
+            # Mark as DOWNLOADED using proper repository method
+            db_manager.disclosure_repo.update_local_path(
+                f"local://{filename}", file_path, 'DOWNLOADED'
+            )
             new_files.append(filename)
             
     return {

@@ -115,13 +115,19 @@ async def run_sync_disclosures():
         scan_result = sync_filesystem_with_db()
         
         # 3. Trigger Indexing for any pending/downloaded docs
-        from idx_processor import IDXProcessor
-        processor = IDXProcessor()
-        processor.run_processor()
+        proc_result = {"processed": 0, "success": 0, "failed": 0}
+        try:
+            from idx_processor import IDXProcessor
+            processor = IDXProcessor()
+            proc_result = processor.run_processor()
+        except Exception as proc_err:
+            logging.warning(f"IDX Processor error (non-fatal): {proc_err}")
+            proc_result["error"] = str(proc_err)
         
         return {
             "sync_result": sync_result,
             "scan_result": scan_result,
+            "process_result": proc_result,
             "message": "Synchronization and indexing complete."
         }
     except Exception as e:
