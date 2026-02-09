@@ -107,12 +107,17 @@ async def run_scraper(request: ScrapeRequest):
             fetched = pipeline_result.get("fetched", 0)
             failed_dl = pipeline_result.get("failed", 0)
             
-            # Step 2: Auto-run Indexing (wrapped in try/except so download success isn't lost)
+            # Step 2: Auto-run Indexing ONLY for newly downloaded docs
+            #         (not the entire backlog - that would take hours)
             process_msg = ""
+            downloaded_urls = pipeline_result.get("downloaded_urls", [])
             try:
                 from idx_processor import IDXProcessor
                 processor = IDXProcessor()
-                proc_result = processor.run_processor()
+                if downloaded_urls:
+                    proc_result = processor.run_processor_for_urls(downloaded_urls)
+                else:
+                    proc_result = {"processed": 0, "success": 0, "failed": 0}
                 
                 proc_success = proc_result.get("success", 0)
                 proc_failed = proc_result.get("failed", 0)

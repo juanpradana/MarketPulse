@@ -147,9 +147,12 @@ class DisclosureRepository(BaseRepository):
         finally:
             conn.close()
     
-    def get_pending_disclosures(self) -> List[Tuple]:
+    def get_pending_disclosures(self, limit: Optional[int] = None) -> List[Tuple]:
         """
         Get disclosures that need processing (PENDING or DOWNLOADED status).
+        
+        Args:
+            limit: Optional max number of records to return (newest first)
         
         Returns:
             List of (id, local_path, ticker, title) tuples
@@ -157,14 +160,48 @@ class DisclosureRepository(BaseRepository):
         conn = self._get_conn()
         try:
             cursor = conn.cursor()
-            cursor.execute(
+            query = (
                 "SELECT id, local_path, ticker, title FROM idx_disclosures "
                 "WHERE processed_status IN ('PENDING', 'DOWNLOADED') "
-                "AND local_path IS NOT NULL AND local_path != ''"
+                "AND local_path IS NOT NULL AND local_path != '' "
+                "ORDER BY id DESC"
             )
+            if limit:
+                query += f" LIMIT {int(limit)}"
+            cursor.execute(query)
             return cursor.fetchall()
         except Exception as e:
             print(f"[!] Error fetching pending disclosures: {e}")
+            return []
+        finally:
+            conn.close()
+    
+    def get_disclosures_by_urls(self, urls: List[str]) -> List[Tuple]:
+        """
+        Get disclosures matching specific download URLs.
+        Used to process only newly downloaded documents.
+        
+        Args:
+            urls: List of download URLs to match
+        
+        Returns:
+            List of (id, local_path, ticker, title) tuples
+        """
+        if not urls:
+            return []
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            placeholders = ",".join(["?" for _ in urls])
+            cursor.execute(
+                f"SELECT id, local_path, ticker, title FROM idx_disclosures "
+                f"WHERE download_url IN ({placeholders}) "
+                f"AND local_path IS NOT NULL AND local_path != ''",
+                urls
+            )
+            return cursor.fetchall()
+        except Exception as e:
+            print(f"[!] Error fetching disclosures by URLs: {e}")
             return []
         finally:
             conn.close()
@@ -188,6 +225,28 @@ class DisclosureRepository(BaseRepository):
             conn.commit()
         except Exception as e:
             print(f"[!] Error deleting disclosures: {e}")
+        finally:
+            conn.close()
+    
+    def get_non_pending_urls(self) -> set:
+        """
+        Get download URLs that are NOT in PENDING status.
+        Used by scraper to skip already-downloaded or failed URLs.
+        
+        Returns:
+            Set of download_url strings
+        """
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT download_url FROM idx_disclosures "
+                "WHERE processed_status != 'PENDING'"
+            )
+            return {row[0] for row in cursor.fetchall()}
+        except Exception as e:
+            print(f"[!] Error fetching non-pending URLs: {e}")
+            return set()
         finally:
             conn.close()
     

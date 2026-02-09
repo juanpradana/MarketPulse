@@ -144,6 +144,29 @@ class IDXProcessor:
         
         return None
 
+    def _is_valid_pdf(self, file_path):
+        """Check if file is actually a PDF (extension + magic bytes)."""
+        # Check extension
+        _, ext = os.path.splitext(file_path.lower())
+        if ext and ext != '.pdf':
+            return False
+        
+        # Check magic bytes (PDF starts with %PDF)
+        try:
+            with open(file_path, 'rb') as f:
+                header = f.read(8)
+            if header[:4] == b'%PDF':
+                return True
+            # ZIP magic bytes (PK\x03\x04) - definitely not a PDF
+            if header[:4] == b'PK\x03\x04':
+                return False
+            # If no extension and not clearly non-PDF, give it a try
+            if not ext:
+                return True
+            return False
+        except Exception:
+            return False
+
     def _extract_text_from_pdf(self, file_path):
         """Extract text from PDF with multiple fallback methods."""
         # Method 1: PyPDFLoader (LangChain)
@@ -229,6 +252,13 @@ class IDXProcessor:
                 logger.error(f"File not found for doc {doc_id}: {local_path}")
                 self.db.disclosure_repo.update_status(doc_id, 'FAILED')
                 return False
+            
+            # Validate file is actually a PDF
+            if not self._is_valid_pdf(resolved_path):
+                fname = os.path.basename(resolved_path)
+                logger.info(f"Skipping non-PDF file: {fname}")
+                self.db.disclosure_repo.update_status(doc_id, 'SKIPPED', f'Non-PDF file: {fname}')
+                return True  # Not a failure, just not processable
 
             # Extract text from PDF
             pages = self._extract_text_from_pdf(resolved_path)
@@ -279,14 +309,13 @@ class IDXProcessor:
             self.db.disclosure_repo.update_status(doc_id, 'FAILED')
             return False
 
-    def run_processor(self):
-        """Process all pending disclosures."""
-        records = self.db.disclosure_repo.get_pending_disclosures()
+    def _process_records(self, records):
+        """Internal: process a list of (id, local_path, ticker, title) records."""
         if not records:
-            logger.info("No pending disclosures found.")
+            logger.info("No documents to process.")
             return {"processed": 0, "success": 0, "failed": 0}
 
-        logger.info(f"Found {len(records)} pending disclosures.")
+        logger.info(f"Processing {len(records)} documents...")
         
         if self.ollama_available:
             logger.info("Ollama is available - full AI processing enabled.")
@@ -308,6 +337,18 @@ class IDXProcessor:
         
         logger.info(f"Processing complete: {result['success']}/{result['processed']} succeeded, {result['failed']} failed")
         return result
+
+    def run_processor(self, limit=None):
+        """Process pending disclosures (optionally limited)."""
+        records = self.db.disclosure_repo.get_pending_disclosures(limit=limit)
+        return self._process_records(records)
+    
+    def run_processor_for_urls(self, urls):
+        """Process only documents matching specific download URLs (for targeted processing)."""
+        if not urls:
+            return {"processed": 0, "success": 0, "failed": 0}
+        records = self.db.disclosure_repo.get_disclosures_by_urls(urls)
+        return self._process_records(records)
 
 
 if __name__ == "__main__":

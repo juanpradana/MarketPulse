@@ -13,6 +13,18 @@ IDX_API_URL = "https://www.idx.co.id/primary/ListedCompany/GetAnnouncement"
 REFERER_URL = "https://www.idx.co.id/id/perusahaan-tercatat/keterbukaan-informasi/"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
+# File extensions to skip (not processable as PDF)
+SKIP_EXTENSIONS = {'.zip', '.xlsx', '.xls', '.xml', '.xbrl', '.csv', '.doc', '.docx', '.ppt', '.pptx', '.rar', '.7z'}
+
+def _is_pdf_file(filename, download_url):
+    """Check if a file is likely a PDF based on filename/URL."""
+    name = (filename or download_url.split('/')[-1] or '').lower()
+    _, ext = os.path.splitext(name)
+    if ext in SKIP_EXTENSIONS:
+        return False
+    # Accept .pdf or no extension (IDX sometimes has hash filenames without extension)
+    return True
+
 def _create_session():
     """Create a reusable curl_cffi session with proper headers."""
     s = requests.Session(impersonate="chrome120")
@@ -131,6 +143,11 @@ def fetch_idx_disclosures(ticker=None, date_from=None, date_to=None, limit=None,
                 
                 if not download_url:
                     continue
+                
+                # Skip non-PDF files (zip, xlsx, xbrl, etc.)
+                if not _is_pdf_file(original_filename, download_url):
+                    logger.debug(f"  Skipping non-PDF: {original_filename or download_url.split('/')[-1]}")
+                    continue
                     
                 file_id = download_url.split("/")[-1]
 
@@ -236,7 +253,8 @@ def fetch_and_save_pipeline(ticker=None, days=30, download_dir="downloads", star
         "downloaded": 0,
         "skipped": 0,
         "failed": 0,
-        "status": "success"
+        "status": "success",
+        "downloaded_urls": []
     }
     
     # 1. Fetch & Save Metadata
@@ -260,12 +278,21 @@ def fetch_and_save_pipeline(ticker=None, days=30, download_dir="downloads", star
     
     result["fetched"] = len(disclosures)
     
-    # 2. Download PDFs with reused session
+    # 2. Get already-processed URLs to skip re-downloads
+    already_processed_urls = db.disclosure_repo.get_non_pending_urls()
+    
+    # 3. Download PDFs with reused session
     download_session = _create_session()
     
     for item in disclosures:
         url = item['download_url']
         fname = item.get('filename', url.split('/')[-1])
+        
+        # Skip if already processed in DB
+        if url in already_processed_urls:
+            result["skipped"] += 1
+            continue
+        
         logger.info(f"  Downloading: {fname}")
         
         local_path = download_pdf(url, download_dir, session=download_session)
@@ -274,7 +301,10 @@ def fetch_and_save_pipeline(ticker=None, days=30, download_dir="downloads", star
             # Update DB with local path using proper repository method
             db.disclosure_repo.update_local_path(url, local_path, 'DOWNLOADED')
             result["downloaded"] += 1
+            result["downloaded_urls"].append(url)
         else:
+            # Mark as DOWNLOAD_FAILED so we don't retry on next run
+            db.disclosure_repo.update_local_path(url, '', 'DOWNLOAD_FAILED')
             result["failed"] += 1
     
     logger.info(f"[*] Pipeline complete. Fetched={result['fetched']}, Downloaded={result['downloaded']}, Failed={result['failed']}")
