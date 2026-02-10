@@ -24,6 +24,7 @@ import { scrapersApi } from './api/scrapers';
 import { brokerFiveApi } from './api/brokerFive';
 import { doneDetailApi } from './api/doneDetail';
 import { priceVolumeApi } from './api/priceVolume';
+import { bandarmologyApi } from './api/bandarmology';
 
 // Re-export types for backward compatibility
 export type { NewsItem, Disclosure };
@@ -71,6 +72,10 @@ export const api = {
 
     // Scraper APIs
     runScraper: scrapersApi.runScraper,
+
+    // Bandarmology APIs
+    getBandarmologyScreening: bandarmologyApi.getScreening,
+    getBandarmologyDates: bandarmologyApi.getDates,
 };
 
 /**
@@ -84,5 +89,6 @@ export {
     scrapersApi,
     brokerFiveApi,
     doneDetailApi,
-    priceVolumeApi
+    priceVolumeApi,
+    bandarmologyApi
 };

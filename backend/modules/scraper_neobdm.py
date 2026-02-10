@@ -903,6 +903,502 @@ class NeoBDMScraper:
             print(f"[!] Critical error in Batch Sync: {e}")
             return results
 
+    # ==================== BANDARMOLOGY: INVENTORY ====================
+
+    async def _select_ticker_react_select(self, ticker: str, container_selector: str = None) -> bool:
+        """
+        Select ticker from React-Select dropdown (used by inventory & transaction_chart pages).
+        Uses JS-based approach for reliability across repeated page loads.
+        
+        Args:
+            container_selector: CSS selector to scope which React-Select to target.
+                               e.g. '#ticker-container' or None for first found.
+        """
+        if not self.page:
+            return False
+        
+        try:
+            # Wait for React-Select to be present in DOM
+            for _ in range(10):
+                ready = await self.page.evaluate("""
+                    () => {
+                        const inputs = document.querySelectorAll('.Select-input input, .Select input[role="combobox"]');
+                        return inputs.length > 0;
+                    }
+                """)
+                if ready:
+                    break
+                await asyncio.sleep(1)
+            
+            # Strategy 1: Use JS to simulate React-Select interaction
+            # This is more reliable than clicking DOM elements
+            selected = await self.page.evaluate("""
+                (ticker) => {
+                    // Find the FIRST .Select-control (ticker select, not broker)
+                    const controls = document.querySelectorAll('.Select-control');
+                    if (controls.length === 0) return 'no_controls';
+                    
+                    // Click to open
+                    controls[0].click();
+                    return 'opened';
+                }
+            """, ticker)
+            
+            if selected == 'no_controls':
+                print(f"   [TICKER] No .Select-control found on page")
+                return False
+            
+            await asyncio.sleep(0.5)
+            
+            # Type into the input that should now be focused/visible
+            input_el = self.page.locator('.Select-input input').first
+            if await input_el.count() > 0:
+                await input_el.fill('')
+                await asyncio.sleep(0.3)
+                await input_el.type(ticker, delay=50)
+                await asyncio.sleep(2)
+                
+                # Try clicking the matching option
+                option = self.page.locator('.Select-menu .Select-option, .VirtualizedSelectOption').filter(has_text=ticker).first
+                if await option.count() > 0:
+                    await option.click()
+                    await asyncio.sleep(1)
+                    print(f"   [TICKER] Selected {ticker} via React-Select option click")
+                    return True
+                
+                # Fallback: try grid-based dropdown
+                grid_option = self.page.locator('[role="grid"] [role="row"]').filter(has_text=ticker).first
+                if await grid_option.count() > 0:
+                    await grid_option.click()
+                    await asyncio.sleep(1)
+                    print(f"   [TICKER] Selected {ticker} via grid dropdown")
+                    return True
+                    
+                # Fallback: press Enter to select first match
+                await input_el.press('Enter')
+                await asyncio.sleep(1)
+                print(f"   [TICKER] Selected {ticker} via Enter key")
+                return True
+            
+            # Strategy 2: Try clicking placeholder directly then typing
+            placeholder = self.page.locator('.Select-placeholder').first
+            if await placeholder.count() > 0:
+                await placeholder.click()
+                await asyncio.sleep(0.5)
+                # After clicking placeholder, the input should appear
+                input_el2 = self.page.locator('.Select-input input').first
+                if await input_el2.count() > 0:
+                    await input_el2.type(ticker, delay=50)
+                    await asyncio.sleep(2)
+                    await input_el2.press('Enter')
+                    await asyncio.sleep(1)
+                    print(f"   [TICKER] Selected {ticker} via placeholder+Enter")
+                    return True
+            
+            print(f"   [TICKER] React-Select input not found after all strategies")
+            return False
+            
+        except Exception as e:
+            print(f"   [TICKER] React-Select selection failed: {e}")
+            return False
+
+    async def get_inventory(self, ticker: str, period_months: int = 3) -> dict:
+        """
+        Scrape inventory chart data for a specific ticker.
+        Returns broker accumulation/distribution data from Plotly chart.
+        """
+        if not self.page:
+            return None
+        
+        try:
+            target_url = f"{self.base_url}/inventory/"
+            
+            # Always navigate fresh to avoid stale DOM issues
+            print(f"   [INV] Navigating to {target_url}...")
+            await self.page.goto(target_url, wait_until='networkidle', timeout=60000)
+            await asyncio.sleep(3)
+            
+            # CRITICAL: Uncheck "hide tektok" and "hide netdist" to show ALL brokers
+            try:
+                hide_tektok = self.page.locator('input[type="checkbox"]').nth(0)
+                hide_netdist = self.page.locator('input[type="checkbox"]').nth(1)
+                
+                # Check if "hide tektok" is checked and uncheck it
+                is_tektok_checked = await hide_tektok.is_checked()
+                if is_tektok_checked:
+                    await hide_tektok.click()
+                    await asyncio.sleep(0.3)
+                    print(f"   [INV] Unchecked 'hide tektok'")
+                
+                # Check if "hide netdist" is checked and uncheck it
+                is_netdist_checked = await hide_netdist.is_checked()
+                if is_netdist_checked:
+                    await hide_netdist.click()
+                    await asyncio.sleep(0.3)
+                    print(f"   [INV] Unchecked 'hide netdist'")
+            except Exception as e:
+                print(f"   [INV] Warning: Could not uncheck hide checkboxes: {e}")
+            
+            # Select ticker
+            if not await self._select_ticker_react_select(ticker):
+                print(f"   [INV] Failed to select ticker {ticker}")
+                return None
+            
+            # Click Fetch button
+            fetch_btn = self.page.locator('button:has-text("Fetch")')
+            if await fetch_btn.count() > 0:
+                await fetch_btn.click()
+                print(f"   [INV] Clicked Fetch for {ticker}")
+            else:
+                print(f"   [INV] Fetch button not found")
+                return None
+            
+            # Wait for chart to load (inventory charts can be slow)
+            await asyncio.sleep(8)
+            
+            # Wait for Plotly chart to have broker data (more than just price+volume)
+            chart_info = None
+            for attempt in range(15):
+                chart_info = await self.page.evaluate("""
+                    () => {
+                        const p = document.querySelector('.js-plotly-plot');
+                        if (!p || !p._fullData) return { found: false, traces: 0 };
+                        return { found: true, traces: p._fullData.length };
+                    }
+                """)
+                if chart_info.get('found') and chart_info.get('traces', 0) > 2:
+                    break
+                await asyncio.sleep(1)
+            
+            trace_count = chart_info.get('traces', 0) if chart_info else 0
+            print(f"   [INV] Chart has {trace_count} traces for {ticker}")
+            
+            if trace_count <= 2:
+                print(f"   [INV] Only price/volume traces found, no broker data for {ticker}")
+                return None
+            
+            # Extract inventory data from Plotly
+            # NOTE: Plotly _fullData uses typed arrays (Float64Array) for y values,
+            # so Array.isArray() returns false. We use t.y && t.y.length instead.
+            data = await self.page.evaluate(r"""
+                () => {
+                    const p = document.querySelector('.js-plotly-plot');
+                    if (!p || !p._fullData) return null;
+                    const fd = p._fullData;
+                    
+                    const result = { brokers: [], lastDate: null, firstDate: null, traceCount: fd.length };
+                    
+                    for (let i = 0; i < fd.length; i++) {
+                        const t = fd[i];
+                        const name = t.name || '';
+                        
+                        // Skip price, volume, and marker traces
+                        if (t.type === 'candlestick' || name === 'volume' || name === 'price') continue;
+                        if (t.mode === 'markers+text') continue;
+                        if (t.type !== 'scatter') continue;
+                        
+                        // Plotly uses typed arrays (Float64Array), not regular Arrays
+                        const yLen = (t.y && t.y.length) ? t.y.length : 0;
+                        const xLen = (t.x && t.x.length) ? t.x.length : 0;
+                        if (yLen === 0) continue;
+                        
+                        // Convert typed arrays to regular arrays
+                        const dates = Array.from(t.x || []);
+                        const values = Array.from(t.y);
+                        
+                        const code = name.replace(/[\u2713\u2717]/g, '').trim();
+                        if (!code) continue;
+                        
+                        const lastVal = values[values.length - 1];
+                        const firstVal = values[0];
+                        
+                        result.brokers.push({
+                            code: code,
+                            isClean: name.indexOf('\u2713') !== -1,
+                            isTektok: name.indexOf('\u2717') !== -1,
+                            finalNetLot: lastVal,
+                            startNetLot: firstVal,
+                            isAccumulating: lastVal > 0,
+                            dataPoints: yLen,
+                            timeSeries: values.map(function(v, idx) {
+                                return { date: dates[idx] || null, cumNetLot: v };
+                            })
+                        });
+                        
+                        if (dates.length > 0) {
+                            result.lastDate = dates[dates.length - 1];
+                            result.firstDate = dates[0];
+                        }
+                    }
+                    
+                    return result;
+                }
+            """)
+            
+            if data and data.get('brokers') and len(data['brokers']) > 0:
+                print(f"   [INV] Extracted {len(data['brokers'])} broker traces for {ticker}")
+                data['ticker'] = ticker
+                return data
+            else:
+                print(f"   [INV] No broker data extracted for {ticker} (traces={trace_count})")
+                return None
+                
+        except Exception as e:
+            print(f"   [INV] Error scraping inventory for {ticker}: {e}")
+            return None
+
+    # ==================== BANDARMOLOGY: TRANSACTION CHART ====================
+
+    async def get_transaction_chart(self, ticker: str, period: str = '6m') -> dict:
+        """
+        Scrape transaction chart data for a specific ticker.
+        Returns flow data for all methods (MM, NR, Smart, Retail, Foreign, Institution, Zombie).
+        
+        Args:
+            ticker: Stock ticker symbol
+            period: Time period ('3m', '6m', '9m')
+        
+        Returns:
+            Dict with cumulative flows, daily flows, participation ratios, cross_index
+        """
+        if not self.page:
+            return None
+        
+        try:
+            target_url = f"{self.base_url}/transaction_chart/"
+            
+            # Always navigate fresh to avoid stale DOM issues
+            print(f"   [TXN] Navigating to {target_url}...")
+            await self.page.goto(target_url, wait_until='networkidle', timeout=60000)
+            await asyncio.sleep(3)
+            
+            # Select period radio button
+            try:
+                period_label = self.page.locator(f'label:has-text("{period}"), div:has-text("{period}")').first
+                if await period_label.count() > 0:
+                    await period_label.click()
+                    await asyncio.sleep(0.5)
+            except:
+                pass
+            
+            # Select ticker
+            if not await self._select_ticker_react_select(ticker):
+                print(f"   [TXN] Failed to select ticker {ticker}")
+                return None
+            
+            # Wait for chart to load
+            await asyncio.sleep(5)
+            
+            # Wait for Plotly chart data
+            for attempt in range(10):
+                has_data = await self.page.evaluate("""
+                    () => {
+                        const p = document.querySelector('.js-plotly-plot');
+                        return p && p._fullData && p._fullData.length > 5;
+                    }
+                """)
+                if has_data:
+                    break
+                await asyncio.sleep(1)
+            
+            # Extract transaction chart data
+            data = await self.page.evaluate(r"""
+                () => {
+                    const p = document.querySelector('.js-plotly-plot');
+                    if (!p || !p._fullData) return null;
+                    const fd = p._fullData;
+                    
+                    // Map trace names to their meaning
+                    const METHOD_MAP = {
+                        'm': 'market_maker', 'nr': 'non_retail', 's': 'smart_money',
+                        'r': 'retail', 'f': 'foreign', 'i': 'institution', 'z': 'zombie'
+                    };
+                    
+                    const result = {
+                        cumulative: {},
+                        daily: {},
+                        participation: {},
+                        cross_index: null,
+                        volume: null,
+                        dates: [],
+                        lastDate: null,
+                        firstDate: null,
+                        dataPoints: 0
+                    };
+                    
+                    for (let i = 0; i < fd.length; i++) {
+                        const t = fd[i];
+                        const name = t.name || '';
+                        const yLen = t.y ? t.y.length : 0;
+                        if (yLen === 0 && t.type !== 'candlestick') continue;
+                        
+                        const method = METHOD_MAP[name];
+                        
+                        // Cumulative lines (scatter, yaxis=y, long time series)
+                        if (method && t.type === 'scatter' && t.mode === 'lines' && (t.yaxis === 'y' || t.yaxis === 'y2' || !t.yaxis)) {
+                            if (yLen > 60) {
+                                const values = [];
+                                for (let j = 0; j < yLen; j++) values.push(t.y[j]);
+                                const dates = [];
+                                for (let j = 0; j < t.x.length; j++) dates.push(t.x[j]);
+                                
+                                result.cumulative[method] = {
+                                    latest: values[values.length - 1],
+                                    prev: values.length > 1 ? values[values.length - 2] : 0,
+                                    week_ago: values.length > 5 ? values[values.length - 6] : 0,
+                                    month_ago: values.length > 22 ? values[values.length - 23] : values[0],
+                                    start: values[0],
+                                    dataPoints: yLen
+                                };
+                                
+                                if (dates.length > 0 && !result.lastDate) {
+                                    result.lastDate = dates[dates.length - 1];
+                                    result.firstDate = dates[0];
+                                    result.dates = dates;
+                                    result.dataPoints = yLen;
+                                }
+                            }
+                        }
+                        
+                        // Daily bars (bar, yaxis=y6)
+                        if (method && t.type === 'bar' && t.yaxis === 'y6') {
+                            const values = [];
+                            for (let j = 0; j < yLen; j++) values.push(t.y[j]);
+                            
+                            result.daily[method] = {
+                                latest: values[values.length - 1],
+                                prev: values.length > 1 ? values[values.length - 2] : 0,
+                                avg_5d: values.length >= 5 ? 
+                                    values.slice(-5).reduce((a, b) => a + b, 0) / 5 : values[values.length - 1],
+                                avg_20d: values.length >= 20 ?
+                                    values.slice(-20).reduce((a, b) => a + b, 0) / 20 : values[values.length - 1]
+                            };
+                        }
+                        
+                        // Participation ratios (bar, yaxis=y10)
+                        if (method && t.type === 'bar' && t.yaxis === 'y10') {
+                            const values = [];
+                            for (let j = 0; j < yLen; j++) values.push(t.y[j]);
+                            
+                            result.participation[method] = {
+                                latest: values[values.length - 1],
+                                avg_5d: values.length >= 5 ?
+                                    values.slice(-5).reduce((a, b) => a + b, 0) / 5 : values[values.length - 1]
+                            };
+                        }
+                        
+                        // Cross index (scatter, yaxis=y9)
+                        if (name === 'cross_index' && t.type === 'scatter') {
+                            const values = [];
+                            for (let j = 0; j < yLen; j++) values.push(t.y[j]);
+                            
+                            result.cross_index = {
+                                latest: values[values.length - 1],
+                                prev: values.length > 1 ? values[values.length - 2] : 0,
+                                avg_5d: values.length >= 5 ?
+                                    values.slice(-5).reduce((a, b) => a + b, 0) / 5 : values[values.length - 1]
+                            };
+                        }
+                        
+                        // Volume
+                        if (name === 'volume' && t.type === 'bar') {
+                            const values = [];
+                            for (let j = 0; j < yLen; j++) values.push(t.y[j]);
+                            
+                            result.volume = {
+                                latest: values[values.length - 1],
+                                avg_20d: values.length >= 20 ?
+                                    values.slice(-20).reduce((a, b) => a + b, 0) / 20 : values[values.length - 1]
+                            };
+                        }
+                    }
+                    
+                    return result;
+                }
+            """)
+            
+            if data and (data.get('cumulative') or data.get('daily')):
+                print(f"   [TXN] Extracted transaction chart for {ticker}: " +
+                      f"{len(data.get('cumulative', {}))} cumulative, " +
+                      f"{len(data.get('daily', {}))} daily methods")
+                data['ticker'] = ticker
+                data['period'] = period
+                return data
+            else:
+                print(f"   [TXN] No transaction chart data for {ticker}")
+                return None
+                
+        except Exception as e:
+            print(f"   [TXN] Error scraping transaction chart for {ticker}: {e}")
+            return None
+
+    # ==================== BANDARMOLOGY: BATCH DEEP ANALYSIS ====================
+
+    async def get_bandarmology_deep_batch(self, tickers: list, period: str = '6m') -> list:
+        """
+        Execute deep analysis scraping for multiple tickers in a single browser session.
+        Scrapes both inventory and transaction chart for each ticker.
+        
+        Args:
+            tickers: List of ticker strings to analyze
+            period: Transaction chart period ('3m', '6m', '9m')
+        
+        Returns:
+            List of dicts with inventory and transaction chart data per ticker
+        """
+        if not self.page:
+            return []
+        
+        results = []
+        try:
+            # Login once
+            login_success = await self.login()
+            if not login_success:
+                return [{"error": "Login failed"}]
+            
+            for i, ticker in enumerate(tickers):
+                print(f"\n[DEEP] Processing {ticker} ({i+1}/{len(tickers)})...")
+                result = {"ticker": ticker}
+                
+                # 1. Scrape Inventory
+                try:
+                    inv_data = await self.get_inventory(ticker)
+                    if inv_data:
+                        result["inventory"] = inv_data
+                    else:
+                        result["inventory"] = None
+                        result["inventory_error"] = "No data"
+                except Exception as e:
+                    print(f"   [DEEP] Inventory error for {ticker}: {e}")
+                    result["inventory"] = None
+                    result["inventory_error"] = str(e)
+                
+                await asyncio.sleep(2)
+                
+                # 2. Scrape Transaction Chart
+                try:
+                    txn_data = await self.get_transaction_chart(ticker, period)
+                    if txn_data:
+                        result["transaction_chart"] = txn_data
+                    else:
+                        result["transaction_chart"] = None
+                        result["txn_error"] = "No data"
+                except Exception as e:
+                    print(f"   [DEEP] Transaction chart error for {ticker}: {e}")
+                    result["transaction_chart"] = None
+                    result["txn_error"] = str(e)
+                
+                results.append(result)
+                
+                # Cooldown between tickers
+                await asyncio.sleep(2)
+            
+            return results
+            
+        except Exception as e:
+            print(f"[!] Critical error in deep batch: {e}")
+            return results
+
     async def close(self):
         if self.browser:
             await self.browser.close()

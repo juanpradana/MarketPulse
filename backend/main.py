@@ -48,6 +48,7 @@ from routes.done_detail import router as done_detail_router
 from routes.price_volume import router as price_volume_router
 from routes.alpha_hunter import router as alpha_hunter_router
 from routes.broker_stalker import router as broker_stalker_router
+from routes.bandarmology import router as bandarmology_router
 
 # Create FastAPI app
 app = FastAPI(
@@ -143,6 +144,7 @@ app.include_router(done_detail_router)
 app.include_router(price_volume_router)
 app.include_router(alpha_hunter_router)
 app.include_router(broker_stalker_router)
+app.include_router(bandarmology_router)
 
 
 if __name__ == "__main__":

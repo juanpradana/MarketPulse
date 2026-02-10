@@ -149,7 +149,7 @@ export function useNeoBDMHotList() {
  * Hook for broker summary data (Net Buy & Net Sell)
  */
 export function useBrokerSummary(ticker: string, tradeDate: string) {
-    const { data, loading, error, execute } = useApi(neobdmApi.getBrokerSummary);
+    const { data, loading, error, execute } = useApi(neobdmApi.getNeoBDMBrokerSummary);
     const [isScraping, setIsScraping] = useState(false);
 
     useEffect(() => {
@@ -169,7 +169,7 @@ export function useBrokerSummary(ticker: string, tradeDate: string) {
     }, [ticker, tradeDate, execute]);
 
     return {
-        data: data?.data || { buy: [], sell: [] },
+        data: data ? { buy: data.buy || [], sell: data.sell || [] } : { buy: [], sell: [] },
         source: data?.source || 'none',
         loading: loading || isScraping,
         error,

@@ -26,6 +26,7 @@ from .neobdm_repository import NeoBDMRepository
 from .broker_five_repository import BrokerFiveRepository
 from .done_detail_repository import DoneDetailRepository
 from .broker_stalker_repository import BrokerStalkerRepository
+from .bandarmology_repository import BandarmologyRepository
 
 __all__ = [
     "BaseRepository",
@@ -35,5 +36,6 @@ __all__ = [
     "NeoBDMRepository",
     "BrokerFiveRepository",
     "DoneDetailRepository",
-    "BrokerStalkerRepository"
+    "BrokerStalkerRepository",
+    "BandarmologyRepository"
 ]

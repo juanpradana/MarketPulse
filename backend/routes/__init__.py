@@ -26,6 +26,7 @@ from .neobdm import router as neobdm_router
 
 from .scrapers import router as scrapers_router
 from .broker_five import router as broker_five_router
+from .bandarmology import router as bandarmology_router
 
 __all__ = [
     "dashboard_router",
@@ -34,5 +35,6 @@ __all__ = [
     "neobdm_router",
 
     "scrapers_router",
-    "broker_five_router"
+    "broker_five_router",
+    "bandarmology_router"
 ]

@@ -381,5 +381,161 @@ class DatabaseConnection:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_broker_stalker_lookup ON broker_stalker_tracking(broker_code, ticker, trade_date DESC);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_broker_stalker_ticker ON broker_stalker_tracking(ticker, trade_date DESC);")
         
+        # Bandarmology Inventory Data (per-ticker broker accumulation from /inventory/)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS bandarmology_inventory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticker TEXT NOT NULL,
+                broker_code TEXT NOT NULL,
+                is_clean INTEGER DEFAULT 0,
+                is_tektok INTEGER DEFAULT 0,
+                is_accumulating INTEGER DEFAULT 0,
+                final_net_lot REAL DEFAULT 0,
+                start_net_lot REAL DEFAULT 0,
+                data_points INTEGER DEFAULT 0,
+                time_series_json TEXT,
+                date_start TEXT,
+                date_end TEXT,
+                scraped_at DATETIME DEFAULT (datetime('now')),
+                UNIQUE(ticker, broker_code, date_end)
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_band_inv_ticker ON bandarmology_inventory(ticker, date_end);")
+        
+        # Bandarmology Transaction Chart Data (per-ticker flow data from /transaction_chart/)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS bandarmology_txn_chart (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticker TEXT NOT NULL,
+                period TEXT DEFAULT '6m',
+                
+                -- Cumulative values (latest point)
+                cum_mm REAL DEFAULT 0,
+                cum_nr REAL DEFAULT 0,
+                cum_smart REAL DEFAULT 0,
+                cum_retail REAL DEFAULT 0,
+                cum_foreign REAL DEFAULT 0,
+                cum_institution REAL DEFAULT 0,
+                cum_zombie REAL DEFAULT 0,
+                
+                -- Daily values (latest day)
+                daily_mm REAL DEFAULT 0,
+                daily_nr REAL DEFAULT 0,
+                daily_smart REAL DEFAULT 0,
+                daily_retail REAL DEFAULT 0,
+                daily_foreign REAL DEFAULT 0,
+                daily_institution REAL DEFAULT 0,
+                daily_zombie REAL DEFAULT 0,
+                
+                -- Participation ratios (latest day, 0-1)
+                part_foreign REAL DEFAULT 0,
+                part_retail REAL DEFAULT 0,
+                part_institution REAL DEFAULT 0,
+                part_zombie REAL DEFAULT 0,
+                
+                -- Cross index (latest)
+                cross_index REAL DEFAULT 0,
+                
+                -- Trend analysis (computed from time series)
+                mm_trend TEXT,
+                foreign_trend TEXT,
+                institution_trend TEXT,
+                
+                -- Full time series JSON for detailed analysis
+                time_series_json TEXT,
+                
+                date_start TEXT,
+                date_end TEXT,
+                data_points INTEGER DEFAULT 0,
+                scraped_at DATETIME DEFAULT (datetime('now')),
+                UNIQUE(ticker, period, date_end)
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_band_txn_ticker ON bandarmology_txn_chart(ticker, date_end);")
+        
+        # Bandarmology Deep Analysis Cache (enriched scoring results)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS bandarmology_deep_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticker TEXT NOT NULL,
+                analysis_date TEXT NOT NULL,
+                
+                -- Inventory summary
+                inv_accum_brokers INTEGER DEFAULT 0,
+                inv_distrib_brokers INTEGER DEFAULT 0,
+                inv_clean_brokers INTEGER DEFAULT 0,
+                inv_tektok_brokers INTEGER DEFAULT 0,
+                inv_total_accum_lot REAL DEFAULT 0,
+                inv_total_distrib_lot REAL DEFAULT 0,
+                inv_top_accum_broker TEXT,
+                inv_top_accum_lot REAL DEFAULT 0,
+                
+                -- Transaction chart summary
+                txn_mm_cum REAL DEFAULT 0,
+                txn_foreign_cum REAL DEFAULT 0,
+                txn_institution_cum REAL DEFAULT 0,
+                txn_retail_cum REAL DEFAULT 0,
+                txn_cross_index REAL DEFAULT 0,
+                txn_foreign_participation REAL DEFAULT 0,
+                txn_institution_participation REAL DEFAULT 0,
+                txn_mm_trend TEXT,
+                txn_foreign_trend TEXT,
+                
+                -- Broker summary metrics
+                broksum_total_buy_lot REAL DEFAULT 0,
+                broksum_total_sell_lot REAL DEFAULT 0,
+                broksum_total_buy_val REAL DEFAULT 0,
+                broksum_total_sell_val REAL DEFAULT 0,
+                broksum_avg_buy_price REAL DEFAULT 0,
+                broksum_avg_sell_price REAL DEFAULT 0,
+                broksum_floor_price REAL DEFAULT 0,
+                broksum_target_price REAL DEFAULT 0,
+                broksum_top_buyers_json TEXT,
+                broksum_top_sellers_json TEXT,
+                broksum_net_institutional REAL DEFAULT 0,
+                broksum_net_foreign REAL DEFAULT 0,
+                
+                -- Enhanced scoring
+                deep_score INTEGER DEFAULT 0,
+                deep_trade_type TEXT,
+                deep_signals_json TEXT,
+                
+                -- Entry/target analysis
+                entry_price REAL DEFAULT 0,
+                target_price REAL DEFAULT 0,
+                stop_loss REAL DEFAULT 0,
+                risk_reward_ratio REAL DEFAULT 0,
+                
+                calculated_at DATETIME DEFAULT (datetime('now')),
+                UNIQUE(ticker, analysis_date)
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_band_deep_lookup ON bandarmology_deep_cache(ticker, analysis_date);")
+        
+        # Migration: Add new columns to existing bandarmology_deep_cache table
+        new_columns = [
+            ("broksum_total_buy_lot", "REAL DEFAULT 0"),
+            ("broksum_total_sell_lot", "REAL DEFAULT 0"),
+            ("broksum_total_buy_val", "REAL DEFAULT 0"),
+            ("broksum_total_sell_val", "REAL DEFAULT 0"),
+            ("broksum_avg_buy_price", "REAL DEFAULT 0"),
+            ("broksum_avg_sell_price", "REAL DEFAULT 0"),
+            ("broksum_floor_price", "REAL DEFAULT 0"),
+            ("broksum_target_price", "REAL DEFAULT 0"),
+            ("broksum_top_buyers_json", "TEXT"),
+            ("broksum_top_sellers_json", "TEXT"),
+            ("broksum_net_institutional", "REAL DEFAULT 0"),
+            ("broksum_net_foreign", "REAL DEFAULT 0"),
+            ("entry_price", "REAL DEFAULT 0"),
+            ("target_price", "REAL DEFAULT 0"),
+            ("stop_loss", "REAL DEFAULT 0"),
+            ("risk_reward_ratio", "REAL DEFAULT 0"),
+        ]
+        for col_name, col_type in new_columns:
+            try:
+                conn.execute(f"ALTER TABLE bandarmology_deep_cache ADD COLUMN {col_name} {col_type}")
+            except Exception:
+                pass  # Column already exists
+        
         conn.commit()
 

@@ -10,6 +10,7 @@ from db.disclosure_repository import DisclosureRepository
 from db.neobdm_repository import NeoBDMRepository
 from db.market_metadata_repository import MarketMetadataRepository
 from db.alpha_hunter_repository import AlphaHunterRepository
+from db.bandarmology_repository import BandarmologyRepository
 from typing import Optional
 
 
@@ -33,6 +34,7 @@ class DatabaseManager:
         self.neobdm_repo = NeoBDMRepository(db_path)
         self.market_meta_repo = MarketMetadataRepository(db_path)
         self.alpha_hunter_repo = AlphaHunterRepository(db_path)
+        self.bandarmology_repo = BandarmologyRepository(db_path)
     
     def _get_conn(self):
         """Get database connection (for backward compatibility)."""
