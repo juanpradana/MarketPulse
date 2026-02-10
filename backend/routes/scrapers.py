@@ -37,7 +37,7 @@ async def run_scraper(request: ScrapeRequest):
     """
     try:
         from modules.database import DatabaseManager
-        from modules.analyzer import SentimentEngine
+        from modules.analyzer import get_engine
         from modules.utils import extract_tickers
         
         db_manager = DatabaseManager()
@@ -52,11 +52,11 @@ async def run_scraper(request: ScrapeRequest):
         if request.source == "EmitenNews":
             from modules.scraper_emiten import EmitenNewsScraper
             scraper = EmitenNewsScraper()
-            new_articles = scraper.run(start_dt, end_dt)
+            raw_articles = scraper.run(start_dt, end_dt)
             
-            if new_articles:
-                engine = SentimentEngine()
-                analyzed_data = engine.process_and_save(new_articles)
+            if raw_articles:
+                engine = get_engine()
+                analyzed_data = engine.process_and_save(raw_articles)
                 
                 # Enrich with ticker extraction
                 for article in analyzed_data:
@@ -72,10 +72,11 @@ async def run_scraper(request: ScrapeRequest):
         elif request.source == "CNBC Indonesia":
             from modules.scraper_cnbc import CNBCScraper
             scraper = CNBCScraper()
-            # CNBC scraper already runs analysis internally
-            analyzed_data = scraper.run(start_date=start_dt, end_date=end_dt)
+            raw_articles = scraper.run(start_date=start_dt, end_date=end_dt)
             
-            if analyzed_data:
+            if raw_articles:
+                engine = get_engine()
+                analyzed_data = engine.process_and_save(raw_articles)
                 db_manager.save_news(analyzed_data)
                 new_count = len(analyzed_data)
                 message = f"Berhasil mengambil {new_count} berita dari CNBC Indonesia."
@@ -135,10 +136,11 @@ async def run_scraper(request: ScrapeRequest):
         elif request.source == "Bisnis.com":
             from modules.scraper_bisnis import BisnisScraper
             scraper = BisnisScraper()
-            # Bisnis scraper already runs analysis internally
-            analyzed_data = scraper.run(start_date=start_dt, end_date=end_dt)
+            raw_articles = scraper.run(start_date=start_dt, end_date=end_dt)
             
-            if analyzed_data:
+            if raw_articles:
+                engine = get_engine()
+                analyzed_data = engine.process_and_save(raw_articles)
                 db_manager.save_news(analyzed_data)
                 new_count = len(analyzed_data)
                 message = f"Berhasil mengambil {new_count} berita dari Bisnis.com."
@@ -148,10 +150,11 @@ async def run_scraper(request: ScrapeRequest):
         elif request.source == "Investor.id":
             from modules.scraper_investor import InvestorScraper
             scraper = InvestorScraper()
-            # Investor scraper already runs analysis internally
-            analyzed_data = scraper.run(start_date=start_dt, end_date=end_dt)
+            raw_articles = scraper.run(start_date=start_dt, end_date=end_dt)
             
-            if analyzed_data:
+            if raw_articles:
+                engine = get_engine()
+                analyzed_data = engine.process_and_save(raw_articles)
                 db_manager.save_news(analyzed_data)
                 new_count = len(analyzed_data)
                 message = f"Berhasil mengambil {new_count} berita dari Investor.id."

@@ -14,6 +14,10 @@ class EmitenNewsScraper:
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": config.USER_AGENT})
+        # Increase connection pool to match ThreadPoolExecutor workers
+        adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
         self.news_data = []
         self.db = DatabaseManager() # Initialize DB connection
 

@@ -435,19 +435,7 @@ class InvestorScraper:
         
         print(f"\n[*] Scraping complete. Total: {len(self.news_data)} articles")
         
-        # Run sentiment analysis
-        if self.news_data:
-            try:
-                from modules.analyzer import SentimentEngine
-                print("[*] Running sentiment analysis...")
-                engine = SentimentEngine()
-                analyzed_data = engine.process_and_save(self.news_data)
-                return analyzed_data
-            except Exception as e:
-                print(f"[!] Sentiment analysis error: {e}")
-                return self.news_data
-        
-        return []
+        return self.news_data
 
 
 if __name__ == "__main__":

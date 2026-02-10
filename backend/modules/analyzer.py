@@ -5,7 +5,25 @@ import json
 import os
 import time
 import datetime
+import logging
 import config
+
+logger = logging.getLogger(__name__)
+
+# ── Singleton Instance ──────────────────────────────────────
+_engine_instance: "SentimentEngine | None" = None
+
+
+def get_engine() -> "SentimentEngine":
+    """Return a lazily-initialised, process-wide SentimentEngine singleton.
+    
+    The model is loaded ONCE and reused across all scraper calls,
+    avoiding the ~2-4 s overhead of re-loading weights every time.
+    """
+    global _engine_instance
+    if _engine_instance is None:
+        _engine_instance = SentimentEngine()
+    return _engine_instance
 
 class DateTimeEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -15,20 +33,52 @@ class DateTimeEncoder(json.JSONEncoder):
 
 class SentimentEngine:
     def __init__(self):
-        # 1. Force GPU & FP16 if available
-        self.device = 0 if torch.cuda.is_available() else -1
+        # ── GPU / CPU detection with diagnostics ────────────────
+        cuda_available = torch.cuda.is_available()
+        self.device = 0 if cuda_available else -1
         self.dtype = torch.float16 if self.device == 0 else torch.float32
-        
-        print(f"[*] Initializing Sentiment Model on {'GPU' if self.device==0 else 'CPU'}...")
-        if self.device == 0:
-            print("    -> Using FP16 Precision for Speed")
-        
+
+        # Dynamic batch size: GPU can handle larger batches
+        # 16 is safe for 4GB VRAM (zero-shot runs model 3x per batch for 3 labels)
+        self.batch_size = 16 if self.device == 0 else 8
+
+        if cuda_available:
+            gpu_name = torch.cuda.get_device_name(0)
+            gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+            print(f"[*] Initializing Sentiment Model on GPU ({gpu_name}, {gpu_mem:.1f} GB)...")
+            print(f"    -> FP16 Precision | Batch Size: {self.batch_size}")
+        else:
+            print(f"[*] Initializing Sentiment Model on CPU...")
+            print(f"    -> Tip: Install PyTorch with CUDA for 10-50x faster inference")
+            print(f"       pip install torch --index-url https://download.pytorch.org/whl/cu121")
+            print(f"    -> Batch Size: {self.batch_size}")
+
+        # Set HF_TOKEN from env if available (suppresses rate-limit warnings)
+        hf_token = os.environ.get("HF_TOKEN")
+        if hf_token:
+            os.environ["HF_TOKEN"] = hf_token  # ensure transformers picks it up
+
         self.classifier = pipeline(
-            "zero-shot-classification", 
-            model=config.MODEL_NAME, 
+            "zero-shot-classification",
+            model=config.MODEL_NAME,
             device=self.device,
-            torch_dtype=self.dtype
+            # 'torch_dtype' is deprecated in newer transformers; use 'dtype'
+            dtype=self.dtype,
         )
+
+    # ── Warm-up (optional, called at startup) ───────────────
+    def warmup(self):
+        """Run a tiny dummy inference so the first real call is fast."""
+        try:
+            self.classifier(
+                "warmup",
+                config.SENTIMENT_LABELS,
+                multi_label=False,
+                hypothesis_template=config.HYPOTHESIS_TEMPLATE,
+            )
+            print("[*] Sentiment Engine warm-up complete.")
+        except Exception as e:
+            logger.warning(f"Warm-up failed (non-fatal): {e}")
 
     def chunk_text(self, text, max_len=512, overlap=50):
         """Splits text into chunks with overlap."""
@@ -96,14 +146,12 @@ class SentimentEngine:
         print(f"    -> Generated {total_chunks} chunks from {total_articles} articles.")
         
         # --- STAGE 2: BATCH INFERENCE ---
-        print(f"    -> Running Inference (Batch Size: 8, Device: {self.device})...")
+        batch_size = self.batch_size
+        device_label = f"GPU (bs={batch_size})" if self.device == 0 else f"CPU (bs={batch_size})"
+        print(f"    -> Running Inference on {device_label}...")
         
-        # Run pipeline on list of strings
-        # Using tqdm for progress bar
         batch_results = []
-        batch_size = 8
         
-        # Process in batches manually 
         for i in tqdm(range(0, total_chunks, batch_size), desc="    Inference Progress"):
             batch_slice = all_chunks[i : i + batch_size]
             results = self.classifier(

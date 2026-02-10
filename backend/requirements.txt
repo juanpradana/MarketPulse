@@ -23,6 +23,8 @@ wordcloud
 pytest
 pytest-asyncio
 plotly
+# For GPU acceleration (NVIDIA): pip install torch --index-url https://download.pytorch.org/whl/cu121
+# For CPU-only: pip install torch
 torch
 transformers
 trafilatura

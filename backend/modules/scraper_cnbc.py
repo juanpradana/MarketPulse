@@ -351,20 +351,7 @@ class CNBCScraper:
                 
         print(f"[*] Scraping Completed. Raw Total: {len(self.news_data)}")
         
-        # --- SENTIMENT ANALYSIS INTEGRATION ---
-        # As requested: Scraper calls analyzer
-        if self.news_data:
-            try:
-                from modules.analyzer import SentimentEngine
-                print("[*] Running Sentiment Analysis from Scraper...")
-                engine = SentimentEngine()
-                analyzed_data = engine.process_and_save(self.news_data)
-                return analyzed_data
-            except Exception as e:
-                print(f"[!] Analysis Error in Scraper: {e}")
-                return self.news_data # Fallback to raw if analysis fails
-        
-        return []
+        return self.news_data
 
 
 if __name__ == "__main__":

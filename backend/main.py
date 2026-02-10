@@ -95,7 +95,19 @@ async def startup_event():
                 logger.info(f"Done Detail Cleanup: Deleted {cleaned} raw records older than 7 days")
         except Exception as cleanup_err:
             logger.warning(f"Done Detail cleanup skipped: {cleanup_err}")
-            
+
+        # Pre-load Sentiment Engine (singleton) so first scraper call is instant
+        try:
+            import threading
+            def _warmup():
+                from modules.analyzer import get_engine
+                engine = get_engine()
+                engine.warmup()
+            threading.Thread(target=_warmup, daemon=True).start()
+            logger.info("Sentiment Engine warm-up started in background thread.")
+        except Exception as warmup_err:
+            logger.warning(f"Sentiment Engine warm-up skipped: {warmup_err}")
+
     except Exception as e:
         logging.error(f"Startup sync failed: {e}")
 
