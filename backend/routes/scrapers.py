@@ -27,6 +27,7 @@ async def run_scraper(request: ScrapeRequest):
     - "CNBC Indonesia": Scrape from cnbcindonesia.com
     - "Bisnis.com": Scrape from bisnis.com market section
     - "Investor.id": Scrape from investor.id (corporate-action + market)
+    - "Bloomberg Technoz": Scrape from bloombergtechnoz.com (market + finansial)
     - "IDX (Keterbukaan Informasi)": Scrape IDX disclosures
     
     Args:
@@ -160,6 +161,20 @@ async def run_scraper(request: ScrapeRequest):
                 message = f"Berhasil mengambil {new_count} berita dari Investor.id."
             else:
                 message = "Tidak ada berita baru ditemukan di Investor.id."
+
+        elif request.source == "Bloomberg Technoz":
+            from modules.scraper_bloomberg import BloombergTechnozScraper
+            scraper = BloombergTechnozScraper()
+            raw_articles = scraper.run(start_date=start_dt, end_date=end_dt)
+            
+            if raw_articles:
+                engine = get_engine()
+                analyzed_data = engine.process_and_save(raw_articles)
+                db_manager.save_news(analyzed_data)
+                new_count = len(analyzed_data)
+                message = f"Berhasil mengambil {new_count} berita dari Bloomberg Technoz."
+            else:
+                message = "Tidak ada berita baru ditemukan di Bloomberg Technoz."
 
         else:
             return JSONResponse(

@@ -58,6 +58,7 @@ export default function NewsLibraryPage() {
                             <option value="EmitenNews">EmitenNews</option>
                             <option value="Bisnis.com">Bisnis.com</option>
                             <option value="Investor.id">Investor.id</option>
+                            <option value="Bloomberg Technoz">Bloomberg Technoz</option>
                             <option value="IDX">IDX</option>
                         </select>
                     </div>

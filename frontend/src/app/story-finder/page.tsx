@@ -108,6 +108,8 @@ const StoryCard = ({ story }: { story: StoryItem }) => {
                 return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
             case 'Investor.id':
                 return 'bg-pink-500/20 text-pink-400 border-pink-500/30';
+            case 'Bloomberg Technoz':
+                return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
             default:
                 return 'bg-zinc-800/50 text-zinc-400 border-zinc-700/50';
         }

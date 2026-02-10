@@ -72,7 +72,8 @@ export default function DashboardPage() {
                 "CNBC Indonesia",
                 "EmitenNews",
                 "Bisnis.com",
-                "Investor.id"
+                "Investor.id",
+                "Bloomberg Technoz"
             ];
 
             console.log("[Refresh] Triggering scrape for all sources:", sources.join(", "));

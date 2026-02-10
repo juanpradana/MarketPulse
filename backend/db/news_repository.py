@@ -120,6 +120,8 @@ class NewsRepository(BaseRepository):
                     base_query += " AND url LIKE '%bisnis.com%'"
                 elif source == "Investor.id":
                     base_query += " AND url LIKE '%investor.id%'"
+                elif source == "Bloomberg Technoz":
+                    base_query += " AND url LIKE '%bloombergtechnoz.com%'"
 
             # Order by latest
             base_query += " ORDER BY timestamp DESC"

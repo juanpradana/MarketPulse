@@ -79,6 +79,8 @@ async def get_news(
                     s_name = "Bisnis.com"
                 elif "investor.id" in url:
                     s_name = "Investor.id"
+                elif "bloombergtechnoz.com" in url:
+                    s_name = "Bloomberg Technoz"
                 else: 
                     s_name = "Web"
             except:
@@ -429,6 +431,8 @@ async def get_story_finder(
                     source = "Bisnis.com"
                 elif "investor.id" in url:
                     source = "Investor.id"
+                elif "bloombergtechnoz.com" in url:
+                    source = "Bloomberg Technoz"
                 else:
                     source = "Web"
                 
