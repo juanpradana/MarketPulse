@@ -380,6 +380,24 @@ export const bandarmologyApi = {
     },
 
     /**
+     * Trigger deep analysis for specific tickers (manual input)
+     */
+    triggerDeepAnalysisTickers: async (
+        tickers: string,
+        date?: string
+    ): Promise<{ message: string; tickers: string[]; date: string }> => {
+        const params = buildParams({ tickers, date });
+        const response = await fetch(`${API_BASE_URL}/api/bandarmology/deep-analyze-tickers?${params}`, {
+            method: 'POST'
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to trigger manual deep analysis');
+        }
+        return await response.json();
+    },
+
+    /**
      * Get detailed deep analysis for a single stock
      */
     getStockDetail: async (ticker: string, date?: string): Promise<StockDetailResponse> => {

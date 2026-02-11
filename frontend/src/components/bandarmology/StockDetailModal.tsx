@@ -5,7 +5,7 @@ import { bandarmologyApi, StockDetailResponse } from '@/services/api/bandarmolog
 import {
     X, TrendingUp, TrendingDown, Target, Shield, AlertTriangle,
     ArrowUpRight, ArrowDownRight, Loader2, BarChart3, Users, DollarSign,
-    Crosshair, Activity, Zap
+    Crosshair, Activity, Zap, FileDown, Copy, Check
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -86,10 +86,358 @@ function SignalBadge({ signal, description }: { signal: string; description: str
     );
 }
 
+function generateChatText(data: StockDetailResponse): string {
+    const fmt = (n: number | undefined | null) => n != null ? n.toLocaleString('id-ID') : '—';
+    const pct = (n: number | undefined | null) => n != null ? `${n > 0 ? '+' : ''}${n.toFixed(1)}%` : '—';
+    const lines: string[] = [];
+
+    lines.push(`📊 *BANDARMOLOGY INSIGHT: ${data.ticker}*`);
+    lines.push(`📅 ${data.date}`);
+    lines.push(`💰 Harga: ${fmt(data.price)} (${pct(data.pct_1d)})`);
+    if (data.trade_type && data.trade_type !== '—') lines.push(`📋 Tipe: ${data.deep_trade_type || data.trade_type}`);
+    lines.push('');
+
+    lines.push(`⭐ *SKOR*`);
+    lines.push(`  Base: ${data.base_score}/${data.max_base_score}`);
+    if (data.has_deep) {
+        lines.push(`  Deep: +${data.deep_score ?? 0}`);
+        lines.push(`  Combined: ${data.combined_score ?? data.base_score}/${data.max_combined_score ?? 200}`);
+    }
+    if (data.breakout_probability) lines.push(`  Breakout Prob: ${data.breakout_probability}%`);
+    lines.push('');
+
+    if (data.entry_price || data.target_price) {
+        lines.push(`🎯 *ENTRY / TARGET*`);
+        if (data.entry_price) lines.push(`  Entry: ${fmt(data.entry_price)}`);
+        if (data.target_price) lines.push(`  Target: ${fmt(data.target_price)}`);
+        if (data.stop_loss) lines.push(`  Stop Loss: ${fmt(data.stop_loss)}`);
+        if (data.risk_reward_ratio) lines.push(`  R:R = 1:${data.risk_reward_ratio}`);
+        lines.push('');
+    }
+
+    if (data.has_deep && data.controlling_brokers && data.controlling_brokers.length > 0) {
+        lines.push(`🏦 *CONTROLLING BROKERS*`);
+        if (data.accum_phase && data.accum_phase !== 'UNKNOWN') lines.push(`  Fase: ${data.accum_phase}`);
+        if (data.bandar_avg_cost) lines.push(`  Avg Cost Bandar: ${fmt(data.bandar_avg_cost)}`);
+        if (data.coordination_score) lines.push(`  Koordinasi: ${data.coordination_score}%`);
+        if (data.breakout_signal && data.breakout_signal !== 'NONE') lines.push(`  Breakout Signal: ${data.breakout_signal}`);
+        if (data.distribution_alert && data.distribution_alert !== 'NONE') lines.push(`  ⚠️ Distribusi: ${data.distribution_alert}`);
+        lines.push('');
+        data.controlling_brokers.forEach(cb => {
+            const status = cb.distribution_pct >= 50 ? '🔴DIST' : cb.distribution_pct >= 25 ? '🟠SELL' : cb.avg_daily_last10 > 50 ? '🟢BUY' : '⚪HOLD';
+            lines.push(`  ${cb.code}${cb.is_clean ? '✓' : cb.is_tektok ? '✗' : ''} | Net: +${fmt(cb.net_lot)} | Avg: ${fmt(cb.avg_buy_price)} | ${status}`);
+        });
+        lines.push('');
+    }
+
+    if (data.bandar_confirmation && data.bandar_confirmation !== 'NONE' && data.bandar_confirmation !== 'NEUTRAL') {
+        const emoji = data.bandar_confirmation.includes('BUY') ? '🟢' : '🔴';
+        lines.push(`${emoji} *CROSS-REF*: Bandar ${data.bandar_confirmation}`);
+        if (data.bandar_buy_today_lot) lines.push(`  Buy today: +${fmt(data.bandar_buy_today_lot)} lot`);
+        if (data.bandar_sell_today_lot) lines.push(`  Sell today: -${fmt(data.bandar_sell_today_lot)} lot`);
+        lines.push('');
+    }
+
+    if (data.has_deep) {
+        lines.push(`📈 *TRANSACTION FLOW (6M)*`);
+        lines.push(`  MM: ${(data.txn_mm_cum ?? 0).toFixed(1)}B | FGN: ${(data.txn_foreign_cum ?? 0).toFixed(1)}B`);
+        lines.push(`  INST: ${(data.txn_institution_cum ?? 0).toFixed(1)}B | RTL: ${(data.txn_retail_cum ?? 0).toFixed(1)}B`);
+        if (data.txn_cross_index != null) lines.push(`  Cross Index: ${data.txn_cross_index.toFixed(2)}`);
+        lines.push('');
+    }
+
+    if (data.broker_summary && (data.broker_summary.buy.length > 0 || data.broker_summary.sell.length > 0)) {
+        lines.push(`💹 *BROKER SUMMARY (Today)*`);
+        if (data.broker_summary.buy.length > 0) {
+            lines.push(`  Top Buyers: ${data.broker_summary.buy.slice(0, 5).map(b => `${b.broker}(${fmt(Number(b.nlot))})`).join(', ')}`);
+        }
+        if (data.broker_summary.sell.length > 0) {
+            lines.push(`  Top Sellers: ${data.broker_summary.sell.slice(0, 5).map(s => `${s.broker}(${fmt(Number(s.nlot))})`).join(', ')}`);
+        }
+        if (data.broksum_net_institutional) lines.push(`  Inst Net: ${fmt(data.broksum_net_institutional)} lot`);
+        if (data.broksum_net_foreign) lines.push(`  Foreign Net: ${fmt(data.broksum_net_foreign)} lot`);
+        lines.push('');
+    }
+
+    if (data.deep_signals && Object.keys(data.deep_signals).length > 0) {
+        lines.push(`🔔 *SIGNALS*`);
+        Object.values(data.deep_signals).forEach(desc => {
+            lines.push(`  • ${desc}`);
+        });
+        lines.push('');
+    }
+
+    lines.push(`— MarketPulse Bandarmology`);
+    return lines.join('\n');
+}
+
+function generatePdfHtml(data: StockDetailResponse): string {
+    const fmt = (n: number | undefined | null) => n != null ? n.toLocaleString('id-ID') : '—';
+    const pct = (n: number | undefined | null) => n != null ? `${n > 0 ? '+' : ''}${n.toFixed(1)}%` : '—';
+    const scoreColor = (v: number, max: number) => {
+        const p = (v / max) * 100;
+        return p >= 70 ? '#34d399' : p >= 50 ? '#60a5fa' : p >= 30 ? '#fb923c' : '#ef4444';
+    };
+
+    let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bandarmology - ${data.ticker}</title>
+<style>
+  @page { size: A4; margin: 15mm; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; font-size: 11px; color: #1a1a2e; background: #fff; line-height: 1.4; }
+  .header { background: linear-gradient(135deg, #1e1b4b, #1e3a5f); color: #fff; padding: 16px 20px; border-radius: 8px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .header h1 { font-size: 22px; font-weight: 900; letter-spacing: -0.5px; }
+  .header .sub { font-size: 11px; opacity: 0.7; margin-top: 2px; }
+  .header .price { text-align: right; }
+  .header .price .val { font-size: 20px; font-weight: 800; }
+  .header .price .chg { font-size: 12px; }
+  .section { margin-bottom: 12px; }
+  .section-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #6366f1; border-bottom: 2px solid #e5e7eb; padding-bottom: 4px; margin-bottom: 8px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .grid4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; }
+  .grid6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; }
+  .card .label { font-size: 8px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.5px; }
+  .card .value { font-size: 16px; font-weight: 900; margin-top: 2px; }
+  .card .sub { font-size: 8px; color: #94a3b8; margin-top: 1px; }
+  table { width: 100%; border-collapse: collapse; font-size: 10px; }
+  th { background: #f1f5f9; font-weight: 700; text-transform: uppercase; font-size: 8px; letter-spacing: 0.3px; color: #64748b; padding: 5px 6px; text-align: left; border-bottom: 2px solid #e2e8f0; }
+  td { padding: 4px 6px; border-bottom: 1px solid #f1f5f9; }
+  tr:hover { background: #f8fafc; }
+  .pos { color: #059669; font-weight: 700; }
+  .neg { color: #dc2626; font-weight: 700; }
+  .warn { color: #d97706; font-weight: 700; }
+  .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 700; }
+  .badge-green { background: #d1fae5; color: #065f46; }
+  .badge-red { background: #fee2e2; color: #991b1b; }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+  .badge-yellow { background: #fef3c7; color: #92400e; }
+  .badge-purple { background: #ede9fe; color: #5b21b6; }
+  .bar-container { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-top: 3px; }
+  .bar-fill { height: 100%; border-radius: 4px; }
+  .signal-list { display: flex; flex-wrap: wrap; gap: 4px; }
+  .signal { padding: 2px 6px; border-radius: 3px; font-size: 8px; font-weight: 600; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+  .footer { margin-top: 16px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #94a3b8; text-align: center; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style></head><body>`;
+
+    // Header
+    html += `<div class="header">
+      <div><h1>${data.ticker}</h1><div class="sub">Bandarmology Deep Analysis Report — ${data.date}</div>
+        ${data.trade_type && data.trade_type !== '—' ? `<span class="badge badge-purple" style="margin-top:4px;display:inline-block;">${data.deep_trade_type || data.trade_type}</span>` : ''}
+      </div>
+      <div class="price"><div class="val">${fmt(data.price)}</div>
+        <div class="chg" style="color:${data.pct_1d >= 0 ? '#34d399' : '#f87171'}">${pct(data.pct_1d)}</div>
+      </div></div>`;
+
+    // Score Cards
+    html += `<div class="section"><div class="section-title">Score Overview</div><div class="grid6">`;
+    const scoreCards = [
+        { label: 'Base Score', value: `${data.base_score}`, sub: `/ ${data.max_base_score}`, color: scoreColor(data.base_score, data.max_base_score) },
+        { label: 'Deep Score', value: data.has_deep ? `+${data.deep_score ?? 0}` : '—', sub: data.has_deep ? 'Analyzed' : 'N/A', color: '#60a5fa' },
+        { label: 'Combined', value: `${data.combined_score ?? data.base_score}`, sub: `/ ${data.max_combined_score ?? 200}`, color: scoreColor(data.combined_score ?? data.base_score, data.max_combined_score ?? 200) },
+        { label: 'Breakout Prob', value: data.breakout_probability ? `${data.breakout_probability}%` : '—', sub: data.breakout_probability ? (data.breakout_probability >= 70 ? 'HIGH' : data.breakout_probability >= 40 ? 'MEDIUM' : 'LOW') : '', color: (data.breakout_probability ?? 0) >= 70 ? '#34d399' : (data.breakout_probability ?? 0) >= 40 ? '#f59e0b' : '#94a3b8' },
+        { label: 'Entry Price', value: data.entry_price ? fmt(data.entry_price) : '—', sub: data.entry_price && data.price ? `${((data.price - data.entry_price) / data.entry_price * 100).toFixed(1)}% from current` : '', color: '#06b6d4' },
+        { label: 'Target Price', value: data.target_price ? fmt(data.target_price) : '—', sub: data.risk_reward_ratio ? `R:R = 1:${data.risk_reward_ratio}` : '', color: '#eab308' },
+    ];
+    scoreCards.forEach(c => {
+        html += `<div class="card"><div class="label">${c.label}</div><div class="value" style="color:${c.color}">${c.value}</div><div class="sub">${c.sub}</div></div>`;
+    });
+    html += `</div></div>`;
+
+    // Entry/Target/SL Bar
+    if (data.entry_price && data.target_price && data.stop_loss) {
+        html += `<div class="section"><div class="section-title">Price Levels</div><div class="grid4">
+          <div class="card"><div class="label">Stop Loss</div><div class="value neg">${fmt(data.stop_loss)}</div></div>
+          <div class="card"><div class="label">Entry</div><div class="value" style="color:#06b6d4">${fmt(data.entry_price)}</div></div>
+          <div class="card"><div class="label">Current</div><div class="value">${fmt(data.price)}</div></div>
+          <div class="card"><div class="label">Target</div><div class="value" style="color:#eab308">${fmt(data.target_price)}</div></div>
+        </div></div>`;
+    }
+
+    // Controlling Brokers
+    if (data.has_deep && data.controlling_brokers && data.controlling_brokers.length > 0) {
+        html += `<div class="section"><div class="section-title">Controlling Brokers (Bandarmology)</div>`;
+        // Summary badges
+        html += `<div style="margin-bottom:8px;display:flex;gap:6px;flex-wrap:wrap;">`;
+        if (data.accum_phase && data.accum_phase !== 'UNKNOWN') {
+            const phaseClass = data.accum_phase === 'ACCUMULATION' ? 'badge-green' : data.accum_phase === 'DISTRIBUTION' ? 'badge-red' : 'badge-blue';
+            html += `<span class="badge ${phaseClass}">${data.accum_phase}</span>`;
+        }
+        if (data.breakout_signal && data.breakout_signal !== 'NONE') html += `<span class="badge badge-yellow">⚡ ${data.breakout_signal}</span>`;
+        if (data.accum_start_date) html += `<span class="badge badge-blue">Since ${data.accum_start_date}</span>`;
+        if (data.bandar_avg_cost) html += `<span class="badge badge-blue">Avg Cost: ${fmt(data.bandar_avg_cost)}</span>`;
+        if (data.coordination_score) html += `<span class="badge ${data.coordination_score >= 70 ? 'badge-green' : 'badge-yellow'}">Coordination: ${data.coordination_score}%</span>`;
+        html += `</div>`;
+
+        // Distribution alert
+        if (data.distribution_alert && data.distribution_alert !== 'NONE') {
+            html += `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:6px 10px;margin-bottom:8px;font-weight:700;color:#991b1b;font-size:10px;">⚠️ Distribution Alert: ${data.distribution_alert} — Peak: ${fmt(data.bandar_peak_lot)} lot, Sold: ${(data.bandar_distribution_pct ?? 0).toFixed(1)}%</div>`;
+        }
+
+        // Broker table
+        html += `<table><thead><tr><th>Broker</th><th style="text-align:right">Net Lot</th><th style="text-align:right">Avg Buy</th><th style="text-align:right">Buy Lots</th><th style="text-align:right">Sell Lots</th><th>Turn Date</th><th style="text-align:right">Peak</th><th style="text-align:right">Dist%</th><th>Status</th></tr></thead><tbody>`;
+        data.controlling_brokers.forEach(cb => {
+            const status = cb.distribution_pct >= 50 ? 'DISTRIBUSI' : cb.distribution_pct >= 25 ? 'SELLING' : cb.avg_daily_last10 > 50 ? 'BUYING' : cb.avg_daily_last10 < -50 ? 'SELLING' : 'HOLDING';
+            const statusClass = status === 'BUYING' ? 'pos' : status === 'DISTRIBUSI' || status === 'SELLING' ? 'neg' : '';
+            html += `<tr>
+              <td><strong>${cb.code}</strong>${cb.is_clean ? ' <span class="pos">✓</span>' : ''}${cb.is_tektok ? ' <span class="warn">✗</span>' : ''}${cb.broker_class ? ` <span style="color:#94a3b8;font-size:8px">${cb.broker_class}</span>` : ''}</td>
+              <td style="text-align:right" class="pos">+${fmt(cb.net_lot)}</td>
+              <td style="text-align:right;color:#06b6d4;font-weight:700">${cb.avg_buy_price ? fmt(cb.avg_buy_price) : '—'}</td>
+              <td style="text-align:right">${cb.total_buy_lots ? fmt(cb.total_buy_lots) : '—'}</td>
+              <td style="text-align:right">${cb.total_sell_lots ? fmt(cb.total_sell_lots) : '—'}</td>
+              <td>${cb.turn_date || '—'}</td>
+              <td style="text-align:right">${cb.peak_lot ? fmt(cb.peak_lot) : '—'}</td>
+              <td style="text-align:right" class="${cb.distribution_pct >= 50 ? 'neg' : cb.distribution_pct >= 25 ? 'warn' : ''}">${cb.distribution_pct > 0 ? cb.distribution_pct.toFixed(1) + '%' : '0%'}</td>
+              <td><span class="badge ${status === 'BUYING' ? 'badge-green' : status === 'DISTRIBUSI' ? 'badge-red' : status === 'SELLING' ? 'badge-red' : 'badge-blue'}">${status}</span></td>
+            </tr>`;
+        });
+        html += `</tbody></table></div>`;
+    }
+
+    // Two column: Transaction Flow + Inventory
+    html += `<div class="grid2">`;
+    // Transaction Flow
+    html += `<div class="section"><div class="section-title">Transaction Flow (6M Cumulative)</div>`;
+    if (data.has_deep) {
+        const flows = [
+            { label: 'Market Maker', value: data.txn_mm_cum ?? 0 },
+            { label: 'Foreign', value: data.txn_foreign_cum ?? 0 },
+            { label: 'Institution', value: data.txn_institution_cum ?? 0 },
+            { label: 'Retail', value: data.txn_retail_cum ?? 0 },
+        ];
+        flows.forEach(f => {
+            html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+              <span style="width:70px;font-size:9px;font-weight:700;color:#64748b">${f.label}</span>
+              <span style="width:60px;text-align:right;font-weight:800;font-size:10px" class="${f.value > 0 ? 'pos' : f.value < 0 ? 'neg' : ''}">${f.value > 0 ? '+' : ''}${f.value.toFixed(1)}B</span>
+            </div>`;
+        });
+        if (data.txn_cross_index != null) html += `<div style="font-size:9px;color:#64748b;margin-top:4px">Cross Index: <strong>${data.txn_cross_index.toFixed(2)}</strong> | MM Trend: <strong>${data.txn_mm_trend || '—'}</strong></div>`;
+    } else {
+        html += `<div style="color:#94a3b8;font-size:10px;text-align:center;padding:12px">No deep analysis data</div>`;
+    }
+    html += `</div>`;
+
+    // Inventory
+    html += `<div class="section"><div class="section-title">Inventory Brokers</div>`;
+    if (data.has_deep && (data.inv_accum_brokers ?? 0) > 0) {
+        html += `<div style="display:flex;gap:8px;margin-bottom:6px;font-size:9px">
+          <span class="pos">${data.inv_accum_brokers} Accumulating</span>
+          <span class="neg">${data.inv_distrib_brokers} Distributing</span>
+          <span style="color:#06b6d4;font-weight:700">${data.inv_clean_brokers}✓ Clean</span>
+        </div>`;
+        html += `<div class="grid2"><div class="card"><div class="label">Total Accum</div><div class="value pos">+${fmt(data.inv_total_accum_lot)}</div></div>
+          <div class="card"><div class="label">Total Distrib</div><div class="value neg">-${fmt(data.inv_total_distrib_lot)}</div></div></div>`;
+        if (data.inv_top_accum_broker) html += `<div style="font-size:9px;color:#64748b;margin-top:4px">Top Accumulator: <strong class="pos">${data.inv_top_accum_broker}</strong></div>`;
+    } else {
+        html += `<div style="color:#94a3b8;font-size:10px;text-align:center;padding:12px">No inventory data</div>`;
+    }
+    html += `</div></div>`;
+
+    // Broker Summary
+    if (data.broker_summary && (data.broker_summary.buy.length > 0 || data.broker_summary.sell.length > 0)) {
+        html += `<div class="section"><div class="section-title">Broker Summary (Today)</div><div class="grid2">`;
+        // Buy side
+        html += `<div><div style="font-size:9px;font-weight:700;color:#059669;margin-bottom:4px">NET BUYERS</div><table><thead><tr><th>Broker</th><th style="text-align:right">Net Lot</th><th style="text-align:right">Value</th><th style="text-align:right">Avg</th></tr></thead><tbody>`;
+        data.broker_summary.buy.slice(0, 8).forEach(b => {
+            html += `<tr><td class="pos">${b.broker}</td><td style="text-align:right">${fmt(Number(b.nlot))}</td><td style="text-align:right;color:#94a3b8">${b.nval ?? '—'}</td><td style="text-align:right">${b.avg_price ? fmt(Number(b.avg_price)) : '—'}</td></tr>`;
+        });
+        html += `</tbody></table>`;
+        if (data.broksum_avg_buy_price) html += `<div style="font-size:9px;color:#64748b;margin-top:4px">Weighted Avg: <strong style="color:#06b6d4">${fmt(data.broksum_avg_buy_price)}</strong></div>`;
+        html += `</div>`;
+        // Sell side
+        html += `<div><div style="font-size:9px;font-weight:700;color:#dc2626;margin-bottom:4px">NET SELLERS</div><table><thead><tr><th>Broker</th><th style="text-align:right">Net Lot</th><th style="text-align:right">Value</th><th style="text-align:right">Avg</th></tr></thead><tbody>`;
+        data.broker_summary.sell.slice(0, 8).forEach(s => {
+            html += `<tr><td class="neg">${s.broker}</td><td style="text-align:right">${fmt(Number(s.nlot))}</td><td style="text-align:right;color:#94a3b8">${s.nval ?? '—'}</td><td style="text-align:right">${s.avg_price ? fmt(Number(s.avg_price)) : '—'}</td></tr>`;
+        });
+        html += `</tbody></table>`;
+        if (data.broksum_avg_sell_price) html += `<div style="font-size:9px;color:#64748b;margin-top:4px">Weighted Avg: <strong style="color:#f59e0b">${fmt(data.broksum_avg_sell_price)}</strong></div>`;
+        html += `</div></div>`;
+        if (data.broksum_net_institutional || data.broksum_net_foreign) {
+            html += `<div style="display:flex;gap:16px;font-size:10px;margin-top:6px;padding-top:6px;border-top:1px solid #e2e8f0">`;
+            if (data.broksum_net_institutional != null) html += `<span>Institutional Net: <strong class="${data.broksum_net_institutional > 0 ? 'pos' : 'neg'}">${data.broksum_net_institutional > 0 ? '+' : ''}${fmt(data.broksum_net_institutional)} lot</strong></span>`;
+            if (data.broksum_net_foreign != null) html += `<span>Foreign Net: <strong class="${data.broksum_net_foreign > 0 ? 'pos' : 'neg'}">${data.broksum_net_foreign > 0 ? '+' : ''}${fmt(data.broksum_net_foreign)} lot</strong></span>`;
+            html += `</div>`;
+        }
+        html += `</div>`;
+    }
+
+    // Weekly Flow
+    html += `<div class="section"><div class="section-title">Weekly Accumulation</div><div class="grid4">`;
+    [{ l: 'W-4', v: data.w_4 }, { l: 'W-3', v: data.w_3 }, { l: 'W-2', v: data.w_2 }, { l: 'W-1', v: data.w_1 }].forEach(w => {
+        html += `<div class="card" style="text-align:center"><div class="label">${w.l}</div><div class="value ${w.v > 0 ? 'pos' : w.v < 0 ? 'neg' : ''}">${w.v > 0 ? '+' : ''}${w.v?.toFixed(1) ?? '—'}</div></div>`;
+    });
+    html += `</div></div>`;
+
+    // Signals
+    if (data.deep_signals && Object.keys(data.deep_signals).length > 0) {
+        html += `<div class="section"><div class="section-title">Deep Analysis Signals</div><div class="signal-list">`;
+        Object.entries(data.deep_signals).forEach(([key, desc]) => {
+            const isPos = key.includes('accum') || key.includes('buy') || key.includes('clean') || key.includes('up') || key.includes('inflow') || key.includes('positive');
+            const isNeg = key.includes('sell') || key.includes('outflow') || key.includes('warning') || key.includes('dist');
+            html += `<span class="signal" style="${isPos ? 'background:#d1fae5;color:#065f46;border-color:#a7f3d0' : isNeg ? 'background:#fee2e2;color:#991b1b;border-color:#fecaca' : ''}">${desc}</span>`;
+        });
+        html += `</div></div>`;
+    }
+
+    // Breakout Factors
+    if (data.breakout_probability != null && data.breakout_probability > 0 && data.breakout_factors) {
+        html += `<div class="section"><div class="section-title">Breakout Probability Factors (${data.breakout_probability}%)</div><div class="grid4">`;
+        Object.entries(data.breakout_factors).forEach(([key, val]) => {
+            const color = val >= 70 ? '#059669' : val >= 40 ? '#d97706' : '#dc2626';
+            html += `<div class="card"><div class="label">${key.replace(/_/g, ' ')}</div><div class="value" style="color:${color}">${val}</div><div class="bar-container"><div class="bar-fill" style="width:${val}%;background:${color}"></div></div></div>`;
+        });
+        html += `</div></div>`;
+    }
+
+    // Top Holders
+    if (data.top_holders && data.top_holders.length > 0) {
+        html += `<div class="section"><div class="section-title">Top Holders (Cumulative Net Buy)</div><div style="display:flex;gap:8px">`;
+        data.top_holders.forEach(h => {
+            html += `<div class="card" style="text-align:center;min-width:80px"><div class="value pos">${h.broker_code}</div><div style="font-size:9px;font-weight:700">+${fmt(h.total_net_lot)} lot</div><div class="sub">${h.trade_count} trades</div></div>`;
+        });
+        html += `</div></div>`;
+    }
+
+    html += `<div class="footer">Generated by MarketPulse Bandarmology — ${new Date().toLocaleString('id-ID')}</div>`;
+    html += `</body></html>`;
+    return html;
+}
+
 export default function StockDetailModal({ ticker, date, onClose }: StockDetailModalProps) {
     const [data, setData] = useState<StockDetailResponse | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [copied, setCopied] = useState(false);
+
+    const handleDownloadPdf = () => {
+        if (!data) return;
+        const html = generatePdfHtml(data);
+        const printWindow = window.open('', '_blank', 'width=900,height=700');
+        if (!printWindow) return;
+        printWindow.document.write(html);
+        printWindow.document.close();
+        setTimeout(() => { printWindow.print(); }, 400);
+    };
+
+    const handleCopyChat = async () => {
+        if (!data) return;
+        const text = generateChatText(data);
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        }
+    };
 
     useEffect(() => {
         if (!ticker) return;
@@ -149,9 +497,36 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                             </>
                         )}
                     </div>
-                    <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200 transition-colors p-1 rounded hover:bg-zinc-700/50">
-                        <X className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                        {data && !loading && (
+                            <>
+                                <button
+                                    onClick={handleCopyChat}
+                                    className={cn(
+                                        "flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold transition-all",
+                                        copied
+                                            ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300"
+                                            : "bg-zinc-700/50 border border-zinc-600/30 text-zinc-300 hover:bg-zinc-600/50 hover:text-white"
+                                    )}
+                                    title="Copy insight ke clipboard untuk dikirim via chat"
+                                >
+                                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                                    {copied ? 'Copied!' : 'Copy Chat'}
+                                </button>
+                                <button
+                                    onClick={handleDownloadPdf}
+                                    className="flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold bg-zinc-700/50 border border-zinc-600/30 text-zinc-300 hover:bg-zinc-600/50 hover:text-white transition-all"
+                                    title="Download laporan PDF"
+                                >
+                                    <FileDown className="w-3.5 h-3.5" />
+                                    PDF
+                                </button>
+                            </>
+                        )}
+                        <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200 transition-colors p-1 rounded hover:bg-zinc-700/50">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Content */}

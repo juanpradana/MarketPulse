@@ -18,7 +18,8 @@ import {
     Microscope,
     Loader2,
     CheckCircle2,
-    Info
+    Info,
+    Search
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import StockDetailModal from '@/components/bandarmology/StockDetailModal';
@@ -102,6 +103,8 @@ export default function BandarmologyPage() {
     const [hasDeepData, setHasDeepData] = useState(false);
     const [expandedRow, setExpandedRow] = useState<string | null>(null);
     const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
+    const [manualTicker, setManualTicker] = useState('');
+    const [manualDeepLoading, setManualDeepLoading] = useState(false);
     const deepPollRef = useRef<NodeJS.Timeout | null>(null);
     const pageSize = 50;
 
@@ -175,6 +178,26 @@ export default function BandarmologyPage() {
             if (deepPollRef.current) clearInterval(deepPollRef.current);
         };
     }, []);
+
+    const handleManualDeep = async () => {
+        if (!manualTicker.trim()) return;
+        setManualDeepLoading(true);
+        setError(null);
+        try {
+            await bandarmologyApi.triggerDeepAnalysisTickers(
+                manualTicker.trim(),
+                selectedDate || undefined
+            );
+            setManualTicker('');
+            startDeepPolling();
+            const status = await bandarmologyApi.getDeepStatus();
+            setDeepStatus(status);
+        } catch (err: any) {
+            setError(err.message || 'Failed to trigger manual deep analysis');
+        } finally {
+            setManualDeepLoading(false);
+        }
+    };
 
     const handleTriggerDeep = async () => {
         setDeepLoading(true);
@@ -432,6 +455,28 @@ export default function BandarmologyPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                        {/* Manual Deep Analyze */}
+                        <div className="flex items-center gap-1">
+                            <input
+                                type="text"
+                                value={manualTicker}
+                                onChange={(e) => setManualTicker(e.target.value.toUpperCase())}
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleManualDeep(); }}
+                                placeholder="BBCA,BMRI"
+                                className="w-28 bg-[#23252b] border border-zinc-700/50 text-zinc-200 text-[10px] rounded-sm py-1 px-1.5 outline-none focus:border-amber-500/50 placeholder:text-zinc-700 font-mono"
+                                title="Ketik kode emiten (pisah koma) lalu klik Deep atau Enter"
+                            />
+                            <button
+                                onClick={handleManualDeep}
+                                disabled={!manualTicker.trim() || manualDeepLoading || (deepStatus?.running ?? false)}
+                                className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:opacity-90 disabled:opacity-50 text-white px-2 py-1 rounded-sm text-[10px] font-bold shadow-lg transition-all active:scale-95 flex items-center gap-1"
+                                title="Deep analyze emiten yang diketik manual"
+                            >
+                                {manualDeepLoading ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Search className="w-2.5 h-2.5" />}
+                                Deep
+                            </button>
+                        </div>
+                        <div className="h-5 w-px bg-zinc-700" />
                         <button
                             onClick={handleTriggerDeep}
                             disabled={loading || deepLoading || (deepStatus?.running ?? false)}

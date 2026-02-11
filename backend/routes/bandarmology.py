@@ -183,6 +183,72 @@ async def trigger_deep_analysis(
         )
 
 
+@router.post("/bandarmology/deep-analyze-tickers")
+async def trigger_deep_analysis_tickers(
+    background_tasks: BackgroundTasks,
+    tickers: str = Query(..., description="Comma-separated ticker symbols to deep analyze"),
+    date: Optional[str] = Query(None, description="Analysis date"),
+):
+    """
+    Trigger deep analysis for specific tickers (manual input).
+    Accepts comma-separated ticker symbols, e.g. ?tickers=BBCA,BMRI,TLKM
+    """
+    global _deep_analysis_status
+
+    if _deep_analysis_status["running"]:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": "Deep analysis already running",
+                "status": _deep_analysis_status
+            }
+        )
+
+    try:
+        from modules.bandarmology_analyzer import BandarmologyAnalyzer
+
+        analyzer = BandarmologyAnalyzer()
+        actual_date = analyzer._resolve_date(date)
+        results = analyzer.analyze(target_date=actual_date)
+
+        # Parse tickers
+        ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+        if not ticker_list:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "No valid tickers provided"}
+            )
+
+        # Reset status
+        _deep_analysis_status = {
+            "running": True,
+            "progress": 0,
+            "total": len(ticker_list),
+            "current_ticker": "",
+            "completed_tickers": [],
+            "errors": [],
+            "date": actual_date
+        }
+
+        background_tasks.add_task(
+            _run_deep_analysis,
+            ticker_list, actual_date, results
+        )
+
+        return {
+            "message": f"Deep analysis started for {len(ticker_list)} ticker(s)",
+            "tickers": ticker_list,
+            "date": actual_date
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to start manual deep analysis: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+
 @router.get("/bandarmology/deep-status")
 async def get_deep_analysis_status():
     """Get the status of the running deep analysis task."""
