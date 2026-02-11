@@ -59,9 +59,20 @@ function SignalBadge({ signal, description }: { signal: string; description: str
         signal.includes('clean') || signal.includes('up') || signal.includes('inflow') ||
         signal.includes('positive') || signal.includes('strong') || signal.includes('low_cross') ||
         signal.includes('near_floor') || signal.includes('below_floor') ||
-        signal.includes('dominated') || signal.includes('synergy');
+        signal.includes('dominated') || signal.includes('synergy') ||
+        signal.includes('ctrl_clean') || signal.includes('ctrl_coordinated') ||
+        signal.includes('ctrl_ready') || signal.includes('ctrl_near_cost') ||
+        signal.includes('ctrl_below_cost') || signal.includes('ctrl_loading') ||
+        signal.includes('xref_bandar_strong_buy') || signal.includes('xref_bandar_buying') ||
+        signal.includes('xref_bandar_mild_buy') || signal.includes('consistency_high') ||
+        signal.includes('consistency_bandar_buy');
     const isWarning = signal.includes('warning') || signal.includes('sell') ||
-        signal.includes('outflow') || signal.includes('high_cross') || signal.includes('tektok');
+        signal.includes('outflow') || signal.includes('high_cross') || signal.includes('tektok') ||
+        signal.includes('ctrl_distributing') || signal.includes('ctrl_far_above') ||
+        signal.includes('ctrl_heavy_dist') || signal.includes('ctrl_full_exit') ||
+        signal.includes('ctrl_moderate_dist') || signal.includes('ctrl_brokers_selling') ||
+        signal.includes('xref_bandar_strong_sell') || signal.includes('xref_bandar_selling') ||
+        signal.includes('xref_bandar_mild_sell') || signal.includes('consistency_bandar_sell');
 
     return (
         <div className={cn(
@@ -126,6 +137,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                 {data.trade_type && data.trade_type !== '—' && (
                                     <span className={cn(
                                         "text-[10px] font-black px-2 py-0.5 rounded border",
+                                        (data.deep_trade_type || data.trade_type) === 'SELL' ? 'bg-red-500/20 border-red-500/30 text-red-300' :
                                         data.trade_type === 'BOTH' ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-300' :
                                         data.trade_type === 'SWING' ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300' :
                                         data.trade_type === 'INTRADAY' ? 'bg-cyan-500/20 border-cyan-500/30 text-cyan-300' :
@@ -160,7 +172,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                     {data && !loading && (
                         <>
                             {/* Score Overview */}
-                            <div className="grid grid-cols-5 gap-3">
+                            <div className="grid grid-cols-6 gap-3">
                                 <MetricCard
                                     label="Base Score"
                                     value={data.base_score}
@@ -178,9 +190,20 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                 <MetricCard
                                     label="Combined"
                                     value={data.combined_score ?? data.base_score}
-                                    sub={`/ ${data.max_combined_score ?? 190}`}
+                                    sub={`/ ${data.max_combined_score ?? 200}`}
                                     color={(data.combined_score ?? data.base_score) >= 80 ? 'text-emerald-400' : (data.combined_score ?? data.base_score) >= 50 ? 'text-blue-400' : 'text-orange-400'}
                                     icon={<Target className="w-3 h-3 text-zinc-600" />}
+                                />
+                                <MetricCard
+                                    label="Breakout Prob"
+                                    value={data.breakout_probability ? `${data.breakout_probability}%` : '—'}
+                                    sub={data.breakout_probability ? (data.breakout_probability >= 70 ? 'HIGH' : data.breakout_probability >= 40 ? 'MEDIUM' : 'LOW') : ''}
+                                    color={
+                                        (data.breakout_probability ?? 0) >= 70 ? 'text-emerald-400' :
+                                        (data.breakout_probability ?? 0) >= 40 ? 'text-amber-400' :
+                                        (data.breakout_probability ?? 0) > 0 ? 'text-orange-400' : 'text-zinc-600'
+                                    }
+                                    icon={<Zap className="w-3 h-3 text-zinc-600" />}
                                 />
                                 <MetricCard
                                     label="Entry Price"
@@ -230,6 +253,280 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                     </div>
                                 </div>
                             ) : null}
+
+                            {/* Controlling Brokers & Accumulation Phase */}
+                            {data.has_deep && data.controlling_brokers && data.controlling_brokers.length > 0 && (
+                                <div className="bg-zinc-800/20 rounded-lg p-4 border border-zinc-700/20">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h3 className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                                            <Shield className="w-3.5 h-3.5 text-amber-400" />
+                                            Controlling Brokers (Bandarmology)
+                                        </h3>
+                                        <div className="flex items-center gap-2">
+                                            {data.accum_phase && data.accum_phase !== 'UNKNOWN' && (
+                                                <span className={cn(
+                                                    "text-[9px] font-black px-2 py-0.5 rounded border",
+                                                    data.accum_phase === 'ACCUMULATION' ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300' :
+                                                    data.accum_phase === 'HOLDING' ? 'bg-blue-500/20 border-blue-500/30 text-blue-300' :
+                                                    data.accum_phase === 'DISTRIBUTION' ? 'bg-red-500/20 border-red-500/30 text-red-300' :
+                                                    'bg-zinc-700/50 border-zinc-600/30 text-zinc-400'
+                                                )}>
+                                                    {data.accum_phase}
+                                                </span>
+                                            )}
+                                            {data.breakout_signal && data.breakout_signal !== 'NONE' && (
+                                                <span className={cn(
+                                                    "text-[9px] font-black px-2 py-0.5 rounded border flex items-center gap-1",
+                                                    data.breakout_signal === 'READY' ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-300' :
+                                                    data.breakout_signal === 'LAUNCHED' ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300' :
+                                                    data.breakout_signal === 'LOADING' ? 'bg-cyan-500/20 border-cyan-500/30 text-cyan-300' :
+                                                    data.breakout_signal === 'DISTRIBUTING' ? 'bg-red-500/20 border-red-500/30 text-red-300' :
+                                                    'bg-zinc-700/50 border-zinc-600/30 text-zinc-400'
+                                                )}>
+                                                    <Zap className="w-3 h-3" />
+                                                    {data.breakout_signal}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Summary row */}
+                                    <div className="flex items-center gap-4 text-[9px] mb-3 pb-2 border-b border-zinc-700/30">
+                                        {data.accum_start_date && (
+                                            <span className="text-zinc-500">
+                                                Accumulation started: <span className="text-amber-400 font-bold">{data.accum_start_date}</span>
+                                            </span>
+                                        )}
+                                        {data.bandar_avg_cost ? (
+                                            <span className="text-zinc-500">
+                                                Bandar avg cost: <span className="text-cyan-400 font-bold">{data.bandar_avg_cost.toLocaleString('id-ID')}</span>
+                                            </span>
+                                        ) : null}
+                                        {data.coordination_score ? (
+                                            <span className="text-zinc-500">
+                                                Coordination: <span className={cn(
+                                                    "font-bold",
+                                                    data.coordination_score >= 80 ? 'text-emerald-400' :
+                                                    data.coordination_score >= 60 ? 'text-blue-400' : 'text-orange-400'
+                                                )}>{data.coordination_score}%</span>
+                                            </span>
+                                        ) : null}
+                                        {data.phase_confidence && data.phase_confidence !== 'LOW' && (
+                                            <span className="text-zinc-500">
+                                                Confidence: <span className={cn(
+                                                    "font-bold",
+                                                    data.phase_confidence === 'HIGH' ? 'text-emerald-400' : 'text-blue-400'
+                                                )}>{data.phase_confidence}</span>
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Distribution Alert Banner */}
+                                    {data.distribution_alert && data.distribution_alert !== 'NONE' && (
+                                        <div className={cn(
+                                            "flex items-center gap-2 px-3 py-2 rounded-lg mb-3 border text-[10px] font-bold",
+                                            data.distribution_alert === 'FULL_EXIT' ? 'bg-red-500/20 border-red-500/40 text-red-300' :
+                                            data.distribution_alert === 'HEAVY' ? 'bg-red-500/15 border-red-500/30 text-red-400' :
+                                            data.distribution_alert === 'MODERATE' ? 'bg-orange-500/15 border-orange-500/30 text-orange-400' :
+                                            'bg-yellow-500/10 border-yellow-500/20 text-yellow-400'
+                                        )}>
+                                            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                                            <div className="flex-1">
+                                                {data.distribution_alert === 'FULL_EXIT' && 'JUAL SEMUA! Bandar sudah hampir keluar sepenuhnya'}
+                                                {data.distribution_alert === 'HEAVY' && 'BUANG BARANG! Bandar sudah distribusi >50% dari puncak kepemilikan'}
+                                                {data.distribution_alert === 'MODERATE' && 'Hati-hati: Bandar mulai distribusi signifikan'}
+                                                {data.distribution_alert === 'EARLY' && 'Perhatikan: Tanda awal distribusi terdeteksi'}
+                                            </div>
+                                            <div className="flex items-center gap-3 flex-shrink-0">
+                                                <span className="text-[9px]">
+                                                    Peak: <span className="text-white">{(data.bandar_peak_lot ?? 0).toLocaleString('id-ID')} lot</span>
+                                                </span>
+                                                <span className="text-[9px]">
+                                                    Sold: <span className={cn(
+                                                        "font-black",
+                                                        (data.bandar_distribution_pct ?? 0) >= 50 ? 'text-red-300' :
+                                                        (data.bandar_distribution_pct ?? 0) >= 25 ? 'text-orange-300' : 'text-yellow-300'
+                                                    )}>{(data.bandar_distribution_pct ?? 0).toFixed(1)}%</span>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Cross-Reference: Bandar Activity Today */}
+                                    {data.bandar_confirmation && data.bandar_confirmation !== 'NONE' && data.bandar_confirmation !== 'NEUTRAL' && (
+                                        <div className={cn(
+                                            "flex items-center gap-2 px-3 py-2 rounded-lg mb-3 border text-[10px] font-bold",
+                                            data.bandar_confirmation === 'STRONG_BUY' ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300' :
+                                            data.bandar_confirmation === 'BUY' ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400' :
+                                            data.bandar_confirmation === 'MILD_BUY' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
+                                            data.bandar_confirmation === 'STRONG_SELL' ? 'bg-red-500/20 border-red-500/40 text-red-300' :
+                                            data.bandar_confirmation === 'SELL' ? 'bg-red-500/15 border-red-500/30 text-red-400' :
+                                            'bg-orange-500/10 border-orange-500/20 text-orange-400'
+                                        )}>
+                                            {data.bandar_confirmation.includes('BUY') ? (
+                                                <TrendingUp className="w-4 h-4 flex-shrink-0" />
+                                            ) : (
+                                                <TrendingDown className="w-4 h-4 flex-shrink-0" />
+                                            )}
+                                            <div className="flex-1">
+                                                {data.bandar_confirmation === 'STRONG_BUY' && `Bandar AKTIF BELI hari ini (${data.bandar_buy_today_count} broker)`}
+                                                {data.bandar_confirmation === 'BUY' && `Bandar beli hari ini (${data.bandar_buy_today_count} broker)`}
+                                                {data.bandar_confirmation === 'MILD_BUY' && `Bandar beli hari ini (1 broker)`}
+                                                {data.bandar_confirmation === 'STRONG_SELL' && `WARNING: Bandar JUAL hari ini (${data.bandar_sell_today_count} broker)`}
+                                                {data.bandar_confirmation === 'SELL' && `Hati-hati: Bandar jual hari ini (${data.bandar_sell_today_count} broker)`}
+                                                {data.bandar_confirmation === 'MILD_SELL' && `Bandar jual hari ini (1 broker)`}
+                                            </div>
+                                            <div className="flex items-center gap-3 flex-shrink-0 text-[9px]">
+                                                {(data.bandar_buy_today_lot ?? 0) > 0 && (
+                                                    <span>Buy: <span className="text-emerald-300 font-black">+{(data.bandar_buy_today_lot ?? 0).toLocaleString('id-ID')}</span></span>
+                                                )}
+                                                {(data.bandar_sell_today_lot ?? 0) > 0 && (
+                                                    <span>Sell: <span className="text-red-300 font-black">-{(data.bandar_sell_today_lot ?? 0).toLocaleString('id-ID')}</span></span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Breakout Probability Factors */}
+                                    {data.breakout_probability != null && data.breakout_probability > 0 && data.breakout_factors && (
+                                        <div className="mb-3 p-3 bg-zinc-800/30 rounded-lg border border-zinc-700/20">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Breakout Probability Factors</span>
+                                                <span className={cn(
+                                                    "text-sm font-black",
+                                                    data.breakout_probability >= 70 ? 'text-emerald-400' :
+                                                    data.breakout_probability >= 40 ? 'text-amber-400' : 'text-orange-400'
+                                                )}>{data.breakout_probability}%</span>
+                                            </div>
+                                            <div className="grid grid-cols-4 gap-x-4 gap-y-1">
+                                                {Object.entries(data.breakout_factors).map(([key, val]) => (
+                                                    <div key={key} className="flex items-center gap-1.5">
+                                                        <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                                                            <div
+                                                                className={cn("h-full rounded-full",
+                                                                    val >= 70 ? 'bg-emerald-500' :
+                                                                    val >= 40 ? 'bg-amber-500' : 'bg-red-500'
+                                                                )}
+                                                                style={{ width: `${val}%` }}
+                                                            />
+                                                        </div>
+                                                        <span className="text-[8px] text-zinc-500 w-20 truncate">{key.replace(/_/g, ' ')}</span>
+                                                        <span className={cn("text-[8px] font-bold w-6 text-right",
+                                                            val >= 70 ? 'text-emerald-400' :
+                                                            val >= 40 ? 'text-amber-400' : 'text-red-400'
+                                                        )}>{val}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Multi-Day Consistency */}
+                                    {(data.broksum_days_analyzed ?? 0) >= 2 && (
+                                        <div className="mb-3 flex items-center gap-3 text-[9px] px-1">
+                                            <span className="text-zinc-500">
+                                                Consistency ({data.broksum_days_analyzed}d):
+                                                <span className={cn(
+                                                    "font-black ml-1",
+                                                    (data.broksum_consistency_score ?? 0) >= 70 ? 'text-emerald-400' :
+                                                    (data.broksum_consistency_score ?? 0) >= 40 ? 'text-amber-400' : 'text-orange-400'
+                                                )}>{data.broksum_consistency_score ?? 0}/100</span>
+                                            </span>
+                                            {data.broksum_consistent_buyers && data.broksum_consistent_buyers.length > 0 && (
+                                                <span className="text-zinc-500">
+                                                    Consistent buyers: {data.broksum_consistent_buyers.slice(0, 5).map(b => (
+                                                        <span key={b.code} className={cn("font-bold ml-0.5", b.is_bandar ? 'text-emerald-400' : 'text-zinc-400')}>
+                                                            {b.code}{b.is_bandar ? '★' : ''}
+                                                        </span>
+                                                    ))}
+                                                </span>
+                                            )}
+                                            {data.broksum_consistent_sellers && data.broksum_consistent_sellers.filter(s => s.is_bandar).length > 0 && (
+                                                <span className="text-red-400">
+                                                    Bandar selling: {data.broksum_consistent_sellers.filter(s => s.is_bandar).map(s => s.code).join(', ')}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Broker table */}
+                                    <table className="w-full text-[10px]">
+                                        <thead>
+                                            <tr className="text-zinc-600 border-b border-zinc-700/30">
+                                                <th className="text-left py-1 font-bold">Broker</th>
+                                                <th className="text-right py-1 font-bold">Net Lot</th>
+                                                <th className="text-right py-1 font-bold">Avg Buy</th>
+                                                <th className="text-right py-1 font-bold">Buy Lots</th>
+                                                <th className="text-right py-1 font-bold">Sell Lots</th>
+                                                <th className="text-left py-1 font-bold pl-3">Turn Date</th>
+                                                <th className="text-right py-1 font-bold">Peak Lot</th>
+                                                <th className="text-right py-1 font-bold">Dist%</th>
+                                                <th className="text-left py-1 font-bold pl-3">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {data.controlling_brokers.map((cb, i) => (
+                                                <tr key={i} className="border-b border-zinc-800/20 hover:bg-zinc-800/30">
+                                                    <td className="py-1 font-bold">
+                                                        <span className={cn(
+                                                            cb.is_clean ? 'text-emerald-400' :
+                                                            cb.is_tektok ? 'text-orange-400' : 'text-zinc-300'
+                                                        )}>
+                                                            {cb.code}
+                                                            {cb.is_clean && <span className="text-emerald-500 ml-0.5">✓</span>}
+                                                            {cb.is_tektok && <span className="text-orange-500 ml-0.5">✗</span>}
+                                                        </span>
+                                                        {cb.broker_class && (
+                                                            <span className="text-zinc-600 text-[8px] ml-1">{cb.broker_class}</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="py-1 text-right tabular-nums font-bold text-emerald-400">
+                                                        +{cb.net_lot.toLocaleString('id-ID')}
+                                                    </td>
+                                                    <td className="py-1 text-right tabular-nums text-cyan-400 font-bold">
+                                                        {cb.avg_buy_price ? cb.avg_buy_price.toLocaleString('id-ID') : '—'}
+                                                    </td>
+                                                    <td className="py-1 text-right tabular-nums text-zinc-400">
+                                                        {cb.total_buy_lots ? cb.total_buy_lots.toLocaleString('id-ID') : '—'}
+                                                    </td>
+                                                    <td className="py-1 text-right tabular-nums text-zinc-500">
+                                                        {cb.total_sell_lots ? cb.total_sell_lots.toLocaleString('id-ID') : '—'}
+                                                    </td>
+                                                    <td className="py-1 text-left pl-3 text-zinc-500">
+                                                        {cb.turn_date || '—'}
+                                                    </td>
+                                                    <td className="py-1 text-right tabular-nums text-zinc-400">
+                                                        {cb.peak_lot ? cb.peak_lot.toLocaleString('id-ID') : '—'}
+                                                    </td>
+                                                    <td className={cn(
+                                                        "py-1 text-right tabular-nums font-bold",
+                                                        cb.distribution_pct >= 50 ? 'text-red-400' :
+                                                        cb.distribution_pct >= 25 ? 'text-orange-400' :
+                                                        cb.distribution_pct >= 10 ? 'text-yellow-400' : 'text-zinc-500'
+                                                    )}>
+                                                        {cb.distribution_pct > 0 ? `${cb.distribution_pct.toFixed(1)}%` : '0%'}
+                                                    </td>
+                                                    <td className="py-1 text-left pl-3">
+                                                        <span className={cn(
+                                                            "text-[8px] font-bold px-1.5 py-0.5 rounded",
+                                                            cb.distribution_pct >= 50 ? 'bg-red-500/20 text-red-400' :
+                                                            cb.distribution_pct >= 25 ? 'bg-orange-500/20 text-orange-400' :
+                                                            cb.avg_daily_last10 > 50 ? 'bg-emerald-500/20 text-emerald-400' :
+                                                            cb.avg_daily_last10 < -50 ? 'bg-red-500/20 text-red-400' :
+                                                            'bg-zinc-700/50 text-zinc-500'
+                                                        )}>
+                                                            {cb.distribution_pct >= 50 ? 'DISTRIBUSI' :
+                                                             cb.distribution_pct >= 25 ? 'SELLING' :
+                                                             cb.avg_daily_last10 > 50 ? 'BUYING' :
+                                                             cb.avg_daily_last10 < -50 ? 'SELLING' : 'HOLDING'}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
 
                             {/* Two Column Layout */}
                             <div className="grid grid-cols-2 gap-4">

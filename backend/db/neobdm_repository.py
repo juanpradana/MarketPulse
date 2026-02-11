@@ -235,6 +235,51 @@ class NeoBDMRepository(BaseRepository):
         finally:
             conn.close()
     
+    def get_broker_summary_multiday(self, ticker: str, end_date: str, days: int = 5) -> List[Dict]:
+        """
+        Get broker summary data for multiple recent days.
+        
+        Returns list of dicts, each with 'date', 'buy', 'sell' keys.
+        Only returns days where data actually exists (up to `days` most recent).
+        """
+        conn = self._get_conn()
+        try:
+            # Get distinct dates up to N most recent before/on end_date
+            dates_query = """
+            SELECT DISTINCT trade_date
+            FROM neobdm_broker_summaries
+            WHERE UPPER(ticker) = UPPER(?) AND trade_date <= ?
+            ORDER BY trade_date DESC
+            LIMIT ?
+            """
+            df_dates = pd.read_sql(dates_query, conn, params=(ticker, end_date, days))
+            if df_dates.empty:
+                return []
+
+            available_dates = df_dates['trade_date'].tolist()
+
+            results = []
+            for d in available_dates:
+                query = """
+                SELECT side, broker, nlot, nval, avg_price
+                FROM neobdm_broker_summaries
+                WHERE UPPER(ticker) = UPPER(?) AND trade_date = ?
+                ORDER BY nval DESC
+                """
+                df = pd.read_sql(query, conn, params=(ticker, d))
+                if df.empty:
+                    continue
+                buy_data = df[df['side'] == 'BUY'].to_dict('records')
+                sell_data = df[df['side'] == 'SELL'].to_dict('records')
+                results.append({
+                    'date': d,
+                    'buy': buy_data,
+                    'sell': sell_data
+                })
+            return results
+        finally:
+            conn.close()
+
     def get_available_dates_for_ticker(self, ticker: str) -> List[str]:
         """
         Get all available dates where broker summary data exists for a ticker.

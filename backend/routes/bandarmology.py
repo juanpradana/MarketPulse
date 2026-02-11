@@ -222,6 +222,7 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
             try:
                 # 1. Scrape Inventory
                 inv_data = None
+                price_series = None
                 try:
                     raw_inv = await scraper.get_inventory(ticker)
                     if raw_inv and raw_inv.get('brokers'):
@@ -232,6 +233,7 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                             raw_inv.get('lastDate', '')
                         )
                         inv_data = raw_inv['brokers']
+                        price_series = raw_inv.get('priceSeries')
                 except Exception as e:
                     logger.warning(f"Inventory scrape failed for {ticker}: {e}")
                     _deep_analysis_status["errors"].append(f"{ticker} inv: {str(e)[:80]}")
@@ -269,6 +271,15 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
 
                 await asyncio.sleep(2)
 
+                # 3b. Fetch multi-day broker summary from DB (last 5 days)
+                broksum_multiday = None
+                try:
+                    broksum_multiday = neobdm_repo.get_broker_summary_multiday(
+                        ticker, analysis_date, days=5
+                    )
+                except Exception as e:
+                    logger.warning(f"Multi-day broksum fetch failed for {ticker}: {e}")
+
                 # 4. Run deep analysis
                 base_result = base_lookup.get(ticker)
                 deep_result = analyzer.analyze_deep(
@@ -276,6 +287,8 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                     inventory_data=inv_data,
                     txn_chart_data=txn_data,
                     broker_summary_data=broksum_data,
+                    broksum_multiday_data=broksum_multiday,
+                    price_series=price_series,
                     base_result=base_result
                 )
 
@@ -430,12 +443,42 @@ async def get_stock_detail(
                 "target_price": deep_cache.get('target_price', 0),
                 "stop_loss": deep_cache.get('stop_loss', 0),
                 "risk_reward_ratio": deep_cache.get('risk_reward_ratio', 0),
+
+                # Controlling broker analysis
+                "controlling_brokers": deep_cache.get('controlling_brokers', []),
+                "accum_start_date": deep_cache.get('accum_start_date'),
+                "accum_phase": deep_cache.get('accum_phase', 'UNKNOWN'),
+                "bandar_avg_cost": deep_cache.get('bandar_avg_cost', 0),
+                "bandar_total_lot": deep_cache.get('bandar_total_lot', 0),
+                "coordination_score": deep_cache.get('coordination_score', 0),
+                "phase_confidence": deep_cache.get('phase_confidence', 'LOW'),
+                "breakout_signal": deep_cache.get('breakout_signal', 'NONE'),
+                "bandar_peak_lot": deep_cache.get('bandar_peak_lot', 0),
+                "bandar_distribution_pct": deep_cache.get('bandar_distribution_pct', 0.0),
+                "distribution_alert": deep_cache.get('distribution_alert', 'NONE'),
+
+                # Cross-reference: broker summary <-> inventory
+                "bandar_buy_today_count": deep_cache.get('bandar_buy_today_count', 0),
+                "bandar_sell_today_count": deep_cache.get('bandar_sell_today_count', 0),
+                "bandar_buy_today_lot": deep_cache.get('bandar_buy_today_lot', 0),
+                "bandar_sell_today_lot": deep_cache.get('bandar_sell_today_lot', 0),
+                "bandar_confirmation": deep_cache.get('bandar_confirmation', 'NONE'),
+
+                # Multi-day consistency
+                "broksum_days_analyzed": deep_cache.get('broksum_days_analyzed', 0),
+                "broksum_consistency_score": deep_cache.get('broksum_consistency_score', 0),
+                "broksum_consistent_buyers": deep_cache.get('broksum_consistent_buyers', []),
+                "broksum_consistent_sellers": deep_cache.get('broksum_consistent_sellers', []),
+
+                # Breakout probability
+                "breakout_probability": deep_cache.get('breakout_probability', 0),
+                "breakout_factors": deep_cache.get('breakout_factors', {}),
             })
         else:
             detail.update({
                 "deep_score": 0,
                 "combined_score": base_result.get('total_score', 0),
-                "max_combined_score": 190,
+                "max_combined_score": 200,
             })
 
         # Inventory broker detail list

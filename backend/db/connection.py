@@ -506,6 +506,36 @@ class DatabaseConnection:
                 stop_loss REAL DEFAULT 0,
                 risk_reward_ratio REAL DEFAULT 0,
                 
+                -- Controlling broker analysis
+                controlling_brokers_json TEXT,
+                accum_start_date TEXT,
+                accum_phase TEXT,
+                bandar_avg_cost REAL DEFAULT 0,
+                bandar_total_lot REAL DEFAULT 0,
+                coordination_score INTEGER DEFAULT 0,
+                phase_confidence TEXT,
+                breakout_signal TEXT,
+                bandar_peak_lot REAL DEFAULT 0,
+                bandar_distribution_pct REAL DEFAULT 0,
+                distribution_alert TEXT,
+                
+                -- Cross-reference: broker summary <-> inventory
+                bandar_buy_today_count INTEGER DEFAULT 0,
+                bandar_sell_today_count INTEGER DEFAULT 0,
+                bandar_buy_today_lot REAL DEFAULT 0,
+                bandar_sell_today_lot REAL DEFAULT 0,
+                bandar_confirmation TEXT,
+                
+                -- Multi-day broker summary consistency
+                broksum_days_analyzed INTEGER DEFAULT 0,
+                broksum_consistency_score INTEGER DEFAULT 0,
+                broksum_consistent_buyers_json TEXT,
+                broksum_consistent_sellers_json TEXT,
+                
+                -- Breakout probability
+                breakout_probability INTEGER DEFAULT 0,
+                breakout_factors_json TEXT,
+                
                 calculated_at DATETIME DEFAULT (datetime('now')),
                 UNIQUE(ticker, analysis_date)
             );
@@ -530,6 +560,31 @@ class DatabaseConnection:
             ("target_price", "REAL DEFAULT 0"),
             ("stop_loss", "REAL DEFAULT 0"),
             ("risk_reward_ratio", "REAL DEFAULT 0"),
+            ("controlling_brokers_json", "TEXT"),
+            ("accum_start_date", "TEXT"),
+            ("accum_phase", "TEXT"),
+            ("bandar_avg_cost", "REAL DEFAULT 0"),
+            ("bandar_total_lot", "REAL DEFAULT 0"),
+            ("coordination_score", "INTEGER DEFAULT 0"),
+            ("phase_confidence", "TEXT"),
+            ("breakout_signal", "TEXT"),
+            ("bandar_peak_lot", "REAL DEFAULT 0"),
+            ("bandar_distribution_pct", "REAL DEFAULT 0"),
+            ("distribution_alert", "TEXT"),
+            # Cross-reference fields
+            ("bandar_buy_today_count", "INTEGER DEFAULT 0"),
+            ("bandar_sell_today_count", "INTEGER DEFAULT 0"),
+            ("bandar_buy_today_lot", "REAL DEFAULT 0"),
+            ("bandar_sell_today_lot", "REAL DEFAULT 0"),
+            ("bandar_confirmation", "TEXT"),
+            # Multi-day consistency fields
+            ("broksum_days_analyzed", "INTEGER DEFAULT 0"),
+            ("broksum_consistency_score", "INTEGER DEFAULT 0"),
+            ("broksum_consistent_buyers_json", "TEXT"),
+            ("broksum_consistent_sellers_json", "TEXT"),
+            # Breakout probability fields
+            ("breakout_probability", "INTEGER DEFAULT 0"),
+            ("breakout_factors_json", "TEXT"),
         ]
         for col_name, col_type in new_columns:
             try:

@@ -244,10 +244,18 @@ class BandarmologyRepository(BaseRepository):
                     broksum_top_buyers_json, broksum_top_sellers_json,
                     broksum_net_institutional, broksum_net_foreign,
                     entry_price, target_price, stop_loss, risk_reward_ratio,
+                    controlling_brokers_json, accum_start_date, accum_phase,
+                    bandar_avg_cost, bandar_total_lot, coordination_score,
+                    phase_confidence, breakout_signal,
+                    bandar_peak_lot, bandar_distribution_pct, distribution_alert,
+                    bandar_buy_today_count, bandar_sell_today_count,
+                    bandar_buy_today_lot, bandar_sell_today_lot, bandar_confirmation,
+                    broksum_days_analyzed, broksum_consistency_score,
+                    broksum_consistent_buyers_json, broksum_consistent_sellers_json,
+                    breakout_probability, breakout_factors_json,
                     deep_score, deep_trade_type, deep_signals_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
+                ) VALUES ({})
+            """.format(', '.join(['?'] * 60)), (
                 ticker.upper(), analysis_date,
                 data.get('inv_accum_brokers', 0),
                 data.get('inv_distrib_brokers', 0),
@@ -282,6 +290,28 @@ class BandarmologyRepository(BaseRepository):
                 data.get('target_price', 0),
                 data.get('stop_loss', 0),
                 data.get('risk_reward_ratio', 0),
+                json.dumps(data.get('controlling_brokers', [])),
+                data.get('accum_start_date', ''),
+                data.get('accum_phase', 'UNKNOWN'),
+                data.get('bandar_avg_cost', 0),
+                data.get('bandar_total_lot', 0),
+                data.get('coordination_score', 0),
+                data.get('phase_confidence', 'LOW'),
+                data.get('breakout_signal', 'NONE'),
+                data.get('bandar_peak_lot', 0),
+                data.get('bandar_distribution_pct', 0.0),
+                data.get('distribution_alert', 'NONE'),
+                data.get('bandar_buy_today_count', 0),
+                data.get('bandar_sell_today_count', 0),
+                data.get('bandar_buy_today_lot', 0),
+                data.get('bandar_sell_today_lot', 0),
+                data.get('bandar_confirmation', 'NONE'),
+                data.get('broksum_days_analyzed', 0),
+                data.get('broksum_consistency_score', 0),
+                json.dumps(data.get('broksum_consistent_buyers', [])),
+                json.dumps(data.get('broksum_consistent_sellers', [])),
+                data.get('breakout_probability', 0),
+                json.dumps(data.get('breakout_factors', {})),
                 data.get('deep_score', 0),
                 data.get('deep_trade_type', ''),
                 json.dumps(data.get('deep_signals', {}))
@@ -322,6 +352,10 @@ class BandarmologyRepository(BaseRepository):
             d['deep_signals'] = json.loads(d.get('deep_signals_json') or '{}')
             d['broksum_top_buyers'] = json.loads(d.get('broksum_top_buyers_json') or '[]')
             d['broksum_top_sellers'] = json.loads(d.get('broksum_top_sellers_json') or '[]')
+            d['controlling_brokers'] = json.loads(d.get('controlling_brokers_json') or '[]')
+            d['broksum_consistent_buyers'] = json.loads(d.get('broksum_consistent_buyers_json') or '[]')
+            d['broksum_consistent_sellers'] = json.loads(d.get('broksum_consistent_sellers_json') or '[]')
+            d['breakout_factors'] = json.loads(d.get('breakout_factors_json') or '{}')
             return d
         finally:
             conn.close()
@@ -345,6 +379,10 @@ class BandarmologyRepository(BaseRepository):
                 d['deep_signals'] = json.loads(d.get('deep_signals_json') or '{}')
                 d['broksum_top_buyers'] = json.loads(d.get('broksum_top_buyers_json') or '[]')
                 d['broksum_top_sellers'] = json.loads(d.get('broksum_top_sellers_json') or '[]')
+                d['controlling_brokers'] = json.loads(d.get('controlling_brokers_json') or '[]')
+                d['broksum_consistent_buyers'] = json.loads(d.get('broksum_consistent_buyers_json') or '[]')
+                d['broksum_consistent_sellers'] = json.loads(d.get('broksum_consistent_sellers_json') or '[]')
+                d['breakout_factors'] = json.loads(d.get('breakout_factors_json') or '{}')
                 result[d['ticker']] = d
             return result
         finally:

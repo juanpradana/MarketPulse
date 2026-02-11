@@ -1086,14 +1086,27 @@ class NeoBDMScraper:
                     if (!p || !p._fullData) return null;
                     const fd = p._fullData;
                     
-                    const result = { brokers: [], lastDate: null, firstDate: null, traceCount: fd.length };
+                    const result = { brokers: [], priceSeries: [], lastDate: null, firstDate: null, traceCount: fd.length };
                     
                     for (let i = 0; i < fd.length; i++) {
                         const t = fd[i];
                         const name = t.name || '';
                         
-                        // Skip price, volume, and marker traces
-                        if (t.type === 'candlestick' || name === 'volume' || name === 'price') continue;
+                        // Extract price (candlestick) data for cost basis calculation
+                        if (t.type === 'candlestick') {
+                            const dates = Array.from(t.x || []);
+                            const closes = Array.from(t.close || []);
+                            const opens = Array.from(t.open || []);
+                            const highs = Array.from(t.high || []);
+                            const lows = Array.from(t.low || []);
+                            result.priceSeries = dates.map(function(d, j) {
+                                return { date: d, close: closes[j], open: opens[j], high: highs[j], low: lows[j] };
+                            });
+                            continue;
+                        }
+                        
+                        // Skip volume and marker traces
+                        if (name === 'volume' || name === 'price') continue;
                         if (t.mode === 'markers+text') continue;
                         if (t.type !== 'scatter') continue;
                         

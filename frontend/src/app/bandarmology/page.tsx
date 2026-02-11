@@ -30,6 +30,7 @@ const TRADE_TYPE_CONFIG: Record<string, { label: string; color: string; bg: stri
     'SWING': { label: 'SWING', color: 'text-emerald-300', bg: 'bg-emerald-500/20 border-emerald-500/30' },
     'INTRADAY': { label: 'INTRADAY', color: 'text-cyan-300', bg: 'bg-cyan-500/20 border-cyan-500/30' },
     'WATCH': { label: 'WATCH', color: 'text-orange-300', bg: 'bg-orange-500/20 border-orange-500/30' },
+    'SELL': { label: 'SELL', color: 'text-red-300', bg: 'bg-red-500/20 border-red-500/30' },
     '—': { label: '—', color: 'text-zinc-600', bg: 'bg-transparent' },
 };
 

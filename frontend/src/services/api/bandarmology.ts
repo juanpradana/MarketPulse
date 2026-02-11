@@ -116,8 +116,63 @@ export interface BandarmologyItem {
     stop_loss?: number;
     risk_reward_ratio?: number;
 
+    // Controlling broker analysis
+    controlling_brokers?: ControllingBroker[];
+    accum_start_date?: string | null;
+    accum_phase?: string;
+    bandar_avg_cost?: number;
+    bandar_total_lot?: number;
+    coordination_score?: number;
+    phase_confidence?: string;
+    breakout_signal?: string;
+    bandar_peak_lot?: number;
+    bandar_distribution_pct?: number;
+    distribution_alert?: string;
+
+    // Cross-reference: broker summary <-> inventory
+    bandar_buy_today_count?: number;
+    bandar_sell_today_count?: number;
+    bandar_buy_today_lot?: number;
+    bandar_sell_today_lot?: number;
+    bandar_confirmation?: string;
+
+    // Multi-day consistency
+    broksum_days_analyzed?: number;
+    broksum_consistency_score?: number;
+    broksum_consistent_buyers?: ConsistentBroker[];
+    broksum_consistent_sellers?: ConsistentBroker[];
+
+    // Breakout probability
+    breakout_probability?: number;
+    breakout_factors?: Record<string, number>;
+
     // Signals
     deep_signals?: DeepSignals;
+}
+
+export interface ControllingBroker {
+    code: string;
+    net_lot: number;
+    avg_buy_price: number;
+    total_buy_lots: number;
+    total_sell_lots: number;
+    is_clean: boolean;
+    is_tektok: boolean;
+    turn_date: string | null;
+    avg_daily_last10: number;
+    broker_class: string;
+    peak_lot: number;
+    peak_date: string | null;
+    distribution_pct: number;
+}
+
+export interface ConsistentBroker {
+    code: string;
+    buy_days?: number;
+    sell_days?: number;
+    total_days: number;
+    total_lot: number;
+    is_bandar: boolean;
 }
 
 export interface BrokerSummaryEntry {
@@ -197,6 +252,36 @@ export interface StockDetailResponse {
     target_price?: number;
     stop_loss?: number;
     risk_reward_ratio?: number;
+
+    // Controlling broker analysis
+    controlling_brokers?: ControllingBroker[];
+    accum_start_date?: string | null;
+    accum_phase?: string;
+    bandar_avg_cost?: number;
+    bandar_total_lot?: number;
+    coordination_score?: number;
+    phase_confidence?: string;
+    breakout_signal?: string;
+    bandar_peak_lot?: number;
+    bandar_distribution_pct?: number;
+    distribution_alert?: string;
+
+    // Cross-reference
+    bandar_buy_today_count?: number;
+    bandar_sell_today_count?: number;
+    bandar_buy_today_lot?: number;
+    bandar_sell_today_lot?: number;
+    bandar_confirmation?: string;
+
+    // Multi-day consistency
+    broksum_days_analyzed?: number;
+    broksum_consistency_score?: number;
+    broksum_consistent_buyers?: ConsistentBroker[];
+    broksum_consistent_sellers?: ConsistentBroker[];
+
+    // Breakout probability
+    breakout_probability?: number;
+    breakout_factors?: Record<string, number>;
 
     // Detail data
     inventory_brokers: InvBrokerDetail[];
