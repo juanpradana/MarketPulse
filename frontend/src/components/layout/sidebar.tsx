@@ -18,7 +18,8 @@ import {
     CandlestickChart,
     FlaskConical,
     Search,
-    Target
+    Target,
+    Calculator
 } from 'lucide-react';
 import { ScraperControl } from './scraper-control';
 
@@ -28,6 +29,7 @@ const navGroups = [
         items: [
             { icon: FlaskConical, label: 'Alpha Hunter', href: '/alpha-hunter' },
             { icon: Target, label: 'Bandarmology', href: '/bandarmology' },
+            { icon: Calculator, label: 'Adimology', href: '/adimology' },
         ]
     },
     {
