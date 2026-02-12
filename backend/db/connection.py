@@ -96,6 +96,7 @@ class DatabaseConnection:
                 d_4 TEXT,
                 d_3 TEXT,
                 d_2 TEXT,
+                d_1 TEXT,
                 d_0 TEXT,
                 pct_1d TEXT,
                 c_20 TEXT,
@@ -112,7 +113,9 @@ class DatabaseConnection:
                 ma20 TEXT,
                 ma50 TEXT,
                 ma100 TEXT,
-                unusual TEXT
+                unusual TEXT,
+                suspend TEXT,
+                special_notice TEXT
             );
         """)
         
@@ -672,6 +675,18 @@ class DatabaseConnection:
             ("important_dates_score", "INTEGER DEFAULT 0"),
             ("important_dates_signal", "TEXT DEFAULT 'NONE'"),
         ]
+        
+        # Migration: Add new columns to neobdm_records
+        neobdm_new_columns = [
+            ("d_1", "TEXT"),
+            ("suspend", "TEXT"),
+            ("special_notice", "TEXT"),
+        ]
+        for col_name, col_type in neobdm_new_columns:
+            try:
+                conn.execute(f"ALTER TABLE neobdm_records ADD COLUMN {col_name} {col_type}")
+            except Exception:
+                pass
         
         # Migration: Add week_ago/month_ago columns to bandarmology_txn_chart
         txn_chart_new_columns = [

@@ -113,14 +113,14 @@ export default function NeoBDMSummaryPage() {
         const availableKeys = Object.keys(data[0]);
 
         const dailyOrder = [
-            'symbol', 'pinky', 'crossing', 'unusual', 'likuid',
+            'symbol', 'pinky', 'crossing', 'unusual', 'likuid', 'suspend', 'special_notice',
             'w-4', 'w-3', 'w-2', 'w-1',
-            'd-4', 'd-3', 'd-2', 'd-0',
+            'd-4', 'd-3', 'd-2', 'd-1', 'd-0',
             '%1d', 'price', '>ma5', '>ma10', '>ma20', '>ma50', '>ma100'
         ];
 
         const cumulativeOrder = [
-            'symbol', 'pinky', 'crossing', 'unusual', 'likuid',
+            'symbol', 'pinky', 'crossing', 'unusual', 'likuid', 'suspend', 'special_notice',
             'c-20', 'c-10', 'c-5', 'c-3',
             '%3d', '%5d', '%10d', '%20d',
             'price', '>ma5', '>ma10', '>ma20', '>ma50', '>ma100'
@@ -350,7 +350,7 @@ export default function NeoBDMSummaryPage() {
                                     const colLower = col.toLowerCase();
                                     let widthClass = "w-[65px] max-w-[65px]"; // Aggressive default
                                     if (colLower === 'symbol') widthClass = "w-[140px] max-w-[140px]";
-                                    else if (['pinky', 'crossing', 'unusual', 'likuid'].includes(colLower)) widthClass = "w-[45px] max-w-[45px]";
+                                    else if (['pinky', 'crossing', 'unusual', 'likuid', 'suspend', 'special_notice'].includes(colLower)) widthClass = "w-[45px] max-w-[45px]";
                                     else if (colLower.startsWith('w-') || colLower.startsWith('d-') || colLower.startsWith('c-')) widthClass = "w-[65px] max-w-[65px]";
                                     else if (colLower.includes('ma') || colLower === 'price') widthClass = "w-[100px] max-w-[100px]";
 

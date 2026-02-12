@@ -54,12 +54,16 @@ async def get_neobdm_summary(
 
     if scrape:
         try:
-            from modules.neobdm_api_client import NeoBDMApiClient
-            api_client = NeoBDMApiClient()
+            from modules.scraper_neobdm import NeoBDMScraper
+            scraper = NeoBDMScraper()
             try:
-                df, reference_date = await api_client.get_market_summary(method=method, period=period)
+                await scraper.init_browser(headless=True)
+                login_ok = await scraper.login()
+                if not login_ok:
+                    return {"error": "Login failed", "data": []}
+                df, reference_date = await scraper.get_market_summary(method=method, period=period)
             finally:
-                await api_client.close()
+                await scraper.close()
             
             if df is not None and not df.empty:
                 data_list = df.to_dict(orient="records")
@@ -71,7 +75,7 @@ async def get_neobdm_summary(
                 }
             return {"scraped_at": None, "data": []}
         except Exception as e:
-            logging.error(f"NeoBDM Summary API error: {e}")
+            logging.error(f"NeoBDM Summary scrape error: {e}")
             return {"error": str(e), "data": []}
     else:
         # Fetch from DB
@@ -354,13 +358,15 @@ async def run_neobdm_batch_scrape(background_tasks: BackgroundTasks):
 
 
 async def perform_full_sync():
-    """Core logic for background sync via API (no browser needed).
-    
-    Uses NeoBDMApiClient for direct HTTP API calls instead of Playwright.
-    Single login session handles all 6 method+period combinations.
+    """Core logic for background sync with ISOLATED sessions per task.
+
+    Each method+period combination gets a fresh browser session to avoid
+    state pollution and ensure reliable scraping, especially for cumulative data.
+    Uses Playwright scraper to capture ALL columns including flags (pinky, crossing,
+    unusual, likuid, suspend, special_notice) and MA values.
     """
     try:
-        from modules.neobdm_api_client import NeoBDMApiClient
+        from modules.scraper_neobdm import NeoBDMScraper
         from modules.database import DatabaseManager
         import traceback
         
@@ -373,16 +379,32 @@ async def perform_full_sync():
         execution_log = []
         
         print(f"[*] Starting background Full Sync at {start_time}")
-        print(f"[*] Using API CLIENT approach (single HTTP session)")
+        print(f"[*] Using ISOLATED SESSION approach (6 separate logins)")
         
-        api_client = NeoBDMApiClient()
-        try:
-            # Loop through all combinations with single session
-            for m_code, m_label in methods:
-                for p_code, p_label in periods:
-                    log_prefix = f"[{m_label}/{p_label}]"
-                    print(f"\n{log_prefix} Fetching via API...")
-
+        # Loop through all combinations with ISOLATED sessions
+        for m_code, m_label in methods:
+            for p_code, p_label in periods:
+                log_prefix = f"[{m_label}/{p_label}]"
+                print(f"\n{log_prefix} Starting isolated scraping session...")
+                
+                # ISOLATED SESSION: Create fresh scraper for THIS task only
+                scraper = NeoBDMScraper()
+                
+                try:
+                    # Initialize browser
+                    print(f"{log_prefix} Initializing browser...", flush=True)
+                    await scraper.init_browser(headless=True)
+                    
+                    # Login
+                    print(f"{log_prefix} Logging in...", flush=True)
+                    login_success = await scraper.login()
+                    
+                    if not login_success:
+                        msg = "Login failed"
+                        print(f"{log_prefix} Result: {msg}")
+                        execution_log.append(f"{log_prefix}: {msg}")
+                        continue  # Skip to next task
+                    
                     # Cleanup old data for today
                     try:
                         conn = db_manager._get_conn()
@@ -394,10 +416,11 @@ async def perform_full_sync():
                         conn.close()
                     except Exception as e:
                         print(f"{log_prefix} Cleanup warning: {e}")
-
-                    # Fetch via API
+                    
+                    # Scrape
+                    print(f"{log_prefix} Scraping data...", flush=True)
                     try:
-                        df, reference_date = await api_client.get_market_summary(method=m_code, period=p_code)
+                        df, reference_date = await scraper.get_market_summary(method=m_code, period=p_code)
                         
                         if df is not None and not df.empty:
                             data_list = df.to_dict(orient="records")
@@ -407,16 +430,25 @@ async def perform_full_sync():
                         else:
                             msg = "No data found"
                     except Exception as e:
-                        print(f"{log_prefix} API error: {traceback.format_exc()}")
+                        print(f"{log_prefix} Scraping error: {traceback.format_exc()}")
                         msg = f"Error: {str(e)}"
                     
                     print(f"{log_prefix} Result: {msg}")
                     execution_log.append(f"{log_prefix}: {msg}")
                     
-                    # Small cooldown between API calls
-                    await asyncio.sleep(1)
-        finally:
-            await api_client.close()
+                except Exception as e:
+                    msg = f"Session error: {str(e)}"
+                    print(f"{log_prefix} {msg}")
+                    execution_log.append(f"{log_prefix}: {msg}")
+                finally:
+                    # ALWAYS close this session's browser
+                    try:
+                        await scraper.close()
+                    except Exception:
+                        pass
+                    
+                    # Cooldown between sessions
+                    await asyncio.sleep(2)
             
         duration = datetime.now() - start_time
         print(f"\n[*] Background Full Sync completed in {duration.total_seconds():.2f}s.")

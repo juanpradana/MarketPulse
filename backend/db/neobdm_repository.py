@@ -89,10 +89,11 @@ class NeoBDMRepository(BaseRepository):
             query = """
             INSERT INTO neobdm_records (
                 scraped_at, method, period, symbol, pinky, crossing, likuid,
-                w_4, w_3, w_2, w_1, d_4, d_3, d_2, d_0, pct_1d,
+                w_4, w_3, w_2, w_1, d_4, d_3, d_2, d_1, d_0, pct_1d,
                 c_20, c_10, c_5, c_3, pct_3d, pct_5d, pct_10d, pct_20d,
-                price, ma5, ma10, ma20, ma50, ma100, unusual
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                price, ma5, ma10, ma20, ma50, ma100, unusual,
+                suspend, special_notice
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             
             rows_to_insert = []
@@ -115,7 +116,8 @@ class NeoBDMRepository(BaseRepository):
                     get_val('w-4') or get_val('wn-4'), get_val('w-3') or get_val('wn-3'),
                     get_val('w-2') or get_val('wn-2'), get_val('w-1') or get_val('wn-1'),
                     get_val('d-4') or get_val('dn-4'), get_val('d-3') or get_val('dn-3'),
-                    get_val('d-2') or get_val('dn-2'), get_val('d-0') or get_val('dn-0'),
+                    get_val('d-2') or get_val('dn-2'), get_val('d-1') or get_val('dn-1'),
+                    get_val('d-0') or get_val('dn-0'),
                     get_val('%1d'),
                     get_val('c-20') or get_val('cn-20'), get_val('c-10') or get_val('cn-10'),
                     get_val('c-5') or get_val('cn-5'), get_val('c-3') or get_val('cn-3'),
@@ -126,7 +128,8 @@ class NeoBDMRepository(BaseRepository):
                     get_val('ma20') or item.get('>ma20'),
                     get_val('ma50') or item.get('>ma50'), 
                     get_val('ma100') or item.get('>ma100'), 
-                    get_val('unusual')
+                    get_val('unusual'),
+                    get_val('suspend'), get_val('special_notice')
                 )
                 rows_to_insert.append(row)
             
@@ -795,22 +798,25 @@ class NeoBDMRepository(BaseRepository):
                 for _, row in df.iterrows():
                     item = {
                         "symbol": row['symbol'],
-                        "pinky": row['pinky'],
-                        "crossing": row['crossing'],
-                        "likuid": row['likuid'],
-                        "unusual": row['unusual'],
-                        "price": row['price'],
-                        ">ma5": row['ma5'],
-                        ">ma10": row['ma10'],
-                        ">ma20": row['ma20'],
-                        ">ma50": row['ma50'],
-                        ">ma100": row['ma100']
+                        "pinky": row.get('pinky'),
+                        "crossing": row.get('crossing'),
+                        "likuid": row.get('likuid'),
+                        "unusual": row.get('unusual'),
+                        "suspend": row.get('suspend'),
+                        "special_notice": row.get('special_notice'),
+                        "price": row.get('price'),
+                        ">ma5": row.get('ma5'),
+                        ">ma10": row.get('ma10'),
+                        ">ma20": row.get('ma20'),
+                        ">ma50": row.get('ma50'),
+                        ">ma100": row.get('ma100')
                     }
                     if period == 'd':
                         item.update({
-                            "w-4": row['w_4'], "w-3": row['w_3'], "w-2": row['w_2'], "w-1": row['w_1'],
-                            "d-4": row['d_4'], "d-3": row['d_3'], "d-2": row['d_2'], "d-0": row['d_0'],
-                            "%1d": row['pct_1d']
+                            "w-4": row.get('w_4'), "w-3": row.get('w_3'), "w-2": row.get('w_2'), "w-1": row.get('w_1'),
+                            "d-4": row.get('d_4'), "d-3": row.get('d_3'), "d-2": row.get('d_2'),
+                            "d-1": row.get('d_1'), "d-0": row.get('d_0'),
+                            "%1d": row.get('pct_1d')
                         })
                     else:
                         item.update({
