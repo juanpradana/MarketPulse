@@ -7,6 +7,7 @@ from pydantic import BaseModel
 import logging
 import asyncio
 import json
+import os
 import numpy as np
 
 router = APIRouter(prefix="/api", tags=["neobdm"])
@@ -54,16 +55,12 @@ async def get_neobdm_summary(
 
     if scrape:
         try:
-            from modules.scraper_neobdm import NeoBDMScraper
-            scraper = NeoBDMScraper()
+            from modules.neobdm_api_client import NeoBDMApiClient
+            api_client = NeoBDMApiClient()
             try:
-                await scraper.init_browser(headless=True)
-                login_ok = await scraper.login()
-                if not login_ok:
-                    return {"error": "Login failed", "data": []}
-                df, reference_date = await scraper.get_market_summary(method=method, period=period)
+                df, reference_date = await api_client.get_market_summary(method=method, period=period)
             finally:
-                await scraper.close()
+                await api_client.close()
             
             if df is not None and not df.empty:
                 data_list = df.to_dict(orient="records")
@@ -75,7 +72,7 @@ async def get_neobdm_summary(
                 }
             return {"scraped_at": None, "data": []}
         except Exception as e:
-            logging.error(f"NeoBDM Summary scrape error: {e}")
+            logging.error(f"NeoBDM Summary API error: {e}")
             return {"error": str(e), "data": []}
     else:
         # Fetch from DB
@@ -358,105 +355,59 @@ async def run_neobdm_batch_scrape(background_tasks: BackgroundTasks):
 
 
 async def perform_full_sync():
-    """Core logic for background sync with ISOLATED sessions per task.
+    """Core logic for background sync using a SEPARATE SUBPROCESS.
 
-    Each method+period combination gets a fresh browser session to avoid
-    state pollution and ensure reliable scraping, especially for cumulative data.
-    Uses Playwright scraper to capture ALL columns including flags (pinky, crossing,
-    unusual, likuid, suspend, special_notice) and MA values.
+    Spawns batch_scrape_neobdm.py as a standalone process to avoid Windows
+    event loop conflicts (Playwright async API can't create subprocesses
+    inside uvicorn's ProactorEventLoop on Windows).
+    
+    The subprocess uses Playwright to capture ALL columns including flags
+    (pinky, crossing, unusual, likuid, suspend, special_notice) and MA values.
     """
+    import subprocess
+    import sys
+    
     try:
-        from modules.scraper_neobdm import NeoBDMScraper
-        from modules.database import DatabaseManager
-        import traceback
-        
-        methods = [('m', 'Market Maker'), ('nr', 'Non-Retail'), ('f', 'Foreign Flow')]
-        periods = [('d', 'Daily'), ('c', 'Cumulative')]
-        
-        db_manager = DatabaseManager()
         start_time = datetime.now()
-        today_str = start_time.strftime('%Y-%m-%d')
-        execution_log = []
-        
         print(f"[*] Starting background Full Sync at {start_time}")
-        print(f"[*] Using ISOLATED SESSION approach (6 separate logins)")
+        print(f"[*] Using SUBPROCESS approach (separate Python process for Playwright)")
         
-        # Loop through all combinations with ISOLATED sessions
-        for m_code, m_label in methods:
-            for p_code, p_label in periods:
-                log_prefix = f"[{m_label}/{p_label}]"
-                print(f"\n{log_prefix} Starting isolated scraping session...")
-                
-                # ISOLATED SESSION: Create fresh scraper for THIS task only
-                scraper = NeoBDMScraper()
-                
-                try:
-                    # Initialize browser
-                    print(f"{log_prefix} Initializing browser...", flush=True)
-                    await scraper.init_browser(headless=True)
-                    
-                    # Login
-                    print(f"{log_prefix} Logging in...", flush=True)
-                    login_success = await scraper.login()
-                    
-                    if not login_success:
-                        msg = "Login failed"
-                        print(f"{log_prefix} Result: {msg}")
-                        execution_log.append(f"{log_prefix}: {msg}")
-                        continue  # Skip to next task
-                    
-                    # Cleanup old data for today
-                    try:
-                        conn = db_manager._get_conn()
-                        conn.execute(
-                            "DELETE FROM neobdm_records WHERE method=? AND period=? AND scraped_at LIKE ?", 
-                            (m_code, p_code, f"{today_str}%")
-                        )
-                        conn.commit()
-                        conn.close()
-                    except Exception as e:
-                        print(f"{log_prefix} Cleanup warning: {e}")
-                    
-                    # Scrape
-                    print(f"{log_prefix} Scraping data...", flush=True)
-                    try:
-                        df, reference_date = await scraper.get_market_summary(method=m_code, period=p_code)
-                        
-                        if df is not None and not df.empty:
-                            data_list = df.to_dict(orient="records")
-                            scraped_at = reference_date if reference_date else datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                            db_manager.save_neobdm_record_batch(m_code, p_code, data_list, scraped_at=scraped_at)
-                            msg = f"Success ({len(df)} rows)"
-                        else:
-                            msg = "No data found"
-                    except Exception as e:
-                        print(f"{log_prefix} Scraping error: {traceback.format_exc()}")
-                        msg = f"Error: {str(e)}"
-                    
-                    print(f"{log_prefix} Result: {msg}")
-                    execution_log.append(f"{log_prefix}: {msg}")
-                    
-                except Exception as e:
-                    msg = f"Session error: {str(e)}"
-                    print(f"{log_prefix} {msg}")
-                    execution_log.append(f"{log_prefix}: {msg}")
-                finally:
-                    # ALWAYS close this session's browser
-                    try:
-                        await scraper.close()
-                    except Exception:
-                        pass
-                    
-                    # Cooldown between sessions
-                    await asyncio.sleep(2)
+        # Resolve paths
+        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        script_path = os.path.join(backend_dir, "scripts", "batch_scrape_neobdm.py")
+        
+        # Run the batch scrape script as a separate process
+        # This avoids the Windows asyncio subprocess limitation
+        result = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: subprocess.run(
+                [sys.executable, script_path],
+                cwd=backend_dir,
+                capture_output=True,
+                text=True,
+                timeout=600  # 10 minute timeout
+            )
+        )
+        
+        # Print subprocess output
+        if result.stdout:
+            for line in result.stdout.strip().split('\n'):
+                print(f"  {line}")
+        
+        if result.returncode != 0:
+            print(f"[!] Batch scrape subprocess exited with code {result.returncode}")
+            if result.stderr:
+                print(f"[!] Stderr: {result.stderr[-500:]}")
+        else:
+            print(f"[*] Batch scrape subprocess completed successfully.")
             
         duration = datetime.now() - start_time
         print(f"\n[*] Background Full Sync completed in {duration.total_seconds():.2f}s.")
-        print(f"[*] Logs: {execution_log}")
 
+    except subprocess.TimeoutExpired:
+        print(f"[!] Batch scrape subprocess timed out after 600s")
     except Exception as e:
         print(f"[!] Critical error in background sync: {e}")
-        import logging
         logging.error(f"Critical error in background sync: {e}")
 
 
