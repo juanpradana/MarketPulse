@@ -68,7 +68,10 @@ function SignalBadge({ signal, description }: { signal: string; description: str
         signal.includes('consistency_bandar_buy') || signal.includes('sr_classic_bullish') ||
         signal.includes('sr_broad_buying') || signal.includes('sr_daily_divergence') ||
         signal.includes('vol_stealth_accum') || signal.includes('vol_quiet_accum') ||
-        signal.includes('vol_active_breakout') || signal.includes('accum_duration_optimal');
+        signal.includes('vol_active_breakout') || signal.includes('accum_duration_optimal') ||
+        signal.includes('ma_golden_cross') || signal.includes('ma_perfect_alignment') ||
+        signal.includes('ma_bullish_alignment') || signal.includes('phase_accum_to_hold') ||
+        signal.includes('phase_hold_to_accum') || signal.includes('phase_dist_to_accum');
     const isWarning = signal.includes('warning') || signal.includes('sell') ||
         signal.includes('outflow') || signal.includes('high_cross') || signal.includes('tektok') ||
         signal.includes('ctrl_distributing') || signal.includes('ctrl_far_above') ||
@@ -79,7 +82,9 @@ function SignalBadge({ signal, description }: { signal: string; description: str
         signal.includes('sr_retail_trap') || signal.includes('sr_broad_selling') ||
         signal.includes('conc_high_risk') || signal.includes('conc_medium_risk') ||
         signal.includes('vol_dead_stock') || signal.includes('vol_distribution_complete') ||
-        signal.includes('accum_duration_stale');
+        signal.includes('accum_duration_stale') ||
+        signal.includes('ma_death_cross') || signal.includes('ma_bearish_alignment') ||
+        signal.includes('phase_accum_to_dist') || signal.includes('phase_hold_to_dist');
 
     return (
         <div className={cn(
@@ -171,6 +176,22 @@ function generateChatText(data: StockDetailResponse): string {
                 'DIST_COMPLETE': 'Distribution Complete'
             };
             extras.push(`📊 Volume: ${volLabels[data.volume_signal] ?? data.volume_signal} (+${data.volume_score ?? 0}pts)`);
+        }
+        if (data.ma_cross_signal && data.ma_cross_signal !== 'NONE' && data.ma_cross_signal !== 'NEUTRAL') {
+            const maLabels: Record<string, string> = {
+                'GOLDEN_CROSS': '⚡ Golden Cross', 'DEATH_CROSS': '💀 Death Cross',
+                'PERFECT_BULLISH': '🎯 Perfect Bullish', 'BULLISH_ALIGNMENT': '📈 Bullish Alignment',
+                'BEARISH_ALIGNMENT': '📉 Bearish Alignment', 'CONVERGING': '🔄 MA Converging'
+            };
+            extras.push(`${maLabels[data.ma_cross_signal] ?? data.ma_cross_signal} (${(data.ma_cross_score ?? 0) > 0 ? '+' : ''}${data.ma_cross_score ?? 0}pts)`);
+        }
+        if (data.phase_transition && data.phase_transition !== 'NONE') {
+            const parts = data.phase_transition.split('_TO_');
+            extras.push(`🔄 Fase: ${parts[0]} → ${parts[1]}`);
+        }
+        if (data.score_trend && data.score_trend !== 'NONE' && data.score_trend !== 'STABLE' && (data.prev_deep_score ?? 0) > 0) {
+            const arrow = data.score_trend.includes('IMPROVING') ? '↑' : '↓';
+            extras.push(`${arrow} Score: ${data.prev_deep_score} → ${data.deep_score} (${data.score_trend.replace('_', ' ')})`);
         }
         if (extras.length > 0) {
             lines.push(`🔍 *ANALISIS LANJUTAN*`);
@@ -425,6 +446,19 @@ function generatePdfHtml(data: StockDetailResponse): string {
         const volLabels: Record<string, string> = { 'STEALTH_ACCUM': 'Stealth Accumulation', 'QUIET_ACCUM': 'Quiet Accumulation', 'ACTIVE_BREAKOUT': 'Active Breakout', 'DEAD': 'Dead Stock', 'DIST_COMPLETE': 'Distribution Complete' };
         const color = data.volume_signal.includes('ACCUM') || data.volume_signal === 'ACTIVE_BREAKOUT' ? '#059669' : '#dc2626';
         advItems.push(`<div class="card"><div class="label">Volume Context</div><div class="value" style="color:${color}">${volLabels[data.volume_signal] ?? data.volume_signal}</div><div class="sub">+${data.volume_score ?? 0} pts</div></div>`);
+    }
+    if (data.ma_cross_signal && data.ma_cross_signal !== 'NONE' && data.ma_cross_signal !== 'NEUTRAL') {
+        const maLabels: Record<string, string> = { 'GOLDEN_CROSS': 'Golden Cross', 'DEATH_CROSS': 'Death Cross', 'PERFECT_BULLISH': 'Perfect Bullish', 'BULLISH_ALIGNMENT': 'Bullish Alignment', 'BEARISH_ALIGNMENT': 'Bearish Alignment', 'CONVERGING': 'MA Converging' };
+        const color = data.ma_cross_signal === 'GOLDEN_CROSS' || data.ma_cross_signal === 'PERFECT_BULLISH' ? '#059669' : data.ma_cross_signal === 'DEATH_CROSS' || data.ma_cross_signal === 'BEARISH_ALIGNMENT' ? '#dc2626' : '#3b82f6';
+        advItems.push(`<div class="card"><div class="label">MA Cross</div><div class="value" style="color:${color}">${maLabels[data.ma_cross_signal] ?? data.ma_cross_signal}</div><div class="sub">${(data.ma_cross_score ?? 0) > 0 ? '+' : ''}${data.ma_cross_score ?? 0} pts</div></div>`);
+    }
+    if (data.phase_transition && data.phase_transition !== 'NONE') {
+        const parts = data.phase_transition.split('_TO_');
+        const color = data.phase_transition.includes('TO_DISTRIBUTION') ? '#dc2626' : data.phase_transition.includes('TO_HOLDING') ? '#d97706' : '#059669';
+        advItems.push(`<div class="card"><div class="label">Phase Transition</div><div class="value" style="color:${color}">${parts[0]} → ${parts[1]}</div><div class="sub">Score: ${data.prev_deep_score ?? 0} → ${data.deep_score ?? 0}</div></div>`);
+    } else if (data.score_trend && data.score_trend !== 'NONE' && data.score_trend !== 'STABLE' && (data.prev_deep_score ?? 0) > 0) {
+        const color = data.score_trend.includes('IMPROVING') ? '#059669' : '#dc2626';
+        advItems.push(`<div class="card"><div class="label">Score Trend</div><div class="value" style="color:${color}">${data.prev_deep_score} → ${data.deep_score}</div><div class="sub">${data.score_trend.replace('_', ' ')}</div></div>`);
     }
     if (advItems.length > 0) {
         html += `<div class="section"><div class="section-title">Analisis Lanjutan</div><div class="grid4">${advItems.join('')}</div></div>`;
@@ -987,6 +1021,125 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                                         )}>
                                                             {(data.smart_retail_divergence ?? 0) > 30 ? 'BULLISH' :
                                                              (data.smart_retail_divergence ?? 0) < -30 ? 'BEARISH' : 'NEUTRAL'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* MA Cross Signal */}
+                                        {data.ma_cross_signal && data.ma_cross_signal !== 'NONE' && data.ma_cross_signal !== 'NEUTRAL' && (
+                                            <div className={cn(
+                                                "flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px]",
+                                                data.ma_cross_signal === 'GOLDEN_CROSS' || data.ma_cross_signal === 'PERFECT_BULLISH'
+                                                    ? 'bg-emerald-500/10 border-emerald-500/20'
+                                                    : data.ma_cross_signal === 'BULLISH_ALIGNMENT'
+                                                    ? 'bg-cyan-500/10 border-cyan-500/20'
+                                                    : data.ma_cross_signal === 'DEATH_CROSS' || data.ma_cross_signal === 'BEARISH_ALIGNMENT'
+                                                    ? 'bg-red-500/10 border-red-500/20'
+                                                    : 'bg-blue-500/10 border-blue-500/20'
+                                            )}>
+                                                <TrendingUp className={cn(
+                                                    "w-3.5 h-3.5 flex-shrink-0",
+                                                    data.ma_cross_signal === 'GOLDEN_CROSS' || data.ma_cross_signal === 'PERFECT_BULLISH' ? 'text-emerald-400' :
+                                                    data.ma_cross_signal === 'DEATH_CROSS' || data.ma_cross_signal === 'BEARISH_ALIGNMENT' ? 'text-red-400' :
+                                                    'text-zinc-500'
+                                                )} />
+                                                <div>
+                                                    <div className="text-[8px] text-zinc-500 font-bold uppercase">MA Cross Signal</div>
+                                                    <div className={cn(
+                                                        "font-black",
+                                                        data.ma_cross_signal === 'GOLDEN_CROSS' ? 'text-emerald-400' :
+                                                        data.ma_cross_signal === 'PERFECT_BULLISH' ? 'text-emerald-400' :
+                                                        data.ma_cross_signal === 'BULLISH_ALIGNMENT' ? 'text-cyan-400' :
+                                                        data.ma_cross_signal === 'DEATH_CROSS' ? 'text-red-400' :
+                                                        data.ma_cross_signal === 'BEARISH_ALIGNMENT' ? 'text-red-400' :
+                                                        'text-blue-400'
+                                                    )}>
+                                                        {data.ma_cross_signal === 'GOLDEN_CROSS' && '⚡ Golden Cross'}
+                                                        {data.ma_cross_signal === 'DEATH_CROSS' && '💀 Death Cross'}
+                                                        {data.ma_cross_signal === 'PERFECT_BULLISH' && '🎯 Perfect Bullish'}
+                                                        {data.ma_cross_signal === 'BULLISH_ALIGNMENT' && '📈 Bullish Alignment'}
+                                                        {data.ma_cross_signal === 'BEARISH_ALIGNMENT' && '📉 Bearish Alignment'}
+                                                        {data.ma_cross_signal === 'CONVERGING' && '🔄 MA Converging'}
+                                                        <span className="text-zinc-500 font-normal ml-1">
+                                                            ({(data.ma_cross_score ?? 0) > 0 ? '+' : ''}{data.ma_cross_score ?? 0} pts)
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Phase Transition / Historical Comparison */}
+                                        {data.phase_transition && data.phase_transition !== 'NONE' && (
+                                            <div className={cn(
+                                                "flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px]",
+                                                data.phase_transition.includes('TO_DISTRIBUTION')
+                                                    ? 'bg-red-500/10 border-red-500/20'
+                                                    : data.phase_transition.includes('TO_HOLDING')
+                                                    ? 'bg-amber-500/10 border-amber-500/20'
+                                                    : data.phase_transition.includes('TO_ACCUMULATION')
+                                                    ? 'bg-emerald-500/10 border-emerald-500/20'
+                                                    : 'bg-blue-500/10 border-blue-500/20'
+                                            )}>
+                                                <Activity className={cn(
+                                                    "w-3.5 h-3.5 flex-shrink-0",
+                                                    data.phase_transition.includes('TO_DISTRIBUTION') ? 'text-red-400' :
+                                                    data.phase_transition.includes('TO_HOLDING') ? 'text-amber-400' :
+                                                    'text-emerald-400'
+                                                )} />
+                                                <div>
+                                                    <div className="text-[8px] text-zinc-500 font-bold uppercase">Phase Transition</div>
+                                                    <div className={cn(
+                                                        "font-black",
+                                                        data.phase_transition.includes('TO_DISTRIBUTION') ? 'text-red-400' :
+                                                        data.phase_transition.includes('TO_HOLDING') ? 'text-amber-400' :
+                                                        'text-emerald-400'
+                                                    )}>
+                                                        {data.prev_phase} → {data.phase_transition.split('_TO_')[1]}
+                                                    </div>
+                                                    {data.score_trend && data.score_trend !== 'NONE' && (
+                                                        <div className={cn(
+                                                            "text-[9px] mt-0.5",
+                                                            data.score_trend.includes('IMPROVING') ? 'text-emerald-500' :
+                                                            data.score_trend.includes('DECLINING') ? 'text-red-500' :
+                                                            'text-zinc-500'
+                                                        )}>
+                                                            Score: {data.prev_deep_score ?? 0} → {data.deep_score ?? 0}
+                                                            ({data.score_trend.replace('_', ' ')})
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Score Trend (when no phase transition but score changed) */}
+                                        {(!data.phase_transition || data.phase_transition === 'NONE') &&
+                                         data.score_trend && data.score_trend !== 'NONE' && data.score_trend !== 'STABLE' &&
+                                         (data.prev_deep_score ?? 0) > 0 && (
+                                            <div className={cn(
+                                                "flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px]",
+                                                data.score_trend.includes('IMPROVING')
+                                                    ? 'bg-emerald-500/10 border-emerald-500/20'
+                                                    : 'bg-red-500/10 border-red-500/20'
+                                            )}>
+                                                {data.score_trend.includes('IMPROVING') ? (
+                                                    <TrendingUp className="w-3.5 h-3.5 flex-shrink-0 text-emerald-400" />
+                                                ) : (
+                                                    <TrendingDown className="w-3.5 h-3.5 flex-shrink-0 text-red-400" />
+                                                )}
+                                                <div>
+                                                    <div className="text-[8px] text-zinc-500 font-bold uppercase">Score Trend</div>
+                                                    <div className={cn(
+                                                        "font-black",
+                                                        data.score_trend.includes('IMPROVING') ? 'text-emerald-400' : 'text-red-400'
+                                                    )}>
+                                                        {data.prev_deep_score ?? 0} → {data.deep_score ?? 0}
+                                                        <span className="text-zinc-500 font-normal ml-1">
+                                                            ({data.score_trend === 'STRONG_IMPROVING' ? '↑↑ Strong Improving' :
+                                                              data.score_trend === 'IMPROVING' ? '↑ Improving' :
+                                                              data.score_trend === 'STRONG_DECLINING' ? '↓↓ Strong Declining' :
+                                                              '↓ Declining'})
                                                         </span>
                                                     </div>
                                                 </div>

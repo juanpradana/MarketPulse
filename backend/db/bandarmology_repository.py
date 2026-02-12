@@ -257,9 +257,11 @@ class BandarmologyRepository(BaseRepository):
                     concentration_broker, concentration_pct, concentration_risk,
                     txn_smart_money_cum, txn_retail_cum_deep, smart_retail_divergence,
                     volume_score, volume_signal,
+                    ma_cross_signal, ma_cross_score,
+                    prev_deep_score, prev_phase, phase_transition, score_trend,
                     deep_score, deep_trade_type, deep_signals_json
                 ) VALUES ({})
-            """.format(', '.join(['?'] * 69)), (
+            """.format(', '.join(['?'] * 75)), (
                 ticker.upper(), analysis_date,
                 data.get('inv_accum_brokers', 0),
                 data.get('inv_distrib_brokers', 0),
@@ -325,6 +327,12 @@ class BandarmologyRepository(BaseRepository):
                 data.get('smart_retail_divergence', 0),
                 data.get('volume_score', 0),
                 data.get('volume_signal', 'NONE'),
+                data.get('ma_cross_signal', 'NONE'),
+                data.get('ma_cross_score', 0),
+                data.get('prev_deep_score', 0),
+                data.get('prev_phase', ''),
+                data.get('phase_transition', 'NONE'),
+                data.get('score_trend', 'NONE'),
                 data.get('deep_score', 0),
                 data.get('deep_trade_type', ''),
                 json.dumps(data.get('deep_signals', {}))
@@ -357,6 +365,33 @@ class BandarmologyRepository(BaseRepository):
                 cursor = conn.cursor()
                 cursor.execute(query, (ticker,))
 
+            columns = [desc[0] for desc in cursor.description]
+            row = cursor.fetchone()
+            if not row:
+                return None
+            d = dict(zip(columns, row))
+            d['deep_signals'] = json.loads(d.get('deep_signals_json') or '{}')
+            d['broksum_top_buyers'] = json.loads(d.get('broksum_top_buyers_json') or '[]')
+            d['broksum_top_sellers'] = json.loads(d.get('broksum_top_sellers_json') or '[]')
+            d['controlling_brokers'] = json.loads(d.get('controlling_brokers_json') or '[]')
+            d['broksum_consistent_buyers'] = json.loads(d.get('broksum_consistent_buyers_json') or '[]')
+            d['broksum_consistent_sellers'] = json.loads(d.get('broksum_consistent_sellers_json') or '[]')
+            d['breakout_factors'] = json.loads(d.get('breakout_factors_json') or '{}')
+            return d
+        finally:
+            conn.close()
+
+    def get_previous_deep_cache(self, ticker: str, before_date: str) -> Optional[Dict]:
+        """Get the most recent deep cache for a ticker BEFORE the given date."""
+        conn = self._get_conn()
+        try:
+            query = """
+            SELECT * FROM bandarmology_deep_cache
+            WHERE UPPER(ticker) = UPPER(?) AND analysis_date < ?
+            ORDER BY analysis_date DESC LIMIT 1
+            """
+            cursor = conn.cursor()
+            cursor.execute(query, (ticker, before_date))
             columns = [desc[0] for desc in cursor.description]
             row = cursor.fetchone()
             if not row:

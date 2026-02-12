@@ -553,6 +553,16 @@ class DatabaseConnection:
                 volume_score INTEGER DEFAULT 0,
                 volume_signal TEXT,
                 
+                -- MA cross
+                ma_cross_signal TEXT DEFAULT 'NONE',
+                ma_cross_score INTEGER DEFAULT 0,
+                
+                -- Historical comparison
+                prev_deep_score INTEGER DEFAULT 0,
+                prev_phase TEXT DEFAULT '',
+                phase_transition TEXT DEFAULT 'NONE',
+                score_trend TEXT DEFAULT 'NONE',
+                
                 calculated_at DATETIME DEFAULT (datetime('now')),
                 UNIQUE(ticker, analysis_date)
             );
@@ -615,6 +625,14 @@ class DatabaseConnection:
             # Volume context
             ("volume_score", "INTEGER DEFAULT 0"),
             ("volume_signal", "TEXT"),
+            # MA cross
+            ("ma_cross_signal", "TEXT DEFAULT 'NONE'"),
+            ("ma_cross_score", "INTEGER DEFAULT 0"),
+            # Historical comparison
+            ("prev_deep_score", "INTEGER DEFAULT 0"),
+            ("prev_phase", "TEXT DEFAULT ''"),
+            ("phase_transition", "TEXT DEFAULT 'NONE'"),
+            ("score_trend", "TEXT DEFAULT 'NONE'"),
         ]
         for col_name, col_type in new_columns:
             try:

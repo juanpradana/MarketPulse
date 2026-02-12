@@ -163,6 +163,16 @@ export interface BandarmologyItem {
     volume_score?: number;
     volume_signal?: string;
 
+    // MA cross
+    ma_cross_signal?: string;
+    ma_cross_score?: number;
+
+    // Historical comparison
+    prev_deep_score?: number;
+    prev_phase?: string;
+    phase_transition?: string;
+    score_trend?: string;
+
     // Signals
     deep_signals?: DeepSignals;
 }
@@ -317,12 +327,41 @@ export interface StockDetailResponse {
     volume_score?: number;
     volume_signal?: string;
 
+    // MA cross
+    ma_cross_signal?: string;
+    ma_cross_score?: number;
+
+    // Historical comparison
+    prev_deep_score?: number;
+    prev_phase?: string;
+    phase_transition?: string;
+    score_trend?: string;
+
     // Detail data
     inventory_brokers: InvBrokerDetail[];
     txn_chart: Record<string, unknown> | null;
     broker_summary: { buy: BrokerSummaryEntry[]; sell: BrokerSummaryEntry[] };
     floor_analysis: Record<string, unknown>;
     top_holders: { broker_code: string; total_net_lot: number; total_net_value: number; trade_count: number }[];
+}
+
+export interface WatchlistAlert {
+    ticker: string;
+    alert_type: 'PHASE_READY' | 'HOLDING_NEAR_COST' | 'PHASE_EXIT' | 'GOLDEN_CROSS' | 'SCORE_SURGE';
+    priority: 'HIGH' | 'MEDIUM' | 'LOW';
+    description: string;
+    phase: string;
+    prev_phase: string;
+    price: number;
+    bandar_cost: number;
+    price_vs_cost_pct: number;
+    deep_score: number;
+}
+
+export interface WatchlistAlertsResponse {
+    date: string | null;
+    total_alerts: number;
+    alerts: WatchlistAlert[];
 }
 
 export interface BandarmologyResponse {
@@ -440,6 +479,19 @@ export const bandarmologyApi = {
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.error || 'Failed to fetch stock detail');
+        }
+        return await response.json();
+    },
+
+    /**
+     * Get watchlist alerts (phase transitions, golden crosses, etc.)
+     */
+    getWatchlistAlerts: async (date?: string): Promise<WatchlistAlertsResponse> => {
+        const params = buildParams({ date });
+        const response = await fetch(`${API_BASE_URL}/api/bandarmology/watchlist-alerts?${params}`);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to fetch watchlist alerts');
         }
         return await response.json();
     },

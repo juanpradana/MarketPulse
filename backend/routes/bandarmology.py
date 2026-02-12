@@ -346,6 +346,13 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                 except Exception as e:
                     logger.warning(f"Multi-day broksum fetch failed for {ticker}: {e}")
 
+                # 3c. Fetch previous deep cache for historical comparison
+                previous_deep = None
+                try:
+                    previous_deep = band_repo.get_previous_deep_cache(ticker, analysis_date)
+                except Exception as e:
+                    logger.warning(f"Previous deep cache fetch failed for {ticker}: {e}")
+
                 # 4. Run deep analysis
                 base_result = base_lookup.get(ticker)
                 deep_result = analyzer.analyze_deep(
@@ -355,7 +362,8 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                     broker_summary_data=broksum_data,
                     broksum_multiday_data=broksum_multiday,
                     price_series=price_series,
-                    base_result=base_result
+                    base_result=base_result,
+                    previous_deep=previous_deep
                 )
 
                 # 5. Save to cache
@@ -378,6 +386,150 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
         _deep_analysis_status["progress"] = len(tickers)
         _deep_analysis_status["current_ticker"] = ""
         logger.info(f"Deep analysis completed: {len(_deep_analysis_status['completed_tickers'])}/{len(tickers)} tickers")
+
+
+@router.get("/bandarmology/watchlist-alerts")
+async def get_watchlist_alerts(
+    date: Optional[str] = Query(None, description="Analysis date (YYYY-MM-DD). None = latest.")
+):
+    """
+    Auto-watchlist alerts: flag stocks with notable phase transitions or conditions.
+    
+    Detects:
+    - ACCUMULATION → HOLDING with price near bandar cost (ready for breakout)
+    - HOLDING → DISTRIBUTION (exit warning)
+    - Score strongly improving (>10 pts gain)
+    - Golden cross detected
+    """
+    try:
+        from modules.bandarmology_analyzer import BandarmologyAnalyzer
+        from db.bandarmology_repository import BandarmologyRepository
+
+        analyzer = BandarmologyAnalyzer()
+        band_repo = BandarmologyRepository()
+
+        actual_date = analyzer._resolve_date(date)
+        if not actual_date:
+            return {"date": None, "alerts": []}
+
+        # Get all deep caches for this date
+        deep_cache = band_repo.get_deep_cache_batch(actual_date)
+        if not deep_cache:
+            return {"date": actual_date, "alerts": []}
+
+        # Get base results for price info
+        results = analyzer.analyze(target_date=actual_date)
+        base_lookup = {r['symbol']: r for r in results}
+
+        alerts = []
+        for ticker, deep in deep_cache.items():
+            base = base_lookup.get(ticker, {})
+            price = base.get('price', 0)
+            bandar_cost = deep.get('bandar_avg_cost', 0)
+            phase = deep.get('accum_phase', 'UNKNOWN')
+            phase_transition = deep.get('phase_transition', 'NONE')
+            score_trend = deep.get('score_trend', 'NONE')
+            ma_cross = deep.get('ma_cross_signal', 'NONE')
+            deep_score = deep.get('deep_score', 0)
+            prev_phase = deep.get('prev_phase', '')
+
+            # Calculate price vs cost
+            price_vs_cost_pct = 0
+            if price > 0 and bandar_cost > 0:
+                price_vs_cost_pct = round((price - bandar_cost) / bandar_cost * 100, 1)
+
+            # Alert 1: ACCUMULATION → HOLDING with price near cost (READY)
+            if phase_transition == 'ACCUMULATION_TO_HOLDING' and bandar_cost > 0:
+                near_cost = -5 <= price_vs_cost_pct <= 10
+                alerts.append({
+                    "ticker": ticker,
+                    "alert_type": "PHASE_READY",
+                    "priority": "HIGH" if near_cost else "MEDIUM",
+                    "description": f"Fase berubah AKUMULASI → HOLDING, harga {price_vs_cost_pct:+.1f}% dari cost bandar ({bandar_cost:,.0f})",
+                    "phase": phase,
+                    "prev_phase": prev_phase,
+                    "price": price,
+                    "bandar_cost": bandar_cost,
+                    "price_vs_cost_pct": price_vs_cost_pct,
+                    "deep_score": deep_score,
+                })
+
+            # Alert 2: HOLDING with price near cost and high deep score (watchlist candidate)
+            elif phase == 'HOLDING' and bandar_cost > 0 and -5 <= price_vs_cost_pct <= 10 and deep_score >= 30:
+                alerts.append({
+                    "ticker": ticker,
+                    "alert_type": "HOLDING_NEAR_COST",
+                    "priority": "HIGH",
+                    "description": f"HOLDING + harga dekat cost bandar ({price_vs_cost_pct:+.1f}%), deep score {deep_score}",
+                    "phase": phase,
+                    "prev_phase": prev_phase,
+                    "price": price,
+                    "bandar_cost": bandar_cost,
+                    "price_vs_cost_pct": price_vs_cost_pct,
+                    "deep_score": deep_score,
+                })
+
+            # Alert 3: HOLDING/ACCUMULATION → DISTRIBUTION (exit warning)
+            elif phase_transition in ('HOLDING_TO_DISTRIBUTION', 'ACCUMULATION_TO_DISTRIBUTION'):
+                alerts.append({
+                    "ticker": ticker,
+                    "alert_type": "PHASE_EXIT",
+                    "priority": "HIGH",
+                    "description": f"WARNING: Fase berubah {prev_phase} → DISTRIBUSI, bandar mulai jual!",
+                    "phase": phase,
+                    "prev_phase": prev_phase,
+                    "price": price,
+                    "bandar_cost": bandar_cost,
+                    "price_vs_cost_pct": price_vs_cost_pct,
+                    "deep_score": deep_score,
+                })
+
+            # Alert 4: Golden cross detected
+            elif ma_cross == 'GOLDEN_CROSS' and deep_score >= 20:
+                alerts.append({
+                    "ticker": ticker,
+                    "alert_type": "GOLDEN_CROSS",
+                    "priority": "MEDIUM",
+                    "description": f"GOLDEN CROSS terdeteksi, deep score {deep_score}",
+                    "phase": phase,
+                    "prev_phase": prev_phase,
+                    "price": price,
+                    "bandar_cost": bandar_cost,
+                    "price_vs_cost_pct": price_vs_cost_pct,
+                    "deep_score": deep_score,
+                })
+
+            # Alert 5: Score strongly improving
+            elif score_trend == 'STRONG_IMPROVING' and deep_score >= 25:
+                alerts.append({
+                    "ticker": ticker,
+                    "alert_type": "SCORE_SURGE",
+                    "priority": "MEDIUM",
+                    "description": f"Deep score naik signifikan (sekarang {deep_score}, sebelumnya {deep.get('prev_deep_score', 0)})",
+                    "phase": phase,
+                    "prev_phase": prev_phase,
+                    "price": price,
+                    "bandar_cost": bandar_cost,
+                    "price_vs_cost_pct": price_vs_cost_pct,
+                    "deep_score": deep_score,
+                })
+
+        # Sort by priority (HIGH first) then by deep_score
+        priority_order = {'HIGH': 0, 'MEDIUM': 1, 'LOW': 2}
+        alerts.sort(key=lambda a: (priority_order.get(a['priority'], 2), -a['deep_score']))
+
+        return sanitize_data({
+            "date": actual_date,
+            "total_alerts": len(alerts),
+            "alerts": alerts
+        })
+
+    except Exception as e:
+        logger.error(f"Watchlist alerts error: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
 
 
 @router.get("/bandarmology/{ticker}/detail")
@@ -471,7 +623,7 @@ async def get_stock_detail(
             detail.update({
                 "deep_score": deep_cache.get('deep_score', 0),
                 "combined_score": base_result.get('total_score', 0) + deep_cache.get('deep_score', 0),
-                "max_combined_score": 215,
+                "max_combined_score": 225,
                 "deep_trade_type": deep_cache.get('deep_trade_type', '—'),
                 "deep_signals": deep_cache.get('deep_signals', {}),
 
@@ -556,12 +708,28 @@ async def get_stock_detail(
                 # Volume context
                 "volume_score": deep_cache.get('volume_score', 0),
                 "volume_signal": deep_cache.get('volume_signal', 'NONE'),
+
+                # MA cross
+                "ma_cross_signal": deep_cache.get('ma_cross_signal', 'NONE'),
+                "ma_cross_score": deep_cache.get('ma_cross_score', 0),
+
+                # Historical comparison
+                "prev_deep_score": deep_cache.get('prev_deep_score', 0),
+                "prev_phase": deep_cache.get('prev_phase', ''),
+                "phase_transition": deep_cache.get('phase_transition', 'NONE'),
+                "score_trend": deep_cache.get('score_trend', 'NONE'),
             })
         else:
             detail.update({
                 "deep_score": 0,
                 "combined_score": base_result.get('total_score', 0),
-                "max_combined_score": 215,
+                "max_combined_score": 225,
+                "ma_cross_signal": 'NONE',
+                "ma_cross_score": 0,
+                "prev_deep_score": 0,
+                "prev_phase": '',
+                "phase_transition": 'NONE',
+                "score_trend": 'NONE',
             })
 
         # Inventory broker detail list

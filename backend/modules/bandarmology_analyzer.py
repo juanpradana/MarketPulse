@@ -633,7 +633,8 @@ class BandarmologyAnalyzer:
         broker_summary_data: Optional[Dict] = None,
         broksum_multiday_data: Optional[List[Dict]] = None,
         price_series: Optional[List[Dict]] = None,
-        base_result: Optional[Dict] = None
+        base_result: Optional[Dict] = None,
+        previous_deep: Optional[Dict] = None
     ) -> Dict:
         """
         Perform deep analysis on a single ticker using inventory + transaction chart + broker summary data.
@@ -738,6 +739,14 @@ class BandarmologyAnalyzer:
             # Volume context
             'volume_score': 0,
             'volume_signal': 'NONE',
+            # MA cross
+            'ma_cross_signal': 'NONE',
+            'ma_cross_score': 0,
+            # Historical comparison
+            'prev_deep_score': 0,
+            'prev_phase': '',
+            'phase_transition': 'NONE',
+            'score_trend': 'NONE',
         }
 
         signals = {}
@@ -975,6 +984,15 @@ class BandarmologyAnalyzer:
             deep['volume_signal'] = vol_signals.get('_vol_signal', 'NONE')
             vol_signals.pop('_vol_signal', None)
 
+        # ---- MA GOLDEN/DEATH CROSS (max 5 pts, min -3 pts) ----
+        if price_series and len(price_series) >= 50:
+            ma_score, ma_signals = self._score_ma_cross(price_series)
+            deep_score += ma_score
+            deep['ma_cross_score'] = ma_score
+            deep['ma_cross_signal'] = ma_signals.get('_ma_cross_signal', 'NONE')
+            ma_signals.pop('_ma_cross_signal', None)
+            signals.update(ma_signals)
+
         # ---- ENTRY/TARGET PRICE CALCULATION ----
         # Priority: bandar_avg_cost > broksum_floor_price > broksum_avg_buy_price > fallback
         current_price = base_result.get('price', 0) if base_result else 0
@@ -1073,6 +1091,11 @@ class BandarmologyAnalyzer:
         deep['deep_trade_type'] = self._classify_deep_trade_type(
             deep, base_result
         )
+
+        # ---- HISTORICAL COMPARISON ----
+        if previous_deep:
+            comparison = self._compare_with_previous(deep, previous_deep)
+            deep.update(comparison)
 
         return deep
 
@@ -1747,6 +1770,16 @@ class BandarmologyAnalyzer:
         vol_score = deep.get('volume_score', 0)
         factors['volume_context'] = min(100, vol_score * 20)  # 0-5 pts → 0-100 scale
         weights['volume_context'] = 0.05
+
+        # 11. MA cross signal (weight 5%)
+        ma_cross = deep.get('ma_cross_signal', 'NONE')
+        ma_factor = {
+            'GOLDEN_CROSS': 100, 'PERFECT_BULLISH': 90, 'BULLISH_ALIGNMENT': 80,
+            'CONVERGING': 50, 'NEUTRAL': 40, 'NONE': 40,
+            'BEARISH_ALIGNMENT': 10, 'DEATH_CROSS': 0
+        }.get(ma_cross, 40)
+        factors['ma_cross'] = ma_factor
+        weights['ma_cross'] = 0.05
 
         # Calculate weighted average
         total_weight = sum(weights.values())
@@ -2522,6 +2555,209 @@ class BandarmologyAnalyzer:
 
         return min(score, 5), signals
 
+    def _score_ma_cross(
+        self, price_series: List[Dict]
+    ) -> Tuple[int, Dict]:
+        """
+        Detect Golden Cross / Death Cross from price series.
+        
+        Calculates MA5, MA20, MA50 from close prices and detects:
+        - Golden Cross: MA5 crosses above MA20 (bullish)
+        - Death Cross: MA5 crosses below MA20 (bearish)
+        - Bullish Alignment: MA5 > MA20 > MA50 (strong uptrend)
+        - Bearish Alignment: MA5 < MA20 < MA50 (strong downtrend)
+        
+        Returns: (score, signals)
+        Max 5 points, min -3 points.
+        """
+        score = 0
+        signals = {}
+
+        if not price_series or len(price_series) < 50:
+            signals['_ma_cross_signal'] = 'NONE'
+            return 0, signals
+
+        closes = [p.get('close', 0) for p in price_series if p.get('close', 0) > 0]
+        if len(closes) < 50:
+            signals['_ma_cross_signal'] = 'NONE'
+            return 0, signals
+
+        def calc_sma(data: list, period: int) -> list:
+            """Calculate Simple Moving Average."""
+            result = []
+            for i in range(len(data)):
+                if i < period - 1:
+                    result.append(None)
+                else:
+                    result.append(sum(data[i - period + 1:i + 1]) / period)
+            return result
+
+        ma5 = calc_sma(closes, 5)
+        ma20 = calc_sma(closes, 20)
+        ma50 = calc_sma(closes, 50)
+
+        # Get current and previous values (last 2 valid points)
+        curr_ma5 = ma5[-1]
+        curr_ma20 = ma20[-1]
+        curr_ma50 = ma50[-1]
+        prev_ma5 = ma5[-2] if len(ma5) >= 2 else None
+        prev_ma20 = ma20[-2] if len(ma20) >= 2 else None
+
+        if curr_ma5 is None or curr_ma20 is None or curr_ma50 is None:
+            signals['_ma_cross_signal'] = 'NONE'
+            return 0, signals
+
+        current_price = closes[-1]
+
+        # Detect crossover (MA5 vs MA20)
+        golden_cross = False
+        death_cross = False
+        if prev_ma5 is not None and prev_ma20 is not None:
+            # Golden Cross: MA5 was below MA20, now above
+            if prev_ma5 <= prev_ma20 and curr_ma5 > curr_ma20:
+                golden_cross = True
+            # Death Cross: MA5 was above MA20, now below
+            elif prev_ma5 >= prev_ma20 and curr_ma5 < curr_ma20:
+                death_cross = True
+
+        # Check alignment
+        bullish_alignment = curr_ma5 > curr_ma20 > curr_ma50
+        bearish_alignment = curr_ma5 < curr_ma20 < curr_ma50
+
+        # Check price position relative to MAs
+        price_above_all = current_price > curr_ma5 > curr_ma20 > curr_ma50
+
+        if golden_cross:
+            score += 5
+            signals['ma_golden_cross'] = (
+                f"GOLDEN CROSS: MA5 ({curr_ma5:,.0f}) menembus MA20 ({curr_ma20:,.0f}) ke atas"
+            )
+            signals['_ma_cross_signal'] = 'GOLDEN_CROSS'
+        elif death_cross:
+            score -= 3
+            signals['ma_death_cross'] = (
+                f"DEATH CROSS: MA5 ({curr_ma5:,.0f}) menembus MA20 ({curr_ma20:,.0f}) ke bawah"
+            )
+            signals['_ma_cross_signal'] = 'DEATH_CROSS'
+        elif price_above_all:
+            score += 4
+            signals['ma_perfect_alignment'] = (
+                f"Perfect alignment: Price ({current_price:,.0f}) > MA5 > MA20 > MA50"
+            )
+            signals['_ma_cross_signal'] = 'PERFECT_BULLISH'
+        elif bullish_alignment:
+            score += 3
+            signals['ma_bullish_alignment'] = (
+                f"Bullish alignment: MA5 ({curr_ma5:,.0f}) > MA20 ({curr_ma20:,.0f}) > MA50 ({curr_ma50:,.0f})"
+            )
+            signals['_ma_cross_signal'] = 'BULLISH_ALIGNMENT'
+        elif bearish_alignment:
+            score -= 2
+            signals['ma_bearish_alignment'] = (
+                f"Bearish alignment: MA5 ({curr_ma5:,.0f}) < MA20 ({curr_ma20:,.0f}) < MA50 ({curr_ma50:,.0f})"
+            )
+            signals['_ma_cross_signal'] = 'BEARISH_ALIGNMENT'
+        else:
+            signals['_ma_cross_signal'] = 'NEUTRAL'
+
+        # MA distance analysis (how far apart the MAs are)
+        if curr_ma20 > 0:
+            ma5_20_gap = (curr_ma5 - curr_ma20) / curr_ma20 * 100
+            if abs(ma5_20_gap) < 1.0 and not golden_cross and not death_cross:
+                signals['ma_converging'] = (
+                    f"MA5 dan MA20 konvergen (gap {ma5_20_gap:+.1f}%) - potensi crossover"
+                )
+                if signals.get('_ma_cross_signal') == 'NEUTRAL':
+                    signals['_ma_cross_signal'] = 'CONVERGING'
+
+        return max(-3, min(score, 5)), signals
+
+    def _compare_with_previous(
+        self, current_deep: Dict, previous_deep: Optional[Dict]
+    ) -> Dict:
+        """
+        Compare current deep analysis with previous to detect phase transitions.
+        
+        Detects:
+        - Phase transitions (ACCUMULATION→HOLDING, HOLDING→DISTRIBUTION, etc.)
+        - Score trend (IMPROVING, DECLINING, STABLE)
+        - Key metric changes
+        
+        Returns dict with comparison data to be merged into deep result.
+        """
+        result = {
+            'prev_deep_score': 0,
+            'prev_phase': '',
+            'phase_transition': 'NONE',
+            'score_trend': 'NONE',
+        }
+
+        if not previous_deep:
+            return result
+
+        prev_score = previous_deep.get('deep_score', 0)
+        curr_score = current_deep.get('deep_score', 0)
+        prev_phase = previous_deep.get('accum_phase', 'UNKNOWN')
+        curr_phase = current_deep.get('accum_phase', 'UNKNOWN')
+
+        result['prev_deep_score'] = prev_score
+        result['prev_phase'] = prev_phase
+
+        # Detect phase transition
+        if prev_phase and curr_phase and prev_phase != curr_phase:
+            transition = f"{prev_phase}_TO_{curr_phase}"
+            result['phase_transition'] = transition
+
+            # Generate signals based on transition type
+            signals = current_deep.get('deep_signals', {})
+
+            if prev_phase == 'ACCUMULATION' and curr_phase == 'HOLDING':
+                signals['phase_accum_to_hold'] = (
+                    f"Fase berubah: AKUMULASI → HOLDING (bandar selesai beli, siap markup)"
+                )
+            elif prev_phase == 'ACCUMULATION' and curr_phase == 'DISTRIBUTION':
+                signals['phase_accum_to_dist'] = (
+                    f"WARNING: Fase berubah: AKUMULASI → DISTRIBUSI (bandar mulai jual!)"
+                )
+            elif prev_phase == 'HOLDING' and curr_phase == 'DISTRIBUTION':
+                signals['phase_hold_to_dist'] = (
+                    f"WARNING: Fase berubah: HOLDING → DISTRIBUSI (bandar mulai buang barang)"
+                )
+            elif prev_phase == 'HOLDING' and curr_phase == 'ACCUMULATION':
+                signals['phase_hold_to_accum'] = (
+                    f"Fase berubah: HOLDING → AKUMULASI (bandar beli lagi, positif)"
+                )
+            elif prev_phase == 'DISTRIBUTION' and curr_phase == 'ACCUMULATION':
+                signals['phase_dist_to_accum'] = (
+                    f"Fase berubah: DISTRIBUSI → AKUMULASI (re-accumulation, potensi reversal)"
+                )
+            elif prev_phase == 'DISTRIBUTION' and curr_phase == 'HOLDING':
+                signals['phase_dist_to_hold'] = (
+                    f"Fase berubah: DISTRIBUSI → HOLDING (distribusi berhenti)"
+                )
+            elif prev_phase != 'UNKNOWN' and curr_phase != 'UNKNOWN':
+                signals[f'phase_{prev_phase.lower()}_to_{curr_phase.lower()}'] = (
+                    f"Fase berubah: {prev_phase} → {curr_phase}"
+                )
+
+            current_deep['deep_signals'] = signals
+
+        # Score trend
+        if prev_score > 0:
+            score_diff = curr_score - prev_score
+            if score_diff >= 10:
+                result['score_trend'] = 'STRONG_IMPROVING'
+            elif score_diff >= 3:
+                result['score_trend'] = 'IMPROVING'
+            elif score_diff <= -10:
+                result['score_trend'] = 'STRONG_DECLINING'
+            elif score_diff <= -3:
+                result['score_trend'] = 'DECLINING'
+            else:
+                result['score_trend'] = 'STABLE'
+
+        return result
+
     def enrich_results_with_deep(
         self,
         results: List[Dict],
@@ -2544,7 +2780,7 @@ class BandarmologyAnalyzer:
                 r['deep_score'] = deep.get('deep_score', 0)
                 r['deep_trade_type'] = deep.get('deep_trade_type', '')
                 r['combined_score'] = r.get('total_score', 0) + deep.get('deep_score', 0)
-                r['max_combined_score'] = 215  # 100 base + 115 deep
+                r['max_combined_score'] = 225  # 100 base + 125 deep
 
                 # Inventory summary
                 r['inv_accum_brokers'] = deep.get('inv_accum_brokers', 0)
@@ -2627,6 +2863,16 @@ class BandarmologyAnalyzer:
                 r['volume_score'] = deep.get('volume_score', 0)
                 r['volume_signal'] = deep.get('volume_signal', 'NONE')
 
+                # MA cross
+                r['ma_cross_signal'] = deep.get('ma_cross_signal', 'NONE')
+                r['ma_cross_score'] = deep.get('ma_cross_score', 0)
+
+                # Historical comparison
+                r['prev_deep_score'] = deep.get('prev_deep_score', 0)
+                r['prev_phase'] = deep.get('prev_phase', '')
+                r['phase_transition'] = deep.get('phase_transition', 'NONE')
+                r['score_trend'] = deep.get('score_trend', 'NONE')
+
                 # Deep signals
                 r['deep_signals'] = deep.get('deep_signals', {})
 
@@ -2636,7 +2882,7 @@ class BandarmologyAnalyzer:
             else:
                 r['deep_score'] = 0
                 r['combined_score'] = r.get('total_score', 0)
-                r['max_combined_score'] = 215
+                r['max_combined_score'] = 225
                 r['has_deep'] = False
 
         # Re-sort by combined score
