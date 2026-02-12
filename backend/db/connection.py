@@ -593,6 +593,11 @@ class DatabaseConnection:
                 important_dates_score INTEGER DEFAULT 0,
                 important_dates_signal TEXT DEFAULT 'NONE',
                 
+                -- Pump tomorrow prediction
+                pump_tomorrow_score INTEGER DEFAULT 0,
+                pump_tomorrow_signal TEXT DEFAULT 'NONE',
+                pump_tomorrow_factors_json TEXT,
+                
                 calculated_at DATETIME DEFAULT (datetime('now')),
                 UNIQUE(ticker, analysis_date)
             );
@@ -674,6 +679,10 @@ class DatabaseConnection:
             ("important_dates_json", "TEXT"),
             ("important_dates_score", "INTEGER DEFAULT 0"),
             ("important_dates_signal", "TEXT DEFAULT 'NONE'"),
+            # Pump tomorrow prediction
+            ("pump_tomorrow_score", "INTEGER DEFAULT 0"),
+            ("pump_tomorrow_signal", "TEXT DEFAULT 'NONE'"),
+            ("pump_tomorrow_factors_json", "TEXT"),
         ]
         
         # Migration: Add new columns to neobdm_records

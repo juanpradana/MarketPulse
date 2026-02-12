@@ -759,6 +759,10 @@ class BandarmologyAnalyzer:
             'important_dates': [],
             'important_dates_score': 0,
             'important_dates_signal': 'NONE',
+            # Pump tomorrow prediction
+            'pump_tomorrow_score': 0,
+            'pump_tomorrow_signal': 'NONE',
+            'pump_tomorrow_factors': {},
         }
 
         signals = {}
@@ -1132,6 +1136,14 @@ class BandarmologyAnalyzer:
         bp, bp_factors = self._calculate_breakout_probability(deep, base_result)
         deep['breakout_probability'] = bp
         deep['breakout_factors'] = bp_factors
+
+        # ---- PUMP TOMORROW PREDICTION SCORE ----
+        pt_score, pt_signal, pt_factors = self._calculate_pump_tomorrow_score(
+            deep, base_result, broker_summary_data
+        )
+        deep['pump_tomorrow_score'] = pt_score
+        deep['pump_tomorrow_signal'] = pt_signal
+        deep['pump_tomorrow_factors'] = pt_factors
 
         # Enhanced classification
         deep['deep_trade_type'] = self._classify_deep_trade_type(
@@ -2132,6 +2144,175 @@ class BandarmologyAnalyzer:
             probability = 0
 
         return round(probability), factors
+
+    def _calculate_pump_tomorrow_score(
+        self, deep: Dict, base_result: Optional[Dict] = None,
+        broker_summary_data: Optional[Dict] = None
+    ) -> Tuple[int, str, Dict]:
+        """
+        Calculate "Pump Tomorrow" prediction score (0-100).
+        
+        Answers: "Apakah saham ini akan pump BESOK?"
+        
+        7 weighted factors:
+        1. Bandar beli hari ini (25%) — bandar_confirmation from cross-reference
+        2. Flow acceleration (20%) — MM/Foreign rising sharply last 3 days
+        3. Price di zona siap (15%) — near bandar cost, breakout_signal = READY
+        4. Volume compression breaking (10%) — price range narrowing then expanding
+        5. MA convergence/golden cross (10%) — timing tepat
+        6. Institutional fresh entry (10%) — new institutional/foreign in broker summary
+        7. Retail capitulation (10%) — retail selling, smart money buying
+        
+        Returns: (score, signal, factors_dict)
+        """
+        factors = {}
+        weights = {}
+
+        # 1. Bandar beli hari ini (weight 25%)
+        confirmation = deep.get('bandar_confirmation', 'NONE')
+        bandar_today = {
+            'STRONG_BUY': 100, 'BUY': 80, 'MILD_BUY': 55,
+            'NEUTRAL': 20, 'NONE': 10,
+            'MILD_SELL': 5, 'SELL': 0, 'STRONG_SELL': 0
+        }.get(confirmation, 10)
+        factors['bandar_beli_hari_ini'] = bandar_today
+        weights['bandar_beli_hari_ini'] = 0.25
+
+        # 2. Flow acceleration (weight 20%)
+        accel_signal = deep.get('flow_acceleration_signal', 'NONE')
+        flow_accel = {
+            'STRONG_ACCELERATING': 100, 'ACCELERATING': 80,
+            'MILD_ACCELERATING': 55, 'STABLE': 25,
+            'MILD_DECELERATING': 10, 'DECELERATING': 0, 'NONE': 15
+        }.get(accel_signal, 15)
+        # Bonus: check if MM velocity is strongly positive
+        vel_mm = deep.get('flow_velocity_mm', 0)
+        if vel_mm > 1.0 and flow_accel >= 55:
+            flow_accel = min(100, flow_accel + 15)
+        factors['flow_acceleration'] = flow_accel
+        weights['flow_acceleration'] = 0.20
+
+        # 3. Price di zona siap (weight 15%)
+        breakout = deep.get('breakout_signal', 'NONE')
+        price_ready = {
+            'READY': 100, 'LOADING': 50, 'LAUNCHED': 30,
+            'DISTRIBUTING': 0, 'NONE': 20
+        }.get(breakout, 20)
+        # Refine with price vs bandar cost
+        current_price = base_result.get('price', 0) if base_result else 0
+        bandar_cost = deep.get('bandar_avg_cost', 0)
+        if current_price > 0 and bandar_cost > 0:
+            pct_diff = (current_price - bandar_cost) / bandar_cost
+            if -0.03 <= pct_diff <= 0.05:
+                price_ready = max(price_ready, 95)  # Near cost = best
+            elif -0.08 <= pct_diff < -0.03:
+                price_ready = max(price_ready, 80)  # Below cost = discount
+            elif 0.05 < pct_diff <= 0.12:
+                price_ready = max(price_ready, 60)  # Slightly above
+        factors['price_zona_siap'] = price_ready
+        weights['price_zona_siap'] = 0.15
+
+        # 4. Volume compression breaking (weight 10%)
+        vol_signal = deep.get('volume_signal', 'NONE')
+        vol_compress = {
+            'ACTIVE_BREAKOUT': 100,   # Range expanding + accumulation
+            'STEALTH_ACCUM': 85,      # Tight range + heavy accumulation
+            'QUIET_ACCUM': 60,        # Relatively quiet + accumulation
+            'NEUTRAL': 25,
+            'DEAD': 5,
+            'DIST_COMPLETE': 10,
+            'NONE': 15
+        }.get(vol_signal, 15)
+        factors['volume_compression'] = vol_compress
+        weights['volume_compression'] = 0.10
+
+        # 5. MA convergence/golden cross (weight 10%)
+        ma_cross = deep.get('ma_cross_signal', 'NONE')
+        ma_timing = {
+            'GOLDEN_CROSS': 100, 'PERFECT_BULLISH': 90,
+            'BULLISH_ALIGNMENT': 70, 'CONVERGING': 65,
+            'NEUTRAL': 25, 'NONE': 20,
+            'BEARISH_ALIGNMENT': 5, 'DEATH_CROSS': 0
+        }.get(ma_cross, 20)
+        factors['ma_timing'] = ma_timing
+        weights['ma_timing'] = 0.10
+
+        # 6. Institutional fresh entry (weight 10%)
+        inst_fresh = 0
+        inst_net = deep.get('broksum_net_institutional', 0)
+        foreign_net = deep.get('broksum_net_foreign', 0)
+        # Check if institutional/foreign brokers are buying but NOT already controlling brokers
+        # (fresh entry = new money coming in)
+        cb_codes = set(
+            b.get('code', '') for b in deep.get('controlling_brokers', [])
+        )
+        if broker_summary_data:
+            buy_list = broker_summary_data.get('buy', [])
+            fresh_inst_count = 0
+            fresh_inst_lot = 0
+            for b in buy_list:
+                code = b.get('broker', '')
+                info = self.broker_classes.get(code, {})
+                cats = info.get('categories', [])
+                if ('institutional' in cats or 'foreign' in cats) and code not in cb_codes:
+                    fresh_inst_count += 1
+                    fresh_inst_lot += self._parse_broksum_num(b.get('nlot', 0))
+            if fresh_inst_count >= 3:
+                inst_fresh = 100
+            elif fresh_inst_count >= 2:
+                inst_fresh = 75
+            elif fresh_inst_count >= 1:
+                inst_fresh = 50
+            elif inst_net > 0 and foreign_net > 0:
+                inst_fresh = 40
+            elif inst_net > 0 or foreign_net > 0:
+                inst_fresh = 25
+        else:
+            # Fallback to aggregate net values
+            if inst_net > 0 and foreign_net > 0:
+                inst_fresh = 60
+            elif inst_net > 0 or foreign_net > 0:
+                inst_fresh = 35
+        factors['institutional_fresh_entry'] = inst_fresh
+        weights['institutional_fresh_entry'] = 0.10
+
+        # 7. Retail capitulation (weight 10%)
+        sr_div = deep.get('smart_retail_divergence', 0)
+        # smart_retail_divergence ranges from -100 (bearish) to +100 (bullish)
+        # +100 = smart money buying, retail selling (classic pump setup)
+        retail_cap = max(0, min(100, (sr_div + 100) // 2))
+        # Bonus if daily smart money buying and retail selling
+        cum_smart = deep.get('txn_smart_money_cum', 0)
+        cum_retail = deep.get('txn_retail_cum_deep', 0)
+        if cum_smart > 0 and cum_retail < 0:
+            retail_cap = max(retail_cap, 80)
+        factors['retail_capitulation'] = retail_cap
+        weights['retail_capitulation'] = 0.10
+
+        # Calculate weighted average
+        total_weight = sum(weights.values())
+        if total_weight > 0:
+            score = sum(
+                factors[k] * weights[k] for k in factors
+            ) / total_weight
+        else:
+            score = 0
+
+        score = round(score)
+
+        # Determine signal
+        if score >= 75:
+            signal = 'STRONG_PUMP'
+        elif score >= 55:
+            signal = 'LIKELY_PUMP'
+        elif score >= 40:
+            signal = 'POSSIBLE_PUMP'
+        elif score >= 25:
+            signal = 'LOW_CHANCE'
+        else:
+            signal = 'UNLIKELY'
+
+        return score, signal, factors
 
     def _classify_deep_trade_type(
         self, deep: Dict, base_result: Optional[Dict] = None
@@ -3226,6 +3407,11 @@ class BandarmologyAnalyzer:
                 r['important_dates'] = deep.get('important_dates', [])
                 r['important_dates_score'] = deep.get('important_dates_score', 0)
                 r['important_dates_signal'] = deep.get('important_dates_signal', 'NONE')
+
+                # Pump tomorrow prediction
+                r['pump_tomorrow_score'] = deep.get('pump_tomorrow_score', 0)
+                r['pump_tomorrow_signal'] = deep.get('pump_tomorrow_signal', 'NONE')
+                r['pump_tomorrow_factors'] = deep.get('pump_tomorrow_factors', {})
 
                 # Deep signals
                 r['deep_signals'] = deep.get('deep_signals', {})

@@ -116,6 +116,10 @@ function generateChatText(data: StockDetailResponse): string {
         lines.push(`  Combined: ${data.combined_score ?? data.base_score}/${data.max_combined_score ?? 200}`);
     }
     if (data.breakout_probability) lines.push(`  Breakout Prob: ${data.breakout_probability}%`);
+    if (data.pump_tomorrow_score) {
+        const ptLabel = data.pump_tomorrow_signal === 'STRONG_PUMP' ? '🚀 STRONG' : data.pump_tomorrow_signal === 'LIKELY_PUMP' ? '📈 LIKELY' : data.pump_tomorrow_signal === 'POSSIBLE_PUMP' ? '🔄 POSSIBLE' : data.pump_tomorrow_signal === 'LOW_CHANCE' ? '⚠️ LOW' : '';
+        lines.push(`  Pump Tomorrow: ${data.pump_tomorrow_score}% ${ptLabel}`);
+    }
     lines.push('');
 
     if (data.entry_price || data.target_price) {
@@ -313,6 +317,7 @@ function generatePdfHtml(data: StockDetailResponse): string {
         { label: 'Deep Score', value: data.has_deep ? `+${data.deep_score ?? 0}` : '—', sub: data.has_deep ? 'Analyzed' : 'N/A', color: '#60a5fa' },
         { label: 'Combined', value: `${data.combined_score ?? data.base_score}`, sub: `/ ${data.max_combined_score ?? 200}`, color: scoreColor(data.combined_score ?? data.base_score, data.max_combined_score ?? 200) },
         { label: 'Breakout Prob', value: data.breakout_probability ? `${data.breakout_probability}%` : '—', sub: data.breakout_probability ? (data.breakout_probability >= 70 ? 'HIGH' : data.breakout_probability >= 40 ? 'MEDIUM' : 'LOW') : '', color: (data.breakout_probability ?? 0) >= 70 ? '#34d399' : (data.breakout_probability ?? 0) >= 40 ? '#f59e0b' : '#94a3b8' },
+        { label: 'Pump Tomorrow', value: data.pump_tomorrow_score ? `${data.pump_tomorrow_score}%` : '—', sub: data.pump_tomorrow_signal === 'STRONG_PUMP' ? '🚀 STRONG' : data.pump_tomorrow_signal === 'LIKELY_PUMP' ? '📈 LIKELY' : data.pump_tomorrow_signal === 'POSSIBLE_PUMP' ? '🔄 POSSIBLE' : data.pump_tomorrow_signal === 'LOW_CHANCE' ? '⚠️ LOW' : '', color: (data.pump_tomorrow_score ?? 0) >= 75 ? '#34d399' : (data.pump_tomorrow_score ?? 0) >= 55 ? '#06b6d4' : (data.pump_tomorrow_score ?? 0) >= 40 ? '#f59e0b' : '#94a3b8' },
         { label: 'Entry Price', value: data.entry_price ? fmt(data.entry_price) : '—', sub: data.entry_price && data.price ? `${((data.price - data.entry_price) / data.entry_price * 100).toFixed(1)}% from current` : '', color: '#06b6d4' },
         { label: 'Target Price', value: data.target_price ? fmt(data.target_price) : '—', sub: data.risk_reward_ratio ? `R:R = 1:${data.risk_reward_ratio}` : '', color: '#eab308' },
     ];
@@ -515,6 +520,17 @@ function generatePdfHtml(data: StockDetailResponse): string {
         html += `</div></div>`;
     }
 
+    // Pump Tomorrow Factors
+    if (data.pump_tomorrow_score != null && data.pump_tomorrow_score > 0 && data.pump_tomorrow_factors) {
+        const ptSignalLabel = data.pump_tomorrow_signal === 'STRONG_PUMP' ? '🚀 STRONG PUMP' : data.pump_tomorrow_signal === 'LIKELY_PUMP' ? '📈 LIKELY' : data.pump_tomorrow_signal === 'POSSIBLE_PUMP' ? '🔄 POSSIBLE' : data.pump_tomorrow_signal === 'LOW_CHANCE' ? '⚠️ LOW' : '';
+        html += `<div class="section"><div class="section-title">🚀 Pump Tomorrow Prediction (${data.pump_tomorrow_score}% ${ptSignalLabel})</div><div class="grid4">`;
+        Object.entries(data.pump_tomorrow_factors).forEach(([key, val]) => {
+            const color = val >= 70 ? '#059669' : val >= 40 ? '#d97706' : '#dc2626';
+            html += `<div class="card"><div class="label">${key.replace(/_/g, ' ')}</div><div class="value" style="color:${color}">${val}</div><div class="bar-container"><div class="bar-fill" style="width:${val}%;background:${color}"></div></div></div>`;
+        });
+        html += `</div></div>`;
+    }
+
     // Top Holders
     if (data.top_holders && data.top_holders.length > 0) {
         html += `<div class="section"><div class="section-title">Top Holders (Cumulative Net Buy)</div><div style="display:flex;gap:8px">`;
@@ -704,6 +720,23 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                         (data.breakout_probability ?? 0) > 0 ? 'text-orange-400' : 'text-zinc-600'
                                     }
                                     icon={<Zap className="w-3 h-3 text-zinc-600" />}
+                                />
+                                <MetricCard
+                                    label="Pump Tomorrow"
+                                    value={data.pump_tomorrow_score ? `${data.pump_tomorrow_score}%` : '—'}
+                                    sub={data.pump_tomorrow_signal ? (
+                                        data.pump_tomorrow_signal === 'STRONG_PUMP' ? '🚀 STRONG' :
+                                        data.pump_tomorrow_signal === 'LIKELY_PUMP' ? '📈 LIKELY' :
+                                        data.pump_tomorrow_signal === 'POSSIBLE_PUMP' ? '🔄 POSSIBLE' :
+                                        data.pump_tomorrow_signal === 'LOW_CHANCE' ? '⚠️ LOW' : '—'
+                                    ) : ''}
+                                    color={
+                                        (data.pump_tomorrow_score ?? 0) >= 75 ? 'text-emerald-400' :
+                                        (data.pump_tomorrow_score ?? 0) >= 55 ? 'text-cyan-400' :
+                                        (data.pump_tomorrow_score ?? 0) >= 40 ? 'text-amber-400' :
+                                        (data.pump_tomorrow_score ?? 0) > 0 ? 'text-orange-400' : 'text-zinc-600'
+                                    }
+                                    icon={<TrendingUp className="w-3 h-3 text-zinc-600" />}
                                 />
                                 <MetricCard
                                     label="Entry Price"
@@ -911,6 +944,48 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                                             />
                                                         </div>
                                                         <span className="text-[8px] text-zinc-500 w-20 truncate">{key.replace(/_/g, ' ')}</span>
+                                                        <span className={cn("text-[8px] font-bold w-6 text-right",
+                                                            val >= 70 ? 'text-emerald-400' :
+                                                            val >= 40 ? 'text-amber-400' : 'text-red-400'
+                                                        )}>{val}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Pump Tomorrow Factors */}
+                                    {data.pump_tomorrow_score != null && data.pump_tomorrow_score > 0 && data.pump_tomorrow_factors && (
+                                        <div className="mb-3 p-3 bg-zinc-800/30 rounded-lg border border-zinc-700/20">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">🚀 Pump Tomorrow Prediction</span>
+                                                <span className={cn(
+                                                    "text-sm font-black",
+                                                    data.pump_tomorrow_score >= 75 ? 'text-emerald-400' :
+                                                    data.pump_tomorrow_score >= 55 ? 'text-cyan-400' :
+                                                    data.pump_tomorrow_score >= 40 ? 'text-amber-400' : 'text-orange-400'
+                                                )}>{data.pump_tomorrow_score}%
+                                                    <span className="text-[9px] font-normal text-zinc-500 ml-1">
+                                                        {data.pump_tomorrow_signal === 'STRONG_PUMP' ? '🚀 STRONG PUMP' :
+                                                         data.pump_tomorrow_signal === 'LIKELY_PUMP' ? '📈 LIKELY' :
+                                                         data.pump_tomorrow_signal === 'POSSIBLE_PUMP' ? '🔄 POSSIBLE' :
+                                                         data.pump_tomorrow_signal === 'LOW_CHANCE' ? '⚠️ LOW' : ''}
+                                                    </span>
+                                                </span>
+                                            </div>
+                                            <div className="grid grid-cols-4 gap-x-4 gap-y-1">
+                                                {Object.entries(data.pump_tomorrow_factors).map(([key, val]) => (
+                                                    <div key={key} className="flex items-center gap-1.5">
+                                                        <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                                                            <div
+                                                                className={cn("h-full rounded-full",
+                                                                    val >= 70 ? 'bg-emerald-500' :
+                                                                    val >= 40 ? 'bg-amber-500' : 'bg-red-500'
+                                                                )}
+                                                                style={{ width: `${val}%` }}
+                                                            />
+                                                        </div>
+                                                        <span className="text-[8px] text-zinc-500 w-24 truncate">{key.replace(/_/g, ' ')}</span>
                                                         <span className={cn("text-[8px] font-bold w-6 text-right",
                                                             val >= 70 ? 'text-emerald-400' :
                                                             val >= 40 ? 'text-amber-400' : 'text-red-400'

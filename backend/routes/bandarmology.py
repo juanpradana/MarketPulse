@@ -817,6 +817,11 @@ async def get_stock_detail(
                 "important_dates": deep_cache.get('important_dates', []),
                 "important_dates_score": deep_cache.get('important_dates_score', 0),
                 "important_dates_signal": deep_cache.get('important_dates_signal', 'NONE'),
+
+                # Pump tomorrow prediction
+                "pump_tomorrow_score": deep_cache.get('pump_tomorrow_score', 0),
+                "pump_tomorrow_signal": deep_cache.get('pump_tomorrow_signal', 'NONE'),
+                "pump_tomorrow_factors": deep_cache.get('pump_tomorrow_factors', {}),
             })
         else:
             detail.update({

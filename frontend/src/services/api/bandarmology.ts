@@ -186,6 +186,11 @@ export interface BandarmologyItem {
     important_dates_score?: number;
     important_dates_signal?: string;
 
+    // Pump tomorrow prediction
+    pump_tomorrow_score?: number;
+    pump_tomorrow_signal?: string;
+    pump_tomorrow_factors?: Record<string, number>;
+
     // Signals
     deep_signals?: DeepSignals;
 }
@@ -370,6 +375,11 @@ export interface StockDetailResponse {
     important_dates?: ImportantDateAnalysis[];
     important_dates_score?: number;
     important_dates_signal?: string;
+
+    // Pump tomorrow prediction
+    pump_tomorrow_score?: number;
+    pump_tomorrow_signal?: string;
+    pump_tomorrow_factors?: Record<string, number>;
 
     // Detail data
     inventory_brokers: InvBrokerDetail[];

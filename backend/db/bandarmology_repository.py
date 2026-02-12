@@ -278,9 +278,10 @@ class BandarmologyRepository(BaseRepository):
                     flow_velocity_mm, flow_velocity_foreign, flow_velocity_institution,
                     flow_acceleration_mm, flow_acceleration_signal, flow_velocity_score,
                     important_dates_json, important_dates_score, important_dates_signal,
+                    pump_tomorrow_score, pump_tomorrow_signal, pump_tomorrow_factors_json,
                     deep_score, deep_trade_type, deep_signals_json
                 ) VALUES ({})
-            """.format(', '.join(['?'] * 84)), (
+            """.format(', '.join(['?'] * 87)), (
                 ticker.upper(), analysis_date,
                 data.get('inv_accum_brokers', 0),
                 data.get('inv_distrib_brokers', 0),
@@ -361,6 +362,9 @@ class BandarmologyRepository(BaseRepository):
                 json.dumps(data.get('important_dates', [])),
                 data.get('important_dates_score', 0),
                 data.get('important_dates_signal', 'NONE'),
+                data.get('pump_tomorrow_score', 0),
+                data.get('pump_tomorrow_signal', 'NONE'),
+                json.dumps(data.get('pump_tomorrow_factors', {})),
                 data.get('deep_score', 0),
                 data.get('deep_trade_type', ''),
                 json.dumps(data.get('deep_signals', {}))
@@ -406,6 +410,7 @@ class BandarmologyRepository(BaseRepository):
             d['broksum_consistent_sellers'] = json.loads(d.get('broksum_consistent_sellers_json') or '[]')
             d['breakout_factors'] = json.loads(d.get('breakout_factors_json') or '{}')
             d['important_dates'] = json.loads(d.get('important_dates_json') or '[]')
+            d['pump_tomorrow_factors'] = json.loads(d.get('pump_tomorrow_factors_json') or '{}')
             return d
         finally:
             conn.close()
@@ -434,6 +439,7 @@ class BandarmologyRepository(BaseRepository):
             d['broksum_consistent_sellers'] = json.loads(d.get('broksum_consistent_sellers_json') or '[]')
             d['breakout_factors'] = json.loads(d.get('breakout_factors_json') or '{}')
             d['important_dates'] = json.loads(d.get('important_dates_json') or '[]')
+            d['pump_tomorrow_factors'] = json.loads(d.get('pump_tomorrow_factors_json') or '{}')
             return d
         finally:
             conn.close()
@@ -462,6 +468,7 @@ class BandarmologyRepository(BaseRepository):
                 d['broksum_consistent_sellers'] = json.loads(d.get('broksum_consistent_sellers_json') or '[]')
                 d['breakout_factors'] = json.loads(d.get('breakout_factors_json') or '{}')
                 d['important_dates'] = json.loads(d.get('important_dates_json') or '[]')
+                d['pump_tomorrow_factors'] = json.loads(d.get('pump_tomorrow_factors_json') or '{}')
                 result[d['ticker']] = d
             return result
         finally:
