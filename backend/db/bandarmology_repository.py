@@ -153,7 +153,7 @@ class BandarmologyRepository(BaseRepository):
             # Store compact time series (dates + cumulative values only)
             ts_json = json.dumps({
                 'dates': data.get('dates', [])[-30:],  # last 30 dates
-                'cumulative': {k: {'latest': v.get('latest', 0)} for k, v in cum.items()},
+                'cumulative': {k: {'latest': v.get('latest', 0), 'week_ago': v.get('week_ago', 0), 'month_ago': v.get('month_ago', 0)} for k, v in cum.items()},
                 'daily': {k: {'latest': v.get('latest', 0)} for k, v in daily.items()}
             })
 
@@ -165,8 +165,12 @@ class BandarmologyRepository(BaseRepository):
                     part_foreign, part_retail, part_institution, part_zombie,
                     cross_index,
                     mm_trend, foreign_trend, institution_trend,
+                    cum_mm_week_ago, cum_foreign_week_ago, cum_institution_week_ago,
+                    cum_smart_week_ago, cum_retail_week_ago,
+                    cum_mm_month_ago, cum_foreign_month_ago, cum_institution_month_ago,
+                    cum_smart_month_ago, cum_retail_month_ago,
                     time_series_json, date_start, date_end, data_points, scraped_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 ticker.upper(), period,
                 cum.get('market_maker', {}).get('latest', 0),
@@ -189,6 +193,18 @@ class BandarmologyRepository(BaseRepository):
                 part.get('zombie', {}).get('latest', 0),
                 ci.get('latest', 0) if ci else 0,
                 mm_trend, foreign_trend, institution_trend,
+                # Week-ago values
+                cum.get('market_maker', {}).get('week_ago', 0),
+                cum.get('foreign', {}).get('week_ago', 0),
+                cum.get('institution', {}).get('week_ago', 0),
+                cum.get('smart_money', {}).get('week_ago', 0),
+                cum.get('retail', {}).get('week_ago', 0),
+                # Month-ago values
+                cum.get('market_maker', {}).get('month_ago', 0),
+                cum.get('foreign', {}).get('month_ago', 0),
+                cum.get('institution', {}).get('month_ago', 0),
+                cum.get('smart_money', {}).get('month_ago', 0),
+                cum.get('retail', {}).get('month_ago', 0),
                 ts_json, date_start, date_end, data_points, scraped_at
             ))
             conn.commit()
@@ -259,9 +275,12 @@ class BandarmologyRepository(BaseRepository):
                     volume_score, volume_signal,
                     ma_cross_signal, ma_cross_score,
                     prev_deep_score, prev_phase, phase_transition, score_trend,
+                    flow_velocity_mm, flow_velocity_foreign, flow_velocity_institution,
+                    flow_acceleration_mm, flow_acceleration_signal, flow_velocity_score,
+                    important_dates_json, important_dates_score, important_dates_signal,
                     deep_score, deep_trade_type, deep_signals_json
                 ) VALUES ({})
-            """.format(', '.join(['?'] * 75)), (
+            """.format(', '.join(['?'] * 84)), (
                 ticker.upper(), analysis_date,
                 data.get('inv_accum_brokers', 0),
                 data.get('inv_distrib_brokers', 0),
@@ -333,6 +352,15 @@ class BandarmologyRepository(BaseRepository):
                 data.get('prev_phase', ''),
                 data.get('phase_transition', 'NONE'),
                 data.get('score_trend', 'NONE'),
+                data.get('flow_velocity_mm', 0),
+                data.get('flow_velocity_foreign', 0),
+                data.get('flow_velocity_institution', 0),
+                data.get('flow_acceleration_mm', 0),
+                data.get('flow_acceleration_signal', 'NONE'),
+                data.get('flow_velocity_score', 0),
+                json.dumps(data.get('important_dates', [])),
+                data.get('important_dates_score', 0),
+                data.get('important_dates_signal', 'NONE'),
                 data.get('deep_score', 0),
                 data.get('deep_trade_type', ''),
                 json.dumps(data.get('deep_signals', {}))
@@ -377,6 +405,7 @@ class BandarmologyRepository(BaseRepository):
             d['broksum_consistent_buyers'] = json.loads(d.get('broksum_consistent_buyers_json') or '[]')
             d['broksum_consistent_sellers'] = json.loads(d.get('broksum_consistent_sellers_json') or '[]')
             d['breakout_factors'] = json.loads(d.get('breakout_factors_json') or '{}')
+            d['important_dates'] = json.loads(d.get('important_dates_json') or '[]')
             return d
         finally:
             conn.close()
@@ -404,6 +433,7 @@ class BandarmologyRepository(BaseRepository):
             d['broksum_consistent_buyers'] = json.loads(d.get('broksum_consistent_buyers_json') or '[]')
             d['broksum_consistent_sellers'] = json.loads(d.get('broksum_consistent_sellers_json') or '[]')
             d['breakout_factors'] = json.loads(d.get('breakout_factors_json') or '{}')
+            d['important_dates'] = json.loads(d.get('important_dates_json') or '[]')
             return d
         finally:
             conn.close()
@@ -431,6 +461,7 @@ class BandarmologyRepository(BaseRepository):
                 d['broksum_consistent_buyers'] = json.loads(d.get('broksum_consistent_buyers_json') or '[]')
                 d['broksum_consistent_sellers'] = json.loads(d.get('broksum_consistent_sellers_json') or '[]')
                 d['breakout_factors'] = json.loads(d.get('breakout_factors_json') or '{}')
+                d['important_dates'] = json.loads(d.get('important_dates_json') or '[]')
                 result[d['ticker']] = d
             return result
         finally:

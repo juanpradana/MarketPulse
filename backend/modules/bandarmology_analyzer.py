@@ -634,7 +634,8 @@ class BandarmologyAnalyzer:
         broksum_multiday_data: Optional[List[Dict]] = None,
         price_series: Optional[List[Dict]] = None,
         base_result: Optional[Dict] = None,
-        previous_deep: Optional[Dict] = None
+        previous_deep: Optional[Dict] = None,
+        important_dates_data: Optional[List[Dict]] = None
     ) -> Dict:
         """
         Perform deep analysis on a single ticker using inventory + transaction chart + broker summary data.
@@ -747,6 +748,17 @@ class BandarmologyAnalyzer:
             'prev_phase': '',
             'phase_transition': 'NONE',
             'score_trend': 'NONE',
+            # Flow velocity/acceleration
+            'flow_velocity_mm': 0,
+            'flow_velocity_foreign': 0,
+            'flow_velocity_institution': 0,
+            'flow_acceleration_mm': 0,
+            'flow_acceleration_signal': 'NONE',
+            'flow_velocity_score': 0,
+            # Important dates broker summary
+            'important_dates': [],
+            'important_dates_score': 0,
+            'important_dates_signal': 'NONE',
         }
 
         signals = {}
@@ -820,6 +832,18 @@ class BandarmologyAnalyzer:
             deep['txn_institution_participation'] = _safe_float(txn_chart_data.get('part_institution'))
             deep['txn_mm_trend'] = txn_chart_data.get('mm_trend') or 'NEUTRAL'
             deep['txn_foreign_trend'] = txn_chart_data.get('foreign_trend') or 'NEUTRAL'
+
+        # ---- FLOW VELOCITY/ACCELERATION (max 15 pts) ----
+        if txn_chart_data:
+            vel_score, vel_signals, vel_data = self._score_flow_velocity(txn_chart_data)
+            deep_score += vel_score
+            signals.update(vel_signals)
+            deep['flow_velocity_mm'] = vel_data.get('velocity_mm', 0)
+            deep['flow_velocity_foreign'] = vel_data.get('velocity_foreign', 0)
+            deep['flow_velocity_institution'] = vel_data.get('velocity_institution', 0)
+            deep['flow_acceleration_mm'] = vel_data.get('acceleration_mm', 0)
+            deep['flow_acceleration_signal'] = vel_data.get('acceleration_signal', 'NONE')
+            deep['flow_velocity_score'] = vel_score
 
         # ---- SMART MONEY vs RETAIL DIVERGENCE (max 5 pts) ----
         if txn_chart_data:
@@ -1057,6 +1081,28 @@ class BandarmologyAnalyzer:
             deep['bandar_buy_today_lot'] = xref_data.get('buy_lot', 0)
             deep['bandar_sell_today_lot'] = xref_data.get('sell_lot', 0)
             deep['bandar_confirmation'] = xref_data.get('confirmation', 'NONE')
+
+        # ---- IMPORTANT DATES BROKER SUMMARY ANALYSIS (max 10 pts) ----
+        if important_dates_data and ctrl_result.get('controlling_brokers'):
+            impdate_score, impdate_signals, impdate_analyzed = self._score_important_dates_broksum(
+                important_dates_data,
+                ctrl_result.get('controlling_brokers', [])
+            )
+            deep_score += impdate_score
+            signals.update(impdate_signals)
+            deep['important_dates'] = impdate_analyzed
+            deep['important_dates_score'] = impdate_score
+            # Determine signal
+            if impdate_score >= 7:
+                deep['important_dates_signal'] = 'STRONG_ACCUMULATION'
+            elif impdate_score >= 4:
+                deep['important_dates_signal'] = 'ACCUMULATION'
+            elif impdate_score >= 1:
+                deep['important_dates_signal'] = 'MILD_ACCUMULATION'
+            elif impdate_score < 0:
+                deep['important_dates_signal'] = 'DISTRIBUTION'
+            else:
+                deep['important_dates_signal'] = 'NEUTRAL'
 
         # ---- MULTI-DAY BROKER SUMMARY CONSISTENCY ----
         if broksum_multiday_data and len(broksum_multiday_data) >= 2:
@@ -1349,6 +1395,291 @@ class BandarmologyAnalyzer:
             score += 3
 
         return min(score, 30), signals
+
+    def _score_flow_velocity(self, txn: Dict) -> Tuple[int, Dict, Dict]:
+        """
+        Score flow velocity (rate of change) and acceleration for transaction chart.
+        
+        Velocity = (latest - week_ago) / 5 trading days
+        Acceleration = velocity_5d - velocity_20d (positive = accelerating)
+        
+        A stock where MM flow went from +5B to +15B in 5 days is much more
+        interesting than one sitting at +15B for a month.
+        
+        Returns: (score, signals, velocity_data)
+        Max 15 points.
+        """
+        score = 0
+        signals = {}
+        velocity_data = {
+            'velocity_mm': 0.0,
+            'velocity_foreign': 0.0,
+            'velocity_institution': 0.0,
+            'acceleration_mm': 0.0,
+            'acceleration_signal': 'NONE',
+        }
+
+        # Extract current and historical values
+        cum_mm = _safe_float(txn.get('cum_mm'))
+        cum_foreign = _safe_float(txn.get('cum_foreign'))
+        cum_inst = _safe_float(txn.get('cum_institution'))
+
+        mm_week = _safe_float(txn.get('cum_mm_week_ago'))
+        foreign_week = _safe_float(txn.get('cum_foreign_week_ago'))
+        inst_week = _safe_float(txn.get('cum_institution_week_ago'))
+
+        mm_month = _safe_float(txn.get('cum_mm_month_ago'))
+        foreign_month = _safe_float(txn.get('cum_foreign_month_ago'))
+        inst_month = _safe_float(txn.get('cum_institution_month_ago'))
+
+        # Skip if no historical data available
+        if mm_week == 0 and mm_month == 0 and foreign_week == 0:
+            return 0, signals, velocity_data
+
+        # ---- Calculate velocities (change per trading day) ----
+        # 5-day velocity (short-term momentum)
+        vel_mm_5d = (cum_mm - mm_week) / 5.0 if mm_week != 0 or cum_mm != 0 else 0
+        vel_foreign_5d = (cum_foreign - foreign_week) / 5.0
+        vel_inst_5d = (cum_inst - inst_week) / 5.0
+
+        # 20-day velocity (medium-term trend)
+        vel_mm_20d = (cum_mm - mm_month) / 20.0 if mm_month != 0 or cum_mm != 0 else 0
+        vel_foreign_20d = (cum_foreign - foreign_month) / 20.0
+        vel_inst_20d = (cum_inst - inst_month) / 20.0
+
+        # ---- Calculate acceleration (change in velocity) ----
+        accel_mm = vel_mm_5d - vel_mm_20d
+        accel_foreign = vel_foreign_5d - vel_foreign_20d
+        accel_inst = vel_inst_5d - vel_inst_20d
+
+        velocity_data['velocity_mm'] = round(vel_mm_5d, 2)
+        velocity_data['velocity_foreign'] = round(vel_foreign_5d, 2)
+        velocity_data['velocity_institution'] = round(vel_inst_5d, 2)
+        velocity_data['acceleration_mm'] = round(accel_mm, 2)
+
+        # ---- Scoring ----
+
+        # 1. MM Flow Velocity (max 6 pts)
+        if vel_mm_5d > 0 and accel_mm > 0:
+            # Accelerating positive MM flow = strongest signal
+            if vel_mm_5d > 1.0:  # >1B/day inflow
+                score += 6
+                signals['flow_mm_surge'] = (
+                    f"MM flow AKSELERASI KUAT: +{vel_mm_5d:.1f}B/hari "
+                    f"(percepatan +{accel_mm:.1f}B/hari)"
+                )
+            elif vel_mm_5d > 0.3:
+                score += 4
+                signals['flow_mm_accelerating'] = (
+                    f"MM flow akselerasi: +{vel_mm_5d:.1f}B/hari "
+                    f"(percepatan +{accel_mm:.1f}B/hari)"
+                )
+            else:
+                score += 2
+                signals['flow_mm_mild_accel'] = (
+                    f"MM flow naik perlahan: +{vel_mm_5d:.1f}B/hari"
+                )
+        elif vel_mm_5d > 0 and accel_mm <= 0:
+            # Positive but decelerating
+            score += 1
+            signals['flow_mm_decelerating'] = (
+                f"MM flow positif tapi melambat: +{vel_mm_5d:.1f}B/hari "
+                f"(perlambatan {accel_mm:.1f}B/hari)"
+            )
+        elif vel_mm_5d < -0.5 and accel_mm < 0:
+            # Accelerating outflow = danger
+            score -= 2
+            signals['flow_mm_outflow_accel'] = (
+                f"WARNING: MM flow keluar akselerasi: {vel_mm_5d:.1f}B/hari"
+            )
+
+        # 2. Foreign Flow Velocity (max 5 pts)
+        if vel_foreign_5d > 0 and accel_foreign > 0:
+            if vel_foreign_5d > 0.5:
+                score += 5
+                signals['flow_foreign_surge'] = (
+                    f"Foreign inflow akselerasi: +{vel_foreign_5d:.1f}B/hari"
+                )
+            else:
+                score += 3
+                signals['flow_foreign_accel'] = (
+                    f"Foreign inflow naik: +{vel_foreign_5d:.1f}B/hari"
+                )
+        elif vel_foreign_5d > 0:
+            score += 1
+
+        # 3. Institution Flow Velocity (max 4 pts)
+        if vel_inst_5d > 0 and accel_inst > 0:
+            score += 4
+            signals['flow_inst_accel'] = (
+                f"Institution inflow akselerasi: +{vel_inst_5d:.1f}B/hari"
+            )
+        elif vel_inst_5d > 0:
+            score += 2
+
+        # ---- Determine acceleration signal ----
+        positive_accel = sum(1 for a in [accel_mm, accel_foreign, accel_inst] if a > 0)
+        negative_accel = sum(1 for a in [accel_mm, accel_foreign, accel_inst] if a < 0)
+
+        if positive_accel >= 3 and accel_mm > 0:
+            velocity_data['acceleration_signal'] = 'STRONG_ACCELERATING'
+            signals['flow_triple_accel'] = (
+                "SINYAL KUAT: MM + Foreign + Institution semua akselerasi"
+            )
+        elif positive_accel >= 2 and accel_mm > 0:
+            velocity_data['acceleration_signal'] = 'ACCELERATING'
+        elif accel_mm > 0:
+            velocity_data['acceleration_signal'] = 'MILD_ACCELERATING'
+        elif negative_accel >= 2 and accel_mm < 0:
+            velocity_data['acceleration_signal'] = 'DECELERATING'
+        elif accel_mm < 0:
+            velocity_data['acceleration_signal'] = 'MILD_DECELERATING'
+        else:
+            velocity_data['acceleration_signal'] = 'STABLE'
+
+        return max(-2, min(score, 15)), signals, velocity_data
+
+    def _score_important_dates_broksum(
+        self,
+        important_dates_data: List[Dict],
+        controlling_brokers: List[Dict]
+    ) -> Tuple[int, Dict, List[Dict]]:
+        """
+        Score broker summary analysis from important dates (turn_dates, peak_dates).
+        
+        Compares who was buying at accumulation start vs who is buying now.
+        If the same controlling brokers are STILL buying = strong continuation signal.
+        If controlling brokers switched to selling = distribution warning.
+        
+        Args:
+            important_dates_data: List of {date, buy, sell, date_type} dicts
+            controlling_brokers: List of controlling broker dicts from inventory
+            
+        Returns: (score, signals, analyzed_dates_summary)
+        Max 10 points.
+        """
+        score = 0
+        signals = {}
+        analyzed_dates = []
+
+        if not important_dates_data or not controlling_brokers:
+            return 0, signals, analyzed_dates
+
+        cb_codes = set(b.get('code', '') for b in controlling_brokers)
+        if not cb_codes:
+            return 0, signals, analyzed_dates
+
+        # Analyze each important date
+        bandar_buy_dates = 0
+        bandar_sell_dates = 0
+        total_dates = 0
+        bandar_total_buy_lot = 0
+        bandar_total_sell_lot = 0
+
+        for day_data in important_dates_data:
+            date_str = day_data.get('date', '')
+            date_type = day_data.get('date_type', 'unknown')
+            buy_list = day_data.get('buy', [])
+            sell_list = day_data.get('sell', [])
+
+            if not buy_list and not sell_list:
+                continue
+
+            total_dates += 1
+
+            # Check controlling brokers in this date's buy/sell
+            day_bandar_buy = 0
+            day_bandar_sell = 0
+            day_bandar_buy_lot = 0
+            day_bandar_sell_lot = 0
+
+            for b in buy_list:
+                code = (b.get('broker') or '').upper()
+                if code in cb_codes:
+                    nlot = self._parse_broksum_num(b.get('nlot', 0))
+                    day_bandar_buy += 1
+                    day_bandar_buy_lot += nlot
+
+            for s in sell_list:
+                code = (s.get('broker') or '').upper()
+                if code in cb_codes:
+                    nlot = self._parse_broksum_num(s.get('nlot', 0))
+                    day_bandar_sell += 1
+                    day_bandar_sell_lot += nlot
+
+            net_bandar = day_bandar_buy_lot - day_bandar_sell_lot
+            if net_bandar > 0:
+                bandar_buy_dates += 1
+            elif net_bandar < 0:
+                bandar_sell_dates += 1
+
+            bandar_total_buy_lot += day_bandar_buy_lot
+            bandar_total_sell_lot += day_bandar_sell_lot
+
+            analyzed_dates.append({
+                'date': date_str,
+                'date_type': date_type,
+                'bandar_buy_count': day_bandar_buy,
+                'bandar_sell_count': day_bandar_sell,
+                'bandar_net_lot': round(net_bandar),
+            })
+
+        if total_dates == 0:
+            return 0, signals, analyzed_dates
+
+        # ---- Scoring ----
+        net_total = bandar_total_buy_lot - bandar_total_sell_lot
+
+        # 1. Bandar consistency across important dates (max 5 pts)
+        buy_ratio = bandar_buy_dates / total_dates if total_dates > 0 else 0
+        if buy_ratio >= 0.8 and net_total > 0:
+            score += 5
+            signals['impdate_bandar_consistent_buy'] = (
+                f"Bandar konsisten BELI di {bandar_buy_dates}/{total_dates} tanggal penting "
+                f"(+{bandar_total_buy_lot:,.0f} lot)"
+            )
+        elif buy_ratio >= 0.6 and net_total > 0:
+            score += 3
+            signals['impdate_bandar_mostly_buy'] = (
+                f"Bandar mayoritas beli di {bandar_buy_dates}/{total_dates} tanggal penting"
+            )
+        elif buy_ratio >= 0.4:
+            score += 1
+        elif bandar_sell_dates > bandar_buy_dates and net_total < 0:
+            score -= 3
+            signals['impdate_bandar_selling'] = (
+                f"WARNING: Bandar lebih banyak JUAL di tanggal penting "
+                f"({bandar_sell_dates}/{total_dates} hari, -{bandar_total_sell_lot:,.0f} lot)"
+            )
+
+        # 2. Volume of bandar activity at important dates (max 5 pts)
+        if net_total > 0:
+            if bandar_total_buy_lot > 1000:
+                score += 5
+                signals['impdate_heavy_accum'] = (
+                    f"Akumulasi besar di tanggal penting: +{net_total:,.0f} lot net"
+                )
+            elif bandar_total_buy_lot > 500:
+                score += 3
+                signals['impdate_moderate_accum'] = (
+                    f"Akumulasi sedang di tanggal penting: +{net_total:,.0f} lot net"
+                )
+            elif bandar_total_buy_lot > 100:
+                score += 1
+
+        # Determine overall signal
+        if score >= 7:
+            imp_signal = 'STRONG_ACCUMULATION'
+        elif score >= 4:
+            imp_signal = 'ACCUMULATION'
+        elif score >= 1:
+            imp_signal = 'MILD_ACCUMULATION'
+        elif score < 0:
+            imp_signal = 'DISTRIBUTION'
+        else:
+            imp_signal = 'NEUTRAL'
+
+        return max(-3, min(score, 10)), signals, analyzed_dates
 
     def _score_synergy(self, deep: Dict) -> Tuple[int, Dict]:
         """Score synergy between inventory and transaction chart. Max 10 points."""
@@ -1780,6 +2111,16 @@ class BandarmologyAnalyzer:
         }.get(ma_cross, 40)
         factors['ma_cross'] = ma_factor
         weights['ma_cross'] = 0.05
+
+        # 12. Flow velocity/acceleration (weight 10%)
+        accel_signal = deep.get('flow_acceleration_signal', 'NONE')
+        vel_factor = {
+            'STRONG_ACCELERATING': 100, 'ACCELERATING': 80,
+            'MILD_ACCELERATING': 60, 'STABLE': 40,
+            'MILD_DECELERATING': 20, 'DECELERATING': 5, 'NONE': 30
+        }.get(accel_signal, 30)
+        factors['flow_velocity'] = vel_factor
+        weights['flow_velocity'] = 0.10
 
         # Calculate weighted average
         total_weight = sum(weights.values())
@@ -2780,7 +3121,7 @@ class BandarmologyAnalyzer:
                 r['deep_score'] = deep.get('deep_score', 0)
                 r['deep_trade_type'] = deep.get('deep_trade_type', '')
                 r['combined_score'] = r.get('total_score', 0) + deep.get('deep_score', 0)
-                r['max_combined_score'] = 225  # 100 base + 125 deep
+                r['max_combined_score'] = 250  # 100 base + 150 deep
 
                 # Inventory summary
                 r['inv_accum_brokers'] = deep.get('inv_accum_brokers', 0)
@@ -2873,6 +3214,19 @@ class BandarmologyAnalyzer:
                 r['phase_transition'] = deep.get('phase_transition', 'NONE')
                 r['score_trend'] = deep.get('score_trend', 'NONE')
 
+                # Flow velocity/acceleration
+                r['flow_velocity_mm'] = deep.get('flow_velocity_mm', 0)
+                r['flow_velocity_foreign'] = deep.get('flow_velocity_foreign', 0)
+                r['flow_velocity_institution'] = deep.get('flow_velocity_institution', 0)
+                r['flow_acceleration_mm'] = deep.get('flow_acceleration_mm', 0)
+                r['flow_acceleration_signal'] = deep.get('flow_acceleration_signal', 'NONE')
+                r['flow_velocity_score'] = deep.get('flow_velocity_score', 0)
+
+                # Important dates broker summary
+                r['important_dates'] = deep.get('important_dates', [])
+                r['important_dates_score'] = deep.get('important_dates_score', 0)
+                r['important_dates_signal'] = deep.get('important_dates_signal', 'NONE')
+
                 # Deep signals
                 r['deep_signals'] = deep.get('deep_signals', {})
 
@@ -2882,7 +3236,7 @@ class BandarmologyAnalyzer:
             else:
                 r['deep_score'] = 0
                 r['combined_score'] = r.get('total_score', 0)
-                r['max_combined_score'] = 225
+                r['max_combined_score'] = 250
                 r['has_deep'] = False
 
         # Re-sort by combined score

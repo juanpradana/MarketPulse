@@ -441,6 +441,20 @@ class DatabaseConnection:
                 foreign_trend TEXT,
                 institution_trend TEXT,
                 
+                -- Week-ago cumulative values (for velocity calculation)
+                cum_mm_week_ago REAL DEFAULT 0,
+                cum_foreign_week_ago REAL DEFAULT 0,
+                cum_institution_week_ago REAL DEFAULT 0,
+                cum_smart_week_ago REAL DEFAULT 0,
+                cum_retail_week_ago REAL DEFAULT 0,
+                
+                -- Month-ago cumulative values (for acceleration calculation)
+                cum_mm_month_ago REAL DEFAULT 0,
+                cum_foreign_month_ago REAL DEFAULT 0,
+                cum_institution_month_ago REAL DEFAULT 0,
+                cum_smart_month_ago REAL DEFAULT 0,
+                cum_retail_month_ago REAL DEFAULT 0,
+                
                 -- Full time series JSON for detailed analysis
                 time_series_json TEXT,
                 
@@ -563,6 +577,19 @@ class DatabaseConnection:
                 phase_transition TEXT DEFAULT 'NONE',
                 score_trend TEXT DEFAULT 'NONE',
                 
+                -- Flow velocity/acceleration
+                flow_velocity_mm REAL DEFAULT 0,
+                flow_velocity_foreign REAL DEFAULT 0,
+                flow_velocity_institution REAL DEFAULT 0,
+                flow_acceleration_mm REAL DEFAULT 0,
+                flow_acceleration_signal TEXT DEFAULT 'NONE',
+                flow_velocity_score INTEGER DEFAULT 0,
+                
+                -- Important dates broker summary analysis
+                important_dates_json TEXT,
+                important_dates_score INTEGER DEFAULT 0,
+                important_dates_signal TEXT DEFAULT 'NONE',
+                
                 calculated_at DATETIME DEFAULT (datetime('now')),
                 UNIQUE(ticker, analysis_date)
             );
@@ -633,7 +660,38 @@ class DatabaseConnection:
             ("prev_phase", "TEXT DEFAULT ''"),
             ("phase_transition", "TEXT DEFAULT 'NONE'"),
             ("score_trend", "TEXT DEFAULT 'NONE'"),
+            # Flow velocity/acceleration
+            ("flow_velocity_mm", "REAL DEFAULT 0"),
+            ("flow_velocity_foreign", "REAL DEFAULT 0"),
+            ("flow_velocity_institution", "REAL DEFAULT 0"),
+            ("flow_acceleration_mm", "REAL DEFAULT 0"),
+            ("flow_acceleration_signal", "TEXT DEFAULT 'NONE'"),
+            ("flow_velocity_score", "INTEGER DEFAULT 0"),
+            # Important dates broker summary
+            ("important_dates_json", "TEXT"),
+            ("important_dates_score", "INTEGER DEFAULT 0"),
+            ("important_dates_signal", "TEXT DEFAULT 'NONE'"),
         ]
+        
+        # Migration: Add week_ago/month_ago columns to bandarmology_txn_chart
+        txn_chart_new_columns = [
+            ("cum_mm_week_ago", "REAL DEFAULT 0"),
+            ("cum_foreign_week_ago", "REAL DEFAULT 0"),
+            ("cum_institution_week_ago", "REAL DEFAULT 0"),
+            ("cum_smart_week_ago", "REAL DEFAULT 0"),
+            ("cum_retail_week_ago", "REAL DEFAULT 0"),
+            ("cum_mm_month_ago", "REAL DEFAULT 0"),
+            ("cum_foreign_month_ago", "REAL DEFAULT 0"),
+            ("cum_institution_month_ago", "REAL DEFAULT 0"),
+            ("cum_smart_month_ago", "REAL DEFAULT 0"),
+            ("cum_retail_month_ago", "REAL DEFAULT 0"),
+        ]
+        for col_name, col_type in txn_chart_new_columns:
+            try:
+                conn.execute(f"ALTER TABLE bandarmology_txn_chart ADD COLUMN {col_name} {col_type}")
+            except Exception:
+                pass
+        
         for col_name, col_type in new_columns:
             try:
                 conn.execute(f"ALTER TABLE bandarmology_deep_cache ADD COLUMN {col_name} {col_type}")

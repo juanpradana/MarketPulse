@@ -185,6 +185,20 @@ function generateChatText(data: StockDetailResponse): string {
             };
             extras.push(`${maLabels[data.ma_cross_signal] ?? data.ma_cross_signal} (${(data.ma_cross_score ?? 0) > 0 ? '+' : ''}${data.ma_cross_score ?? 0}pts)`);
         }
+        if (data.flow_acceleration_signal && data.flow_acceleration_signal !== 'NONE') {
+            const accelLabels: Record<string, string> = {
+                'STRONG_ACCELERATING': '🚀 Flow Akselerasi Kuat',
+                'ACCELERATING': '📈 Flow Akselerasi',
+                'MILD_ACCELERATING': '↗️ Flow Naik Perlahan',
+                'STABLE': '➡️ Flow Stabil',
+                'MILD_DECELERATING': '↘️ Flow Melambat',
+                'DECELERATING': '📉 Flow Deselerasi'
+            };
+            extras.push(`${accelLabels[data.flow_acceleration_signal] ?? data.flow_acceleration_signal} (MM: ${(data.flow_velocity_mm ?? 0) > 0 ? '+' : ''}${(data.flow_velocity_mm ?? 0).toFixed(1)}B/d, ${(data.flow_velocity_score ?? 0) > 0 ? '+' : ''}${data.flow_velocity_score ?? 0}pts)`);
+        }
+        if (data.important_dates_signal && data.important_dates_signal !== 'NONE' && data.important_dates_signal !== 'NEUTRAL') {
+            extras.push(`🏦 Tanggal Penting: ${data.important_dates_signal} (${(data.important_dates_score ?? 0) > 0 ? '+' : ''}${data.important_dates_score ?? 0}pts, ${(data.important_dates ?? []).length} tanggal dianalisis)`);
+        }
         if (data.phase_transition && data.phase_transition !== 'NONE') {
             const parts = data.phase_transition.split('_TO_');
             extras.push(`🔄 Fase: ${parts[0]} → ${parts[1]}`);
@@ -451,6 +465,15 @@ function generatePdfHtml(data: StockDetailResponse): string {
         const maLabels: Record<string, string> = { 'GOLDEN_CROSS': 'Golden Cross', 'DEATH_CROSS': 'Death Cross', 'PERFECT_BULLISH': 'Perfect Bullish', 'BULLISH_ALIGNMENT': 'Bullish Alignment', 'BEARISH_ALIGNMENT': 'Bearish Alignment', 'CONVERGING': 'MA Converging' };
         const color = data.ma_cross_signal === 'GOLDEN_CROSS' || data.ma_cross_signal === 'PERFECT_BULLISH' ? '#059669' : data.ma_cross_signal === 'DEATH_CROSS' || data.ma_cross_signal === 'BEARISH_ALIGNMENT' ? '#dc2626' : '#3b82f6';
         advItems.push(`<div class="card"><div class="label">MA Cross</div><div class="value" style="color:${color}">${maLabels[data.ma_cross_signal] ?? data.ma_cross_signal}</div><div class="sub">${(data.ma_cross_score ?? 0) > 0 ? '+' : ''}${data.ma_cross_score ?? 0} pts</div></div>`);
+    }
+    if (data.flow_acceleration_signal && data.flow_acceleration_signal !== 'NONE') {
+        const accelLabels: Record<string, string> = { 'STRONG_ACCELERATING': '🚀 Strong Accel', 'ACCELERATING': '📈 Accelerating', 'MILD_ACCELERATING': '↗️ Mild Accel', 'STABLE': '➡️ Stable', 'MILD_DECELERATING': '↘️ Mild Decel', 'DECELERATING': '📉 Decelerating' };
+        const color = data.flow_acceleration_signal.includes('ACCELERATING') ? '#059669' : data.flow_acceleration_signal === 'DECELERATING' ? '#dc2626' : '#64748b';
+        advItems.push(`<div class="card"><div class="label">Flow Velocity</div><div class="value" style="color:${color}">${accelLabels[data.flow_acceleration_signal] ?? data.flow_acceleration_signal}</div><div class="sub">MM: ${(data.flow_velocity_mm ?? 0) > 0 ? '+' : ''}${(data.flow_velocity_mm ?? 0).toFixed(1)}B/d | ${(data.flow_velocity_score ?? 0) > 0 ? '+' : ''}${data.flow_velocity_score ?? 0} pts</div></div>`);
+    }
+    if (data.important_dates_signal && data.important_dates_signal !== 'NONE' && data.important_dates_signal !== 'NEUTRAL') {
+        const color = data.important_dates_signal === 'STRONG_ACCUMULATION' ? '#059669' : data.important_dates_signal.includes('ACCUMULATION') ? '#3b82f6' : '#dc2626';
+        advItems.push(`<div class="card"><div class="label">Important Dates</div><div class="value" style="color:${color}">${data.important_dates_signal.replace('_', ' ')}</div><div class="sub">${(data.important_dates ?? []).length} dates, ${(data.important_dates_score ?? 0) > 0 ? '+' : ''}${data.important_dates_score ?? 0} pts</div></div>`);
     }
     if (data.phase_transition && data.phase_transition !== 'NONE') {
         const parts = data.phase_transition.split('_TO_');
@@ -1177,6 +1200,98 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                                             (+{data.volume_score ?? 0} pts)
                                                         </span>
                                                     </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Flow Velocity / Acceleration */}
+                                        {data.flow_acceleration_signal && data.flow_acceleration_signal !== 'NONE' && (
+                                            <div className={cn(
+                                                "flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px]",
+                                                data.flow_acceleration_signal === 'STRONG_ACCELERATING'
+                                                    ? 'bg-emerald-500/10 border-emerald-500/20'
+                                                    : data.flow_acceleration_signal === 'ACCELERATING' || data.flow_acceleration_signal === 'MILD_ACCELERATING'
+                                                    ? 'bg-cyan-500/10 border-cyan-500/20'
+                                                    : data.flow_acceleration_signal === 'DECELERATING'
+                                                    ? 'bg-red-500/10 border-red-500/20'
+                                                    : 'bg-zinc-500/10 border-zinc-500/20'
+                                            )}>
+                                                <Activity className={cn(
+                                                    "w-3.5 h-3.5 flex-shrink-0",
+                                                    data.flow_acceleration_signal.includes('ACCELERATING') ? 'text-emerald-400' :
+                                                    data.flow_acceleration_signal === 'DECELERATING' ? 'text-red-400' :
+                                                    'text-zinc-500'
+                                                )} />
+                                                <div>
+                                                    <div className="text-[8px] text-zinc-500 font-bold uppercase">Flow Velocity</div>
+                                                    <div className={cn(
+                                                        "font-black",
+                                                        data.flow_acceleration_signal === 'STRONG_ACCELERATING' ? 'text-emerald-400' :
+                                                        data.flow_acceleration_signal.includes('ACCELERATING') ? 'text-cyan-400' :
+                                                        data.flow_acceleration_signal === 'DECELERATING' ? 'text-red-400' :
+                                                        'text-zinc-400'
+                                                    )}>
+                                                        {data.flow_acceleration_signal === 'STRONG_ACCELERATING' && '🚀 Strong Accelerating'}
+                                                        {data.flow_acceleration_signal === 'ACCELERATING' && '📈 Accelerating'}
+                                                        {data.flow_acceleration_signal === 'MILD_ACCELERATING' && '↗️ Mild Accelerating'}
+                                                        {data.flow_acceleration_signal === 'STABLE' && '➡️ Stable'}
+                                                        {data.flow_acceleration_signal === 'MILD_DECELERATING' && '↘️ Mild Decelerating'}
+                                                        {data.flow_acceleration_signal === 'DECELERATING' && '📉 Decelerating'}
+                                                        <span className="text-zinc-500 font-normal ml-1">
+                                                            ({(data.flow_velocity_score ?? 0) > 0 ? '+' : ''}{data.flow_velocity_score ?? 0} pts)
+                                                        </span>
+                                                    </div>
+                                                    <div className="text-[9px] text-zinc-500 mt-0.5">
+                                                        MM: {(data.flow_velocity_mm ?? 0) > 0 ? '+' : ''}{(data.flow_velocity_mm ?? 0).toFixed(1)}B/d
+                                                        {' | '}FGN: {(data.flow_velocity_foreign ?? 0) > 0 ? '+' : ''}{(data.flow_velocity_foreign ?? 0).toFixed(1)}B/d
+                                                        {' | '}INST: {(data.flow_velocity_institution ?? 0) > 0 ? '+' : ''}{(data.flow_velocity_institution ?? 0).toFixed(1)}B/d
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Important Dates Broker Summary */}
+                                        {data.important_dates_signal && data.important_dates_signal !== 'NONE' && data.important_dates_signal !== 'NEUTRAL' && (
+                                            <div className={cn(
+                                                "flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px]",
+                                                data.important_dates_signal === 'STRONG_ACCUMULATION'
+                                                    ? 'bg-emerald-500/10 border-emerald-500/20'
+                                                    : data.important_dates_signal === 'ACCUMULATION' || data.important_dates_signal === 'MILD_ACCUMULATION'
+                                                    ? 'bg-cyan-500/10 border-cyan-500/20'
+                                                    : data.important_dates_signal === 'DISTRIBUTION'
+                                                    ? 'bg-red-500/10 border-red-500/20'
+                                                    : 'bg-zinc-500/10 border-zinc-500/20'
+                                            )}>
+                                                <BarChart3 className={cn(
+                                                    "w-3.5 h-3.5 flex-shrink-0",
+                                                    data.important_dates_signal.includes('ACCUMULATION') ? 'text-emerald-400' :
+                                                    data.important_dates_signal === 'DISTRIBUTION' ? 'text-red-400' :
+                                                    'text-zinc-500'
+                                                )} />
+                                                <div>
+                                                    <div className="text-[8px] text-zinc-500 font-bold uppercase">Important Dates Analysis</div>
+                                                    <div className={cn(
+                                                        "font-black",
+                                                        data.important_dates_signal === 'STRONG_ACCUMULATION' ? 'text-emerald-400' :
+                                                        data.important_dates_signal.includes('ACCUMULATION') ? 'text-cyan-400' :
+                                                        data.important_dates_signal === 'DISTRIBUTION' ? 'text-red-400' :
+                                                        'text-zinc-400'
+                                                    )}>
+                                                        {data.important_dates_signal === 'STRONG_ACCUMULATION' && '🏦 Strong Accumulation'}
+                                                        {data.important_dates_signal === 'ACCUMULATION' && '📊 Accumulation'}
+                                                        {data.important_dates_signal === 'MILD_ACCUMULATION' && '📈 Mild Accumulation'}
+                                                        {data.important_dates_signal === 'DISTRIBUTION' && '⚠️ Distribution'}
+                                                        <span className="text-zinc-500 font-normal ml-1">
+                                                            ({(data.important_dates_score ?? 0) > 0 ? '+' : ''}{data.important_dates_score ?? 0} pts)
+                                                        </span>
+                                                    </div>
+                                                    {data.important_dates && data.important_dates.length > 0 && (
+                                                        <div className="text-[9px] text-zinc-500 mt-0.5">
+                                                            {data.important_dates.length} tanggal: {data.important_dates.map(d =>
+                                                                `${d.date.slice(5)} (${d.bandar_net_lot > 0 ? '+' : ''}${d.bandar_net_lot})`
+                                                            ).join(', ')}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         )}

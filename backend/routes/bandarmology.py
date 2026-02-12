@@ -318,7 +318,7 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
 
                 await asyncio.sleep(0.5)
 
-                # 3. Fetch Broker Summary via API
+                # 3. Fetch Broker Summary via API (analysis_date + recent days)
                 broksum_data = None
                 try:
                     raw_broksum = await api_client.get_broker_summary(ticker, analysis_date)
@@ -336,7 +336,93 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
 
                 await asyncio.sleep(0.5)
 
-                # 3b. Fetch multi-day broker summary from DB (last 5 days)
+                # 3b. Fetch broker summary for recent trading days (last 4 days before analysis_date)
+                recent_dates_fetched = []
+                try:
+                    from datetime import datetime as dt, timedelta
+                    analysis_dt = dt.strptime(analysis_date, '%Y-%m-%d')
+                    for day_offset in range(1, 6):
+                        check_date = analysis_dt - timedelta(days=day_offset)
+                        # Skip weekends
+                        if check_date.weekday() >= 5:
+                            continue
+                        date_str = check_date.strftime('%Y-%m-%d')
+                        # Check if we already have this date in DB
+                        existing = neobdm_repo.get_broker_summary(ticker, date_str)
+                        if existing and (existing.get('buy') or existing.get('sell')):
+                            recent_dates_fetched.append(date_str)
+                            continue
+                        # Fetch from API
+                        try:
+                            raw_bs = await api_client.get_broker_summary(ticker, date_str)
+                            if raw_bs and (raw_bs.get('buy') or raw_bs.get('sell')):
+                                neobdm_repo.save_broker_summary_batch(
+                                    ticker, date_str,
+                                    raw_bs.get('buy', []),
+                                    raw_bs.get('sell', [])
+                                )
+                                recent_dates_fetched.append(date_str)
+                            await asyncio.sleep(0.3)
+                        except Exception as e2:
+                            logger.debug(f"Broksum fetch for {ticker} on {date_str}: {e2}")
+                        if len(recent_dates_fetched) >= 4:
+                            break
+                except Exception as e:
+                    logger.warning(f"Recent days broksum fetch failed for {ticker}: {e}")
+
+                # 3c. Extract important dates from inventory (turn_dates, peak_dates)
+                important_dates_data = []
+                try:
+                    if inv_data:
+                        # Run controlling broker detection early to get turn/peak dates
+                        ctrl_preview = analyzer.detect_controlling_brokers(
+                            inv_data, price_series=price_series, min_brokers=3
+                        )
+                        important_date_set = set()
+                        for cb in ctrl_preview.get('controlling_brokers', []):
+                            td = cb.get('turn_date')
+                            pd = cb.get('peak_date')
+                            if td and td != analysis_date:
+                                important_date_set.add(td)
+                            if pd and pd != analysis_date and pd != td:
+                                important_date_set.add(pd)
+
+                        # Fetch broker summary for each important date
+                        for imp_date in sorted(important_date_set):
+                            existing = neobdm_repo.get_broker_summary(ticker, imp_date)
+                            if existing and (existing.get('buy') or existing.get('sell')):
+                                important_dates_data.append({
+                                    'date': imp_date,
+                                    'date_type': 'turn_or_peak',
+                                    'buy': existing.get('buy', []),
+                                    'sell': existing.get('sell', []),
+                                })
+                                continue
+                            # Fetch from API
+                            try:
+                                raw_bs = await api_client.get_broker_summary(ticker, imp_date)
+                                if raw_bs and (raw_bs.get('buy') or raw_bs.get('sell')):
+                                    neobdm_repo.save_broker_summary_batch(
+                                        ticker, imp_date,
+                                        raw_bs.get('buy', []),
+                                        raw_bs.get('sell', [])
+                                    )
+                                    important_dates_data.append({
+                                        'date': imp_date,
+                                        'date_type': 'turn_or_peak',
+                                        'buy': raw_bs.get('buy', []),
+                                        'sell': raw_bs.get('sell', []),
+                                    })
+                                await asyncio.sleep(0.3)
+                            except Exception as e2:
+                                logger.debug(f"Important date broksum for {ticker} on {imp_date}: {e2}")
+
+                        if important_dates_data:
+                            print(f"   [IMPDATE] Fetched broksum for {len(important_dates_data)} important dates for {ticker}")
+                except Exception as e:
+                    logger.warning(f"Important dates broksum failed for {ticker}: {e}")
+
+                # 3d. Fetch multi-day broker summary from DB (now enriched with recent fetches)
                 broksum_multiday = None
                 try:
                     broksum_multiday = neobdm_repo.get_broker_summary_multiday(
@@ -345,7 +431,7 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                 except Exception as e:
                     logger.warning(f"Multi-day broksum fetch failed for {ticker}: {e}")
 
-                # 3c. Fetch previous deep cache for historical comparison
+                # 3e. Fetch previous deep cache for historical comparison
                 previous_deep = None
                 try:
                     previous_deep = band_repo.get_previous_deep_cache(ticker, analysis_date)
@@ -362,7 +448,8 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                     broksum_multiday_data=broksum_multiday,
                     price_series=price_series,
                     base_result=base_result,
-                    previous_deep=previous_deep
+                    previous_deep=previous_deep,
+                    important_dates_data=important_dates_data if important_dates_data else None
                 )
 
                 # 5. Save to cache
@@ -622,7 +709,7 @@ async def get_stock_detail(
             detail.update({
                 "deep_score": deep_cache.get('deep_score', 0),
                 "combined_score": base_result.get('total_score', 0) + deep_cache.get('deep_score', 0),
-                "max_combined_score": 225,
+                "max_combined_score": 250,
                 "deep_trade_type": deep_cache.get('deep_trade_type', '—'),
                 "deep_signals": deep_cache.get('deep_signals', {}),
 
@@ -717,12 +804,25 @@ async def get_stock_detail(
                 "prev_phase": deep_cache.get('prev_phase', ''),
                 "phase_transition": deep_cache.get('phase_transition', 'NONE'),
                 "score_trend": deep_cache.get('score_trend', 'NONE'),
+
+                # Flow velocity/acceleration
+                "flow_velocity_mm": deep_cache.get('flow_velocity_mm', 0),
+                "flow_velocity_foreign": deep_cache.get('flow_velocity_foreign', 0),
+                "flow_velocity_institution": deep_cache.get('flow_velocity_institution', 0),
+                "flow_acceleration_mm": deep_cache.get('flow_acceleration_mm', 0),
+                "flow_acceleration_signal": deep_cache.get('flow_acceleration_signal', 'NONE'),
+                "flow_velocity_score": deep_cache.get('flow_velocity_score', 0),
+
+                # Important dates broker summary
+                "important_dates": deep_cache.get('important_dates', []),
+                "important_dates_score": deep_cache.get('important_dates_score', 0),
+                "important_dates_signal": deep_cache.get('important_dates_signal', 'NONE'),
             })
         else:
             detail.update({
                 "deep_score": 0,
                 "combined_score": base_result.get('total_score', 0),
-                "max_combined_score": 225,
+                "max_combined_score": 250,
                 "ma_cross_signal": 'NONE',
                 "ma_cross_score": 0,
                 "prev_deep_score": 0,

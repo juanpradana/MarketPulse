@@ -173,8 +173,29 @@ export interface BandarmologyItem {
     phase_transition?: string;
     score_trend?: string;
 
+    // Flow velocity/acceleration
+    flow_velocity_mm?: number;
+    flow_velocity_foreign?: number;
+    flow_velocity_institution?: number;
+    flow_acceleration_mm?: number;
+    flow_acceleration_signal?: string;
+    flow_velocity_score?: number;
+
+    // Important dates broker summary
+    important_dates?: ImportantDateAnalysis[];
+    important_dates_score?: number;
+    important_dates_signal?: string;
+
     // Signals
     deep_signals?: DeepSignals;
+}
+
+export interface ImportantDateAnalysis {
+    date: string;
+    date_type: string;
+    bandar_buy_count: number;
+    bandar_sell_count: number;
+    bandar_net_lot: number;
 }
 
 export interface ControllingBroker {
@@ -336,6 +357,19 @@ export interface StockDetailResponse {
     prev_phase?: string;
     phase_transition?: string;
     score_trend?: string;
+
+    // Flow velocity/acceleration
+    flow_velocity_mm?: number;
+    flow_velocity_foreign?: number;
+    flow_velocity_institution?: number;
+    flow_acceleration_mm?: number;
+    flow_acceleration_signal?: string;
+    flow_velocity_score?: number;
+
+    // Important dates broker summary
+    important_dates?: ImportantDateAnalysis[];
+    important_dates_score?: number;
+    important_dates_signal?: string;
 
     // Detail data
     inventory_brokers: InvBrokerDetail[];
