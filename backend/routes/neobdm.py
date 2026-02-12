@@ -54,18 +54,12 @@ async def get_neobdm_summary(
 
     if scrape:
         try:
-            from modules.scraper_neobdm import NeoBDMScraper
-            scraper = NeoBDMScraper()
-            await scraper.init_browser(headless=True)
-            login_success = await scraper.login()
-            if not login_success:
-                return JSONResponse(
-                    status_code=401, 
-                    content={"error": "Failed to login to NeoBDM"}
-                )
-            
-            df, reference_date = await scraper.get_market_summary(method=method, period=period)
-            await scraper.close()
+            from modules.neobdm_api_client import NeoBDMApiClient
+            api_client = NeoBDMApiClient()
+            try:
+                df, reference_date = await api_client.get_market_summary(method=method, period=period)
+            finally:
+                await api_client.close()
             
             if df is not None and not df.empty:
                 data_list = df.to_dict(orient="records")
@@ -77,7 +71,7 @@ async def get_neobdm_summary(
                 }
             return {"scraped_at": None, "data": []}
         except Exception as e:
-            logging.error(f"NeoBDM Summary scrape error: {e}")
+            logging.error(f"NeoBDM Summary API error: {e}")
             return {"error": str(e), "data": []}
     else:
         # Fetch from DB
@@ -131,16 +125,12 @@ async def get_neobdm_broker_summary(
 
     if scrape:
         try:
-            from modules.scraper_neobdm import NeoBDMScraper
-            scraper = NeoBDMScraper()
-            await scraper.init_browser(headless=True)
-            login_success = await scraper.login()
-            
-            if not login_success:
-                return JSONResponse(status_code=401, content={"error": "NeoBDM login failed"})
-            
-            data = await scraper.get_broker_summary(ticker.upper(), trade_date)
-            await scraper.close()
+            from modules.neobdm_api_client import NeoBDMApiClient
+            api_client = NeoBDMApiClient()
+            try:
+                data = await api_client.get_broker_summary(ticker.upper(), trade_date)
+            finally:
+                await api_client.close()
             
             if data and (data.get('buy') or data.get('sell')):
                 db_manager.save_broker_summary_batch(
@@ -155,18 +145,18 @@ async def get_neobdm_broker_summary(
                     "trade_date": trade_date,
                     "buy": normalized.get('buy', []),
                     "sell": normalized.get('sell', []),
-                    "source": "scraper"
+                    "source": "api"
                 }
             return {
                 "ticker": ticker.upper(),
                 "trade_date": trade_date,
                 "buy": [],
                 "sell": [],
-                "source": "scraper"
+                "source": "api"
             }
             
         except Exception as e:
-            logging.error(f"Broker Summary scrape error: {e}")
+            logging.error(f"Broker Summary API error: {e}")
             return JSONResponse(status_code=500, content={"error": str(e)})
     else:
         # Fetch from DB
@@ -364,13 +354,13 @@ async def run_neobdm_batch_scrape(background_tasks: BackgroundTasks):
 
 
 async def perform_full_sync():
-    """Core logic for background sync with ISOLATED sessions per task.
+    """Core logic for background sync via API (no browser needed).
     
-    Each method+period combination gets a fresh browser session to avoid
-    state pollution and ensure reliable scraping, especially for cumulative data.
+    Uses NeoBDMApiClient for direct HTTP API calls instead of Playwright.
+    Single login session handles all 6 method+period combinations.
     """
     try:
-        from modules.scraper_neobdm import NeoBDMScraper
+        from modules.neobdm_api_client import NeoBDMApiClient
         from modules.database import DatabaseManager
         import traceback
         
@@ -383,31 +373,15 @@ async def perform_full_sync():
         execution_log = []
         
         print(f"[*] Starting background Full Sync at {start_time}")
-        print(f"[*] Using ISOLATED SESSION approach (6 separate logins)")
+        print(f"[*] Using API CLIENT approach (single HTTP session)")
         
-        # Loop through all combinations with ISOLATED sessions
-        for m_code, m_label in methods:
-            for p_code, p_label in periods:
-                log_prefix = f"[{m_label}/{p_label}]"
-                print(f"\n{log_prefix} Starting isolated scraping session...")
-                
-                # ISOLATED SESSION: Create fresh scraper for THIS task only
-                scraper = NeoBDMScraper()
-                
-                try:
-                    # Initialize browser
-                    print(f"{log_prefix} Initializing browser...", flush=True)
-                    await scraper.init_browser(headless=True)
-                    
-                    # Login
-                    print(f"{log_prefix} Logging in...", flush=True)
-                    login_success = await scraper.login()
-                    
-                    if not login_success:
-                        msg = "Login failed"
-                        print(f"{log_prefix} Result: {msg}")
-                        execution_log.append(f"{log_prefix}: {msg}")
-                        continue  # Skip to next task
+        api_client = NeoBDMApiClient()
+        try:
+            # Loop through all combinations with single session
+            for m_code, m_label in methods:
+                for p_code, p_label in periods:
+                    log_prefix = f"[{m_label}/{p_label}]"
+                    print(f"\n{log_prefix} Fetching via API...")
 
                     # Cleanup old data for today
                     try:
@@ -421,10 +395,9 @@ async def perform_full_sync():
                     except Exception as e:
                         print(f"{log_prefix} Cleanup warning: {e}")
 
-                    # Scrape
-                    print(f"{log_prefix} Scraping data...", flush=True)
+                    # Fetch via API
                     try:
-                        df, reference_date = await scraper.get_market_summary(method=m_code, period=p_code)
+                        df, reference_date = await api_client.get_market_summary(method=m_code, period=p_code)
                         
                         if df is not None and not df.empty:
                             data_list = df.to_dict(orient="records")
@@ -434,29 +407,20 @@ async def perform_full_sync():
                         else:
                             msg = "No data found"
                     except Exception as e:
-                        print(f"{log_prefix} Scraping error: {traceback.format_exc()}")
+                        print(f"{log_prefix} API error: {traceback.format_exc()}")
                         msg = f"Error: {str(e)}"
                     
                     print(f"{log_prefix} Result: {msg}")
                     execution_log.append(f"{log_prefix}: {msg}")
                     
-                except Exception as e:
-                    msg = f"Session error: {str(e)}"
-                    print(f"{log_prefix} {msg}")
-                    execution_log.append(f"{log_prefix}: {msg}")
-                    
-                finally:
-                    # CRITICAL: Close browser immediately after each task
-                    print(f"{log_prefix} Closing browser session...", flush=True)
-                    await scraper.close()
-                
-                # Small cooldown between tasks
-                await asyncio.sleep(2)
+                    # Small cooldown between API calls
+                    await asyncio.sleep(1)
+        finally:
+            await api_client.close()
             
         duration = datetime.now() - start_time
         print(f"\n[*] Background Full Sync completed in {duration.total_seconds():.2f}s.")
         print(f"[*] Logs: {execution_log}")
-
 
     except Exception as e:
         print(f"[!] Critical error in background sync: {e}")
@@ -569,7 +533,7 @@ async def get_broker_summary_api(
     If data is not in DB or scrape=True, trigger the scraper.
     """
     from modules.database import DatabaseManager
-    from modules.scraper_neobdm import NeoBDMScraper
+    from modules.neobdm_api_client import NeoBDMApiClient
     
     db_manager = DatabaseManager()
     
@@ -586,19 +550,11 @@ async def get_broker_summary_api(
                 "source": "database"
             }
             
-    # 2. Trigger scraper if needed
-    print(f"[*] Scraping broker summary for {ticker} on {trade_date}...")
-    scraper = NeoBDMScraper()
+    # 2. Fetch via API if needed
+    print(f"[*] Fetching broker summary for {ticker} on {trade_date} via API...")
+    api_client = NeoBDMApiClient()
     try:
-        await scraper.init_browser(headless=True)
-        login_success = await scraper.login()
-        if not login_success:
-            return JSONResponse(
-                status_code=401,
-                content={"error": "Failed to login to NeoBDM"}
-            )
-            
-        scraped_data = await scraper.get_broker_summary(ticker.upper(), trade_date)
+        scraped_data = await api_client.get_broker_summary(ticker.upper(), trade_date)
         
         if scraped_data and (scraped_data.get('buy') or scraped_data.get('sell')):
             # Save to DB, then return normalized DB output
@@ -615,7 +571,7 @@ async def get_broker_summary_api(
                 "trade_date": trade_date,
                 "buy": data['buy'],
                 "sell": data['sell'],
-                "source": "scraper"
+                "source": "api"
             }
         else:
             return JSONResponse(
@@ -630,7 +586,7 @@ async def get_broker_summary_api(
             content={"error": str(e)}
         )
     finally:
-        await scraper.close()
+        await api_client.close()
 
 
 @router.post("/neobdm-broker-summary-batch")
@@ -654,17 +610,16 @@ async def run_neobdm_broker_summary_batch(
 
 
 async def perform_broker_summary_batch_sync(tasks: list):
-    """Background task for batch broker summary sync."""
-    from modules.scraper_neobdm import NeoBDMScraper
+    """Background task for batch broker summary sync via API."""
+    from modules.neobdm_api_client import NeoBDMApiClient
     from modules.database import DatabaseManager
     import logging
     
     db_manager = DatabaseManager()
-    scraper = NeoBDMScraper()
+    api_client = NeoBDMApiClient()
     
     try:
-        await scraper.init_browser(headless=True)
-        results = await scraper.get_broker_summary_batch(tasks)
+        results = await api_client.get_broker_summary_batch(tasks)
         success_count = 0
         error_count = 0
         for res in results:
@@ -685,7 +640,7 @@ async def perform_broker_summary_batch_sync(tasks: list):
     except Exception as e:
         logging.error(f"Error in background batch broker summary sync: {e}")
     finally:
-        await scraper.close()
+        await api_client.close()
 
 
 @router.get("/volume-daily")

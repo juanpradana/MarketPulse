@@ -30,3 +30,4 @@ transformers
 trafilatura
 pytz
 curl-cffi
+httpx

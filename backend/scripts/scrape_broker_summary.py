@@ -8,7 +8,7 @@ from typing import List, Optional
 # Add parent directory to sys.path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from modules.scraper_neobdm import NeoBDMScraper
+from modules.neobdm_api_client import NeoBDMApiClient
 from db.neobdm_repository import NeoBDMRepository
 from db.connection import DatabaseConnection
 
@@ -43,17 +43,14 @@ async def scrape_action(ticker, date_str, verify=False, tickers=None, dates=None
     # Ensure tables exist
     DatabaseConnection()
 
-    scraper = NeoBDMScraper()
+    api_client = NeoBDMApiClient()
     repo = NeoBDMRepository()
 
     try:
-        print(f"[*] Initializing browser...")
-        await scraper.init_browser(headless=True)
-
         if tickers and dates:
             batch_tasks = [{"ticker": t.upper(), "dates": dates} for t in tickers]
-            print(f"[*] Running batch scrape for {len(tickers)} tickers and {len(dates)} dates...")
-            results = await scraper.get_broker_summary_batch(batch_tasks)
+            print(f"[*] Running batch fetch for {len(tickers)} tickers and {len(dates)} dates via API...")
+            results = await api_client.get_broker_summary_batch(batch_tasks)
             for result in results:
                 if "error" in result:
                     print(f"[!] Batch error: {result['error']}")
@@ -66,17 +63,11 @@ async def scrape_action(ticker, date_str, verify=False, tickers=None, dates=None
                 )
                 if verify:
                     _print_verification(result['ticker'], result['trade_date'], result)
-            print("[OK] Batch scraping complete.")
+            print("[OK] Batch fetch complete.")
             return
 
-        print(f"[*] Logging in to NeoBDM...")
-        login_success = await scraper.login()
-        if not login_success:
-            print("[!] Login failed. Check your credentials in .env")
-            return
-
-        print(f"[*] Scraping broker summary for {ticker} on {date_str}...")
-        data = await scraper.get_broker_summary(ticker, date_str)
+        print(f"[*] Fetching broker summary for {ticker} on {date_str} via API...")
+        data = await api_client.get_broker_summary(ticker, date_str)
 
         if data:
             print(f"[*] Saving to database...")
@@ -86,7 +77,7 @@ async def scrape_action(ticker, date_str, verify=False, tickers=None, dates=None
                 buy_data=data['buy'],
                 sell_data=data['sell']
             )
-            print("[OK] Scraping and saving complete.")
+            print("[OK] Fetch and save complete.")
 
             if verify:
                 _print_verification(ticker, date_str, data)
@@ -96,7 +87,7 @@ async def scrape_action(ticker, date_str, verify=False, tickers=None, dates=None
     except Exception as e:
         print(f"[!] Critical Error: {e}")
     finally:
-        await scraper.close()
+        await api_client.close()
 
 def main():
     parser = argparse.ArgumentParser(description="NeoBDM Broker Summary Scraper")

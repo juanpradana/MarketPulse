@@ -365,26 +365,21 @@ async def trigger_broker_scrape(
     ticker: str,
     dates: List[str] = Body(...)
 ):
-    """Trigger broker summary scrape for specific dates using NeoBDM."""
-    from modules.scraper_neobdm import NeoBDMScraper
+    """Trigger broker summary fetch for specific dates using NeoBDM API."""
+    from modules.neobdm_api_client import NeoBDMApiClient
     
     ticker = ticker.upper()
     db = DatabaseManager()
     results = []
     errors = []
-    scraper = None
+    api_client = None
     
     try:
-        scraper = NeoBDMScraper()
-        await scraper.init_browser(headless=True)
-        login_success = await scraper.login()
-        
-        if not login_success:
-            raise HTTPException(status_code=401, detail="Failed to login to NeoBDM")
+        api_client = NeoBDMApiClient()
         
         for date in dates:
             try:
-                data = await scraper.get_broker_summary(ticker, date)
+                data = await api_client.get_broker_summary(ticker, date)
                 if data and (data.get('buy') or data.get('sell')):
                     db.save_broker_summary_batch(
                         ticker, date,
@@ -407,8 +402,8 @@ async def trigger_broker_scrape(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        if scraper:
-            await scraper.close()
+        if api_client:
+            await api_client.close()
     
     return {
         "ticker": ticker,

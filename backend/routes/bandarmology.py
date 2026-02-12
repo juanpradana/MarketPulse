@@ -259,7 +259,7 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
     """Background task: scrape inventory + txn chart and run deep scoring."""
     global _deep_analysis_status
 
-    from modules.scraper_neobdm import NeoBDMScraper
+    from modules.neobdm_api_client import NeoBDMApiClient
     from modules.bandarmology_analyzer import BandarmologyAnalyzer
     from db.bandarmology_repository import BandarmologyRepository
 
@@ -269,10 +269,9 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
     # Build lookup for base results
     base_lookup = {r['symbol']: r for r in base_results}
 
-    scraper = NeoBDMScraper()
+    api_client = NeoBDMApiClient()
     try:
-        await scraper.init_browser(headless=True)
-        login_ok = await scraper.login()
+        login_ok = await api_client.login()
         if not login_ok:
             _deep_analysis_status["running"] = False
             _deep_analysis_status["errors"].append("Login failed")
@@ -286,11 +285,11 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
             _deep_analysis_status["progress"] = i
 
             try:
-                # 1. Scrape Inventory
+                # 1. Fetch Inventory via API
                 inv_data = None
                 price_series = None
                 try:
-                    raw_inv = await scraper.get_inventory(ticker)
+                    raw_inv = await api_client.get_inventory(ticker)
                     if raw_inv and raw_inv.get('brokers'):
                         band_repo.save_inventory_batch(
                             ticker,
@@ -301,28 +300,28 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                         inv_data = raw_inv['brokers']
                         price_series = raw_inv.get('priceSeries')
                 except Exception as e:
-                    logger.warning(f"Inventory scrape failed for {ticker}: {e}")
+                    logger.warning(f"Inventory API failed for {ticker}: {e}")
                     _deep_analysis_status["errors"].append(f"{ticker} inv: {str(e)[:80]}")
 
-                await asyncio.sleep(2)
+                await asyncio.sleep(0.5)
 
-                # 2. Scrape Transaction Chart
+                # 2. Fetch Transaction Chart via API
                 txn_data = None
                 try:
-                    raw_txn = await scraper.get_transaction_chart(ticker)
+                    raw_txn = await api_client.get_transaction_chart(ticker)
                     if raw_txn:
                         band_repo.save_transaction_chart(ticker, raw_txn)
                         txn_data = band_repo.get_transaction_chart(ticker)
                 except Exception as e:
-                    logger.warning(f"Txn chart scrape failed for {ticker}: {e}")
+                    logger.warning(f"Txn chart API failed for {ticker}: {e}")
                     _deep_analysis_status["errors"].append(f"{ticker} txn: {str(e)[:80]}")
 
-                await asyncio.sleep(2)
+                await asyncio.sleep(0.5)
 
-                # 3. Scrape Broker Summary
+                # 3. Fetch Broker Summary via API
                 broksum_data = None
                 try:
-                    raw_broksum = await scraper.get_broker_summary(ticker, analysis_date)
+                    raw_broksum = await api_client.get_broker_summary(ticker, analysis_date)
                     if raw_broksum:
                         neobdm_repo.save_broker_summary_batch(
                             ticker, analysis_date,
@@ -332,10 +331,10 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                         broksum_data = raw_broksum
                         print(f"   [BROKSUM] Extracted {len(raw_broksum.get('buy',[]))} buy + {len(raw_broksum.get('sell',[]))} sell for {ticker}")
                 except Exception as e:
-                    logger.warning(f"Broker summary scrape failed for {ticker}: {e}")
+                    logger.warning(f"Broker summary API failed for {ticker}: {e}")
                     _deep_analysis_status["errors"].append(f"{ticker} broksum: {str(e)[:80]}")
 
-                await asyncio.sleep(2)
+                await asyncio.sleep(0.5)
 
                 # 3b. Fetch multi-day broker summary from DB (last 5 days)
                 broksum_multiday = None
@@ -381,7 +380,7 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
         logger.error(f"Critical deep analysis error: {e}")
         _deep_analysis_status["errors"].append(f"Critical: {str(e)[:120]}")
     finally:
-        await scraper.close()
+        await api_client.close()
         _deep_analysis_status["running"] = False
         _deep_analysis_status["progress"] = len(tickers)
         _deep_analysis_status["current_ticker"] = ""
