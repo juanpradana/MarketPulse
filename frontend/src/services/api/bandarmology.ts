@@ -146,6 +146,23 @@ export interface BandarmologyItem {
     breakout_probability?: number;
     breakout_factors?: Record<string, number>;
 
+    // Accumulation duration
+    accum_duration_days?: number;
+
+    // Concentration risk
+    concentration_broker?: string | null;
+    concentration_pct?: number;
+    concentration_risk?: string;
+
+    // Smart money vs retail divergence
+    txn_smart_money_cum?: number;
+    txn_retail_cum_deep?: number;
+    smart_retail_divergence?: number;
+
+    // Volume context
+    volume_score?: number;
+    volume_signal?: string;
+
     // Signals
     deep_signals?: DeepSignals;
 }
@@ -282,6 +299,23 @@ export interface StockDetailResponse {
     // Breakout probability
     breakout_probability?: number;
     breakout_factors?: Record<string, number>;
+
+    // Accumulation duration
+    accum_duration_days?: number;
+
+    // Concentration risk
+    concentration_broker?: string | null;
+    concentration_pct?: number;
+    concentration_risk?: string;
+
+    // Smart money vs retail divergence
+    txn_smart_money_cum?: number;
+    txn_retail_cum_deep?: number;
+    smart_retail_divergence?: number;
+
+    // Volume context
+    volume_score?: number;
+    volume_signal?: string;
 
     // Detail data
     inventory_brokers: InvBrokerDetail[];

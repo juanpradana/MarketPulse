@@ -65,14 +65,21 @@ function SignalBadge({ signal, description }: { signal: string; description: str
         signal.includes('ctrl_below_cost') || signal.includes('ctrl_loading') ||
         signal.includes('xref_bandar_strong_buy') || signal.includes('xref_bandar_buying') ||
         signal.includes('xref_bandar_mild_buy') || signal.includes('consistency_high') ||
-        signal.includes('consistency_bandar_buy');
+        signal.includes('consistency_bandar_buy') || signal.includes('sr_classic_bullish') ||
+        signal.includes('sr_broad_buying') || signal.includes('sr_daily_divergence') ||
+        signal.includes('vol_stealth_accum') || signal.includes('vol_quiet_accum') ||
+        signal.includes('vol_active_breakout') || signal.includes('accum_duration_optimal');
     const isWarning = signal.includes('warning') || signal.includes('sell') ||
         signal.includes('outflow') || signal.includes('high_cross') || signal.includes('tektok') ||
         signal.includes('ctrl_distributing') || signal.includes('ctrl_far_above') ||
         signal.includes('ctrl_heavy_dist') || signal.includes('ctrl_full_exit') ||
         signal.includes('ctrl_moderate_dist') || signal.includes('ctrl_brokers_selling') ||
         signal.includes('xref_bandar_strong_sell') || signal.includes('xref_bandar_selling') ||
-        signal.includes('xref_bandar_mild_sell') || signal.includes('consistency_bandar_sell');
+        signal.includes('xref_bandar_mild_sell') || signal.includes('consistency_bandar_sell') ||
+        signal.includes('sr_retail_trap') || signal.includes('sr_broad_selling') ||
+        signal.includes('conc_high_risk') || signal.includes('conc_medium_risk') ||
+        signal.includes('vol_dead_stock') || signal.includes('vol_distribution_complete') ||
+        signal.includes('accum_duration_stale');
 
     return (
         <div className={cn(
@@ -136,6 +143,40 @@ function generateChatText(data: StockDetailResponse): string {
         if (data.bandar_buy_today_lot) lines.push(`  Buy today: +${fmt(data.bandar_buy_today_lot)} lot`);
         if (data.bandar_sell_today_lot) lines.push(`  Sell today: -${fmt(data.bandar_sell_today_lot)} lot`);
         lines.push('');
+    }
+
+    // New improvement data
+    if (data.has_deep) {
+        const extras: string[] = [];
+        if ((data.accum_duration_days ?? 0) > 0) {
+            const dur = data.accum_duration_days!;
+            const label = dur < 14 ? 'terlalu dini' : dur <= 56 ? 'optimal' : dur <= 90 ? 'mulai lama' : 'stale';
+            extras.push(`⏱️ Durasi Akumulasi: ${dur} hari (${label})`);
+        }
+        if (data.concentration_risk && data.concentration_risk !== 'NONE' && data.concentration_risk !== 'LOW') {
+            extras.push(`⚠️ Konsentrasi: ${data.concentration_broker} = ${(data.concentration_pct ?? 0).toFixed(0)}% (${data.concentration_risk})`);
+        }
+        if (data.txn_smart_money_cum != null && data.txn_retail_cum_deep != null &&
+            (data.txn_smart_money_cum !== 0 || data.txn_retail_cum_deep !== 0)) {
+            const label = (data.smart_retail_divergence ?? 0) > 30 ? 'BULLISH' :
+                          (data.smart_retail_divergence ?? 0) < -30 ? 'BEARISH' : 'NEUTRAL';
+            extras.push(`🧠 Smart vs Retail: SM ${data.txn_smart_money_cum > 0 ? '+' : ''}${data.txn_smart_money_cum.toFixed(1)}B | RTL ${data.txn_retail_cum_deep > 0 ? '+' : ''}${data.txn_retail_cum_deep.toFixed(1)}B → ${label}`);
+        }
+        if (data.volume_signal && data.volume_signal !== 'NONE' && data.volume_signal !== 'NEUTRAL') {
+            const volLabels: Record<string, string> = {
+                'STEALTH_ACCUM': 'Stealth Accumulation',
+                'QUIET_ACCUM': 'Quiet Accumulation',
+                'ACTIVE_BREAKOUT': 'Active Breakout',
+                'DEAD': 'Dead Stock',
+                'DIST_COMPLETE': 'Distribution Complete'
+            };
+            extras.push(`📊 Volume: ${volLabels[data.volume_signal] ?? data.volume_signal} (+${data.volume_score ?? 0}pts)`);
+        }
+        if (extras.length > 0) {
+            lines.push(`🔍 *ANALISIS LANJUTAN*`);
+            extras.forEach(e => lines.push(`  ${e}`));
+            lines.push('');
+        }
     }
 
     if (data.has_deep) {
@@ -360,6 +401,33 @@ function generatePdfHtml(data: StockDetailResponse): string {
             html += `</div>`;
         }
         html += `</div>`;
+    }
+
+    // Advanced Analysis (new improvements)
+    const advItems: string[] = [];
+    if ((data.accum_duration_days ?? 0) > 0) {
+        const dur = data.accum_duration_days!;
+        const label = dur < 14 ? 'Terlalu Dini' : dur <= 56 ? 'Optimal' : dur <= 90 ? 'Mulai Lama' : 'Stale';
+        const color = dur >= 14 && dur <= 56 ? '#059669' : dur > 90 ? '#dc2626' : '#3b82f6';
+        advItems.push(`<div class="card"><div class="label">Durasi Akumulasi</div><div class="value" style="color:${color}">${dur} hari</div><div class="sub">${label}</div></div>`);
+    }
+    if (data.concentration_risk && data.concentration_risk !== 'NONE' && data.concentration_risk !== 'LOW') {
+        const color = data.concentration_risk === 'HIGH' ? '#dc2626' : '#d97706';
+        advItems.push(`<div class="card"><div class="label">Risiko Konsentrasi</div><div class="value" style="color:${color}">${data.concentration_broker} (${(data.concentration_pct ?? 0).toFixed(0)}%)</div><div class="sub">${data.concentration_risk}</div></div>`);
+    }
+    if (data.txn_smart_money_cum != null && data.txn_retail_cum_deep != null && (data.txn_smart_money_cum !== 0 || data.txn_retail_cum_deep !== 0)) {
+        const div = data.smart_retail_divergence ?? 0;
+        const label = div > 30 ? 'BULLISH' : div < -30 ? 'BEARISH' : 'NEUTRAL';
+        const color = div > 30 ? '#059669' : div < -30 ? '#dc2626' : '#64748b';
+        advItems.push(`<div class="card"><div class="label">Smart Money vs Retail</div><div class="value" style="color:${color}">SM ${data.txn_smart_money_cum > 0 ? '+' : ''}${data.txn_smart_money_cum.toFixed(1)}B / RTL ${data.txn_retail_cum_deep > 0 ? '+' : ''}${data.txn_retail_cum_deep.toFixed(1)}B</div><div class="sub">${label}</div></div>`);
+    }
+    if (data.volume_signal && data.volume_signal !== 'NONE' && data.volume_signal !== 'NEUTRAL') {
+        const volLabels: Record<string, string> = { 'STEALTH_ACCUM': 'Stealth Accumulation', 'QUIET_ACCUM': 'Quiet Accumulation', 'ACTIVE_BREAKOUT': 'Active Breakout', 'DEAD': 'Dead Stock', 'DIST_COMPLETE': 'Distribution Complete' };
+        const color = data.volume_signal.includes('ACCUM') || data.volume_signal === 'ACTIVE_BREAKOUT' ? '#059669' : '#dc2626';
+        advItems.push(`<div class="card"><div class="label">Volume Context</div><div class="value" style="color:${color}">${volLabels[data.volume_signal] ?? data.volume_signal}</div><div class="sub">+${data.volume_score ?? 0} pts</div></div>`);
+    }
+    if (advItems.length > 0) {
+        html += `<div class="section"><div class="section-title">Analisis Lanjutan</div><div class="grid4">${advItems.join('')}</div></div>`;
     }
 
     // Weekly Flow
@@ -823,6 +891,143 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                             )}
                                         </div>
                                     )}
+
+                                    {/* New Improvement Banners */}
+                                    <div className="grid grid-cols-2 gap-2 mb-3">
+                                        {/* Accumulation Duration */}
+                                        {(data.accum_duration_days ?? 0) > 0 && (
+                                            <div className={cn(
+                                                "flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px]",
+                                                (data.accum_duration_days ?? 0) >= 14 && (data.accum_duration_days ?? 0) <= 56
+                                                    ? 'bg-emerald-500/10 border-emerald-500/20'
+                                                    : (data.accum_duration_days ?? 0) > 90
+                                                    ? 'bg-red-500/10 border-red-500/20'
+                                                    : 'bg-blue-500/10 border-blue-500/20'
+                                            )}>
+                                                <Activity className="w-3.5 h-3.5 flex-shrink-0 text-zinc-500" />
+                                                <div>
+                                                    <div className="text-[8px] text-zinc-500 font-bold uppercase">Durasi Akumulasi</div>
+                                                    <div className={cn(
+                                                        "font-black",
+                                                        (data.accum_duration_days ?? 0) >= 14 && (data.accum_duration_days ?? 0) <= 56
+                                                            ? 'text-emerald-400'
+                                                            : (data.accum_duration_days ?? 0) > 90
+                                                            ? 'text-red-400'
+                                                            : 'text-blue-400'
+                                                    )}>
+                                                        {data.accum_duration_days} hari
+                                                        <span className="text-zinc-500 font-normal ml-1">
+                                                            ({(data.accum_duration_days ?? 0) < 14 ? 'terlalu dini' :
+                                                              (data.accum_duration_days ?? 0) <= 56 ? 'optimal' :
+                                                              (data.accum_duration_days ?? 0) <= 90 ? 'mulai lama' : 'stale'})
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Concentration Risk */}
+                                        {data.concentration_risk && data.concentration_risk !== 'NONE' && data.concentration_risk !== 'LOW' && (
+                                            <div className={cn(
+                                                "flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px]",
+                                                data.concentration_risk === 'HIGH'
+                                                    ? 'bg-red-500/10 border-red-500/20'
+                                                    : 'bg-orange-500/10 border-orange-500/20'
+                                            )}>
+                                                <AlertTriangle className={cn(
+                                                    "w-3.5 h-3.5 flex-shrink-0",
+                                                    data.concentration_risk === 'HIGH' ? 'text-red-400' : 'text-orange-400'
+                                                )} />
+                                                <div>
+                                                    <div className="text-[8px] text-zinc-500 font-bold uppercase">Risiko Konsentrasi</div>
+                                                    <div className={cn(
+                                                        "font-black",
+                                                        data.concentration_risk === 'HIGH' ? 'text-red-400' : 'text-orange-400'
+                                                    )}>
+                                                        {data.concentration_broker} menguasai {(data.concentration_pct ?? 0).toFixed(0)}%
+                                                        <span className="text-zinc-500 font-normal ml-1">
+                                                            (single-entity risk {data.concentration_risk})
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Smart Money vs Retail Divergence */}
+                                        {(data.txn_smart_money_cum != null || data.txn_retail_cum_deep != null) &&
+                                         (data.txn_smart_money_cum !== 0 || data.txn_retail_cum_deep !== 0) && (
+                                            <div className={cn(
+                                                "flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px]",
+                                                (data.smart_retail_divergence ?? 0) > 30
+                                                    ? 'bg-emerald-500/10 border-emerald-500/20'
+                                                    : (data.smart_retail_divergence ?? 0) < -30
+                                                    ? 'bg-red-500/10 border-red-500/20'
+                                                    : 'bg-blue-500/10 border-blue-500/20'
+                                            )}>
+                                                <Users className="w-3.5 h-3.5 flex-shrink-0 text-zinc-500" />
+                                                <div className="flex-1">
+                                                    <div className="text-[8px] text-zinc-500 font-bold uppercase">Smart Money vs Retail</div>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className={cn("font-bold",
+                                                            (data.txn_smart_money_cum ?? 0) > 0 ? 'text-emerald-400' :
+                                                            (data.txn_smart_money_cum ?? 0) < 0 ? 'text-red-400' : 'text-zinc-500'
+                                                        )}>
+                                                            SM: {(data.txn_smart_money_cum ?? 0) > 0 ? '+' : ''}{(data.txn_smart_money_cum ?? 0).toFixed(1)}B
+                                                        </span>
+                                                        <span className={cn("font-bold",
+                                                            (data.txn_retail_cum_deep ?? 0) > 0 ? 'text-emerald-400' :
+                                                            (data.txn_retail_cum_deep ?? 0) < 0 ? 'text-red-400' : 'text-zinc-500'
+                                                        )}>
+                                                            RTL: {(data.txn_retail_cum_deep ?? 0) > 0 ? '+' : ''}{(data.txn_retail_cum_deep ?? 0).toFixed(1)}B
+                                                        </span>
+                                                        <span className={cn("text-[9px] font-black px-1.5 py-0.5 rounded",
+                                                            (data.smart_retail_divergence ?? 0) > 30 ? 'bg-emerald-500/20 text-emerald-300' :
+                                                            (data.smart_retail_divergence ?? 0) < -30 ? 'bg-red-500/20 text-red-300' :
+                                                            'bg-zinc-700/50 text-zinc-400'
+                                                        )}>
+                                                            {(data.smart_retail_divergence ?? 0) > 30 ? 'BULLISH' :
+                                                             (data.smart_retail_divergence ?? 0) < -30 ? 'BEARISH' : 'NEUTRAL'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Volume Context */}
+                                        {data.volume_signal && data.volume_signal !== 'NONE' && data.volume_signal !== 'NEUTRAL' && (
+                                            <div className={cn(
+                                                "flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px]",
+                                                data.volume_signal === 'STEALTH_ACCUM' || data.volume_signal === 'QUIET_ACCUM'
+                                                    ? 'bg-emerald-500/10 border-emerald-500/20'
+                                                    : data.volume_signal === 'ACTIVE_BREAKOUT'
+                                                    ? 'bg-cyan-500/10 border-cyan-500/20'
+                                                    : data.volume_signal === 'DEAD' || data.volume_signal === 'DIST_COMPLETE'
+                                                    ? 'bg-red-500/10 border-red-500/20'
+                                                    : 'bg-blue-500/10 border-blue-500/20'
+                                            )}>
+                                                <BarChart3 className="w-3.5 h-3.5 flex-shrink-0 text-zinc-500" />
+                                                <div>
+                                                    <div className="text-[8px] text-zinc-500 font-bold uppercase">Volume Context</div>
+                                                    <div className={cn(
+                                                        "font-black",
+                                                        data.volume_signal === 'STEALTH_ACCUM' ? 'text-emerald-400' :
+                                                        data.volume_signal === 'QUIET_ACCUM' ? 'text-emerald-400' :
+                                                        data.volume_signal === 'ACTIVE_BREAKOUT' ? 'text-cyan-400' :
+                                                        'text-red-400'
+                                                    )}>
+                                                        {data.volume_signal === 'STEALTH_ACCUM' && 'Stealth Accumulation'}
+                                                        {data.volume_signal === 'QUIET_ACCUM' && 'Quiet Accumulation'}
+                                                        {data.volume_signal === 'ACTIVE_BREAKOUT' && 'Active Breakout'}
+                                                        {data.volume_signal === 'DEAD' && 'Dead Stock'}
+                                                        {data.volume_signal === 'DIST_COMPLETE' && 'Distribution Complete'}
+                                                        <span className="text-zinc-500 font-normal ml-1">
+                                                            (+{data.volume_score ?? 0} pts)
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
 
                                     {/* Broker table */}
                                     <table className="w-full text-[10px]">

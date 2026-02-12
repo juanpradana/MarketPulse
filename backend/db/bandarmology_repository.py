@@ -253,9 +253,13 @@ class BandarmologyRepository(BaseRepository):
                     broksum_days_analyzed, broksum_consistency_score,
                     broksum_consistent_buyers_json, broksum_consistent_sellers_json,
                     breakout_probability, breakout_factors_json,
+                    accum_duration_days,
+                    concentration_broker, concentration_pct, concentration_risk,
+                    txn_smart_money_cum, txn_retail_cum_deep, smart_retail_divergence,
+                    volume_score, volume_signal,
                     deep_score, deep_trade_type, deep_signals_json
                 ) VALUES ({})
-            """.format(', '.join(['?'] * 60)), (
+            """.format(', '.join(['?'] * 69)), (
                 ticker.upper(), analysis_date,
                 data.get('inv_accum_brokers', 0),
                 data.get('inv_distrib_brokers', 0),
@@ -312,6 +316,15 @@ class BandarmologyRepository(BaseRepository):
                 json.dumps(data.get('broksum_consistent_sellers', [])),
                 data.get('breakout_probability', 0),
                 json.dumps(data.get('breakout_factors', {})),
+                data.get('accum_duration_days', 0),
+                data.get('concentration_broker', ''),
+                data.get('concentration_pct', 0.0),
+                data.get('concentration_risk', 'NONE'),
+                data.get('txn_smart_money_cum', 0),
+                data.get('txn_retail_cum_deep', 0),
+                data.get('smart_retail_divergence', 0),
+                data.get('volume_score', 0),
+                data.get('volume_signal', 'NONE'),
                 data.get('deep_score', 0),
                 data.get('deep_trade_type', ''),
                 json.dumps(data.get('deep_signals', {}))

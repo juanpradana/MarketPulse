@@ -536,6 +536,23 @@ class DatabaseConnection:
                 breakout_probability INTEGER DEFAULT 0,
                 breakout_factors_json TEXT,
                 
+                -- Accumulation duration
+                accum_duration_days INTEGER DEFAULT 0,
+                
+                -- Concentration risk
+                concentration_broker TEXT,
+                concentration_pct REAL DEFAULT 0,
+                concentration_risk TEXT,
+                
+                -- Smart money vs retail divergence
+                txn_smart_money_cum REAL DEFAULT 0,
+                txn_retail_cum_deep REAL DEFAULT 0,
+                smart_retail_divergence INTEGER DEFAULT 0,
+                
+                -- Volume context
+                volume_score INTEGER DEFAULT 0,
+                volume_signal TEXT,
+                
                 calculated_at DATETIME DEFAULT (datetime('now')),
                 UNIQUE(ticker, analysis_date)
             );
@@ -585,6 +602,19 @@ class DatabaseConnection:
             # Breakout probability fields
             ("breakout_probability", "INTEGER DEFAULT 0"),
             ("breakout_factors_json", "TEXT"),
+            # Accumulation duration
+            ("accum_duration_days", "INTEGER DEFAULT 0"),
+            # Concentration risk
+            ("concentration_broker", "TEXT"),
+            ("concentration_pct", "REAL DEFAULT 0"),
+            ("concentration_risk", "TEXT"),
+            # Smart money vs retail divergence
+            ("txn_smart_money_cum", "REAL DEFAULT 0"),
+            ("txn_retail_cum_deep", "REAL DEFAULT 0"),
+            ("smart_retail_divergence", "INTEGER DEFAULT 0"),
+            # Volume context
+            ("volume_score", "INTEGER DEFAULT 0"),
+            ("volume_signal", "TEXT"),
         ]
         for col_name, col_type in new_columns:
             try:

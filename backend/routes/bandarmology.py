@@ -471,7 +471,7 @@ async def get_stock_detail(
             detail.update({
                 "deep_score": deep_cache.get('deep_score', 0),
                 "combined_score": base_result.get('total_score', 0) + deep_cache.get('deep_score', 0),
-                "max_combined_score": 190,
+                "max_combined_score": 215,
                 "deep_trade_type": deep_cache.get('deep_trade_type', '—'),
                 "deep_signals": deep_cache.get('deep_signals', {}),
 
@@ -539,12 +539,29 @@ async def get_stock_detail(
                 # Breakout probability
                 "breakout_probability": deep_cache.get('breakout_probability', 0),
                 "breakout_factors": deep_cache.get('breakout_factors', {}),
+
+                # Accumulation duration
+                "accum_duration_days": deep_cache.get('accum_duration_days', 0),
+
+                # Concentration risk
+                "concentration_broker": deep_cache.get('concentration_broker'),
+                "concentration_pct": deep_cache.get('concentration_pct', 0.0),
+                "concentration_risk": deep_cache.get('concentration_risk', 'NONE'),
+
+                # Smart money vs retail divergence
+                "txn_smart_money_cum": deep_cache.get('txn_smart_money_cum', 0),
+                "txn_retail_cum_deep": deep_cache.get('txn_retail_cum_deep', 0),
+                "smart_retail_divergence": deep_cache.get('smart_retail_divergence', 0),
+
+                # Volume context
+                "volume_score": deep_cache.get('volume_score', 0),
+                "volume_signal": deep_cache.get('volume_signal', 'NONE'),
             })
         else:
             detail.update({
                 "deep_score": 0,
                 "combined_score": base_result.get('total_score', 0),
-                "max_combined_score": 200,
+                "max_combined_score": 215,
             })
 
         # Inventory broker detail list

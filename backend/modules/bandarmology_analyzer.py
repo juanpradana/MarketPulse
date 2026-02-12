@@ -725,6 +725,19 @@ class BandarmologyAnalyzer:
             # Breakout probability
             'breakout_probability': 0,
             'breakout_factors': {},
+            # Accumulation duration
+            'accum_duration_days': 0,
+            # Concentration risk
+            'concentration_broker': None,
+            'concentration_pct': 0.0,
+            'concentration_risk': 'NONE',
+            # Smart money vs retail divergence
+            'txn_smart_money_cum': 0,
+            'txn_retail_cum_deep': 0,
+            'smart_retail_divergence': 0,
+            # Volume context
+            'volume_score': 0,
+            'volume_signal': 'NONE',
         }
 
         signals = {}
@@ -798,6 +811,15 @@ class BandarmologyAnalyzer:
             deep['txn_institution_participation'] = _safe_float(txn_chart_data.get('part_institution'))
             deep['txn_mm_trend'] = txn_chart_data.get('mm_trend') or 'NEUTRAL'
             deep['txn_foreign_trend'] = txn_chart_data.get('foreign_trend') or 'NEUTRAL'
+
+        # ---- SMART MONEY vs RETAIL DIVERGENCE (max 5 pts) ----
+        if txn_chart_data:
+            sr_score, sr_signals = self._score_smart_retail_divergence(txn_chart_data)
+            deep_score += sr_score
+            deep['txn_smart_money_cum'] = _safe_float(txn_chart_data.get('cum_smart'))
+            deep['txn_retail_cum_deep'] = _safe_float(txn_chart_data.get('cum_retail'))
+            deep['smart_retail_divergence'] = sr_signals.pop('_sr_divergence', 0)
+            signals.update(sr_signals)
 
         # ---- BROKER SUMMARY ANALYSIS (max 20 pts) ----
         if broker_summary_data:
@@ -920,6 +942,38 @@ class BandarmologyAnalyzer:
             ctrl_score, ctrl_signals = self._score_controlling_brokers(ctrl_result, base_result)
             deep_score += ctrl_score
             signals.update(ctrl_signals)
+
+        # ---- ACCUMULATION DURATION (stored for display, scored in _score_controlling_brokers) ----
+        if deep.get('accum_start_date'):
+            try:
+                start_dt = datetime.strptime(deep['accum_start_date'], '%Y-%m-%d')
+                deep['accum_duration_days'] = (datetime.now() - start_dt).days
+            except (ValueError, TypeError):
+                deep['accum_duration_days'] = 0
+
+        # ---- CONCENTRATION RISK ----
+        if ctrl_result and ctrl_result.get('controlling_brokers'):
+            conc_score, conc_signals = self._score_concentration_risk(ctrl_result)
+            deep_score += conc_score  # This is a penalty (negative or zero)
+            signals.update(conc_signals)
+            deep['concentration_broker'] = conc_signals.get('_conc_broker')
+            deep['concentration_pct'] = conc_signals.get('_conc_pct', 0.0)
+            deep['concentration_risk'] = conc_signals.get('_conc_risk', 'NONE')
+            # Remove internal keys
+            conc_signals.pop('_conc_broker', None)
+            conc_signals.pop('_conc_pct', None)
+            conc_signals.pop('_conc_risk', None)
+
+        # ---- VOLUME CONTEXT (max 5 pts) ----
+        if price_series and len(price_series) >= 10:
+            vol_score, vol_signals = self._score_volume_context(
+                price_series, deep
+            )
+            deep_score += vol_score
+            signals.update(vol_signals)
+            deep['volume_score'] = vol_score
+            deep['volume_signal'] = vol_signals.get('_vol_signal', 'NONE')
+            vol_signals.pop('_vol_signal', None)
 
         # ---- ENTRY/TARGET PRICE CALCULATION ----
         # Priority: bandar_avg_cost > broksum_floor_price > broksum_avg_buy_price > fallback
@@ -1682,6 +1736,18 @@ class BandarmologyAnalyzer:
         factors['multiday_consistency'] = consistency  # Already 0-100
         weights['multiday_consistency'] = 0.05
 
+        # 9. Smart money vs retail divergence (weight 5%)
+        sr_div = deep.get('smart_retail_divergence', 0)
+        # Convert -100..+100 to 0..100 scale
+        sr_factor = max(0, min(100, (sr_div + 100) // 2))
+        factors['smart_retail'] = sr_factor
+        weights['smart_retail'] = 0.05
+
+        # 10. Volume context (weight 5%)
+        vol_score = deep.get('volume_score', 0)
+        factors['volume_context'] = min(100, vol_score * 20)  # 0-5 pts → 0-100 scale
+        weights['volume_context'] = 0.05
+
         # Calculate weighted average
         total_weight = sum(weights.values())
         if total_weight > 0:
@@ -2190,7 +2256,271 @@ class BandarmologyAnalyzer:
         if accum_start:
             signals['ctrl_accum_start'] = f"Accumulation started: {accum_start}"
 
-        return min(max(score, -10), 30), signals  # Allow negative but cap at -10
+        # 6. Accumulation Duration Scoring (max 5 pts)
+        if accum_start:
+            try:
+                start_dt = datetime.strptime(accum_start, '%Y-%m-%d')
+                days_accum = (datetime.now() - start_dt).days
+                if 14 <= days_accum <= 56:       # 2-8 weeks = optimal
+                    score += 5
+                    signals['accum_duration_optimal'] = f"Akumulasi {days_accum} hari (2-8 minggu, optimal)"
+                elif 7 <= days_accum < 14:        # 1-2 weeks = early
+                    score += 2
+                    signals['accum_duration_early'] = f"Akumulasi baru {days_accum} hari (terlalu dini)"
+                elif 56 < days_accum <= 90:       # 8-13 weeks = getting long
+                    score += 3
+                    signals['accum_duration_long'] = f"Akumulasi {days_accum} hari (mulai lama)"
+                elif days_accum > 90:             # >3 months = stale
+                    score += 0
+                    signals['accum_duration_stale'] = (
+                        f"Akumulasi sudah {days_accum} hari (>3 bulan, mungkin sudah distribusi diam-diam)"
+                    )
+                else:                             # <1 week
+                    score += 1
+                    signals['accum_duration_very_early'] = f"Akumulasi baru {days_accum} hari"
+            except (ValueError, TypeError):
+                pass
+
+        return min(max(score, -10), 35), signals  # Allow negative but cap at -10, max 35
+
+    def _score_concentration_risk(self, ctrl_result: Dict) -> Tuple[int, Dict]:
+        """
+        Detect concentration risk: if 1 broker holds >50% of total controlling lots.
+        
+        Returns penalty score (0 or negative) and signals dict.
+        Internal keys _conc_broker, _conc_pct, _conc_risk are used to pass data back.
+        """
+        score = 0
+        signals = {}
+
+        cbs = ctrl_result.get('controlling_brokers', [])
+        if not cbs or len(cbs) < 2:
+            signals['_conc_broker'] = None
+            signals['_conc_pct'] = 0.0
+            signals['_conc_risk'] = 'NONE'
+            return 0, signals
+
+        total_lot = sum(abs(cb.get('net_lot', 0)) for cb in cbs)
+        if total_lot <= 0:
+            signals['_conc_broker'] = None
+            signals['_conc_pct'] = 0.0
+            signals['_conc_risk'] = 'NONE'
+            return 0, signals
+
+        # Find broker with highest share
+        max_broker = max(cbs, key=lambda cb: abs(cb.get('net_lot', 0)))
+        max_lot = abs(max_broker.get('net_lot', 0))
+        max_pct = (max_lot / total_lot) * 100
+
+        signals['_conc_broker'] = max_broker.get('code', '')
+        signals['_conc_pct'] = round(max_pct, 1)
+
+        if max_pct >= 60:
+            score = -5
+            signals['_conc_risk'] = 'HIGH'
+            signals['conc_high_risk'] = (
+                f"RISIKO TINGGI: {max_broker['code']} menguasai {max_pct:.0f}% lot bandar "
+                f"(single-entity risk)"
+            )
+        elif max_pct >= 50:
+            score = -3
+            signals['_conc_risk'] = 'HIGH'
+            signals['conc_high_risk'] = (
+                f"Konsentrasi tinggi: {max_broker['code']} menguasai {max_pct:.0f}% lot bandar"
+            )
+        elif max_pct >= 40:
+            score = -1
+            signals['_conc_risk'] = 'MEDIUM'
+            signals['conc_medium_risk'] = (
+                f"Konsentrasi sedang: {max_broker['code']} menguasai {max_pct:.0f}% lot bandar"
+            )
+        else:
+            signals['_conc_risk'] = 'LOW'
+
+        return score, signals
+
+    def _score_smart_retail_divergence(self, txn: Dict) -> Tuple[int, Dict]:
+        """
+        Score Smart Money vs Retail divergence from transaction chart.
+        
+        Classic signals:
+        - Smart money accumulating + retail selling = strong bullish (max 5 pts)
+        - Smart money selling + retail buying = bearish trap warning
+        
+        Returns: (score, signals)
+        Max 5 points.
+        """
+        score = 0
+        signals = {}
+
+        cum_smart = _safe_float(txn.get('cum_smart'))
+        cum_retail = _safe_float(txn.get('cum_retail'))
+        daily_smart = _safe_float(txn.get('daily_smart'))
+        daily_retail = _safe_float(txn.get('daily_retail'))
+
+        # Skip if no meaningful data
+        if cum_smart == 0 and cum_retail == 0:
+            return 0, signals
+
+        # Classic divergence: smart money accumulating, retail selling
+        if cum_smart > 0 and cum_retail < 0:
+            score += 5
+            signals['sr_classic_bullish'] = (
+                f"Smart money akumulasi ({cum_smart:+.1f}B) vs retail distribusi ({cum_retail:+.1f}B) "
+                f"= sinyal klasik kuat"
+            )
+        # Both accumulating (broad buying)
+        elif cum_smart > 0 and cum_retail > 0:
+            score += 2
+            signals['sr_broad_buying'] = (
+                f"Smart money ({cum_smart:+.1f}B) & retail ({cum_retail:+.1f}B) sama-sama beli"
+            )
+        # Bearish divergence: smart money selling, retail buying (retail trap)
+        elif cum_smart < 0 and cum_retail > 0:
+            score -= 2
+            signals['sr_retail_trap'] = (
+                f"WARNING: Smart money jual ({cum_smart:+.1f}B) tapi retail beli ({cum_retail:+.1f}B) "
+                f"= potensi jebakan retail"
+            )
+        # Both selling
+        elif cum_smart < 0 and cum_retail < 0:
+            signals['sr_broad_selling'] = (
+                f"Smart money ({cum_smart:+.1f}B) & retail ({cum_retail:+.1f}B) sama-sama jual"
+            )
+
+        # Daily momentum bonus
+        if daily_smart > 0 and daily_retail < 0 and cum_smart > 0:
+            if score < 5:
+                score = min(score + 1, 5)
+            signals['sr_daily_divergence'] = (
+                f"Hari ini: smart money beli, retail jual"
+            )
+
+        # Calculate divergence score (0-100) for display
+        if cum_smart != 0 or cum_retail != 0:
+            # Positive = smart buying & retail selling (bullish)
+            # Negative = smart selling & retail buying (bearish)
+            total_abs = abs(cum_smart) + abs(cum_retail)
+            if total_abs > 0:
+                divergence = int(((cum_smart - cum_retail) / total_abs) * 100)
+                signals['_sr_divergence'] = max(-100, min(100, divergence))
+            else:
+                signals['_sr_divergence'] = 0
+        else:
+            signals['_sr_divergence'] = 0
+
+        return max(-2, min(score, 5)), signals
+
+    def _score_volume_context(
+        self, price_series: List[Dict], deep: Dict
+    ) -> Tuple[int, Dict]:
+        """
+        Score volume context using price series data.
+        
+        Detects:
+        - Price compression + heavy accumulation = stealth accumulation (bullish)
+        - Price expansion + accumulation = active breakout
+        - Price flat + no accumulation = dead stock
+        
+        Uses price range analysis since raw volume isn't in price_series.
+        
+        Returns: (score, signals)
+        Max 5 points.
+        """
+        score = 0
+        signals = {}
+
+        if not price_series or len(price_series) < 10:
+            signals['_vol_signal'] = 'NONE'
+            return 0, signals
+
+        # Calculate recent vs historical price range (volatility proxy)
+        n = len(price_series)
+        recent_n = min(10, n // 3)  # Last ~10 days or 1/3 of data
+        hist_n = n - recent_n
+
+        # Recent price range
+        recent = price_series[-recent_n:]
+        recent_highs = [p.get('high', 0) or p.get('close', 0) for p in recent]
+        recent_lows = [p.get('low', 0) or p.get('close', 0) for p in recent]
+        recent_closes = [p.get('close', 0) for p in recent]
+
+        # Historical price range
+        hist = price_series[:hist_n]
+        hist_highs = [p.get('high', 0) or p.get('close', 0) for p in hist]
+        hist_lows = [p.get('low', 0) or p.get('close', 0) for p in hist]
+
+        if not recent_closes or not hist_highs:
+            signals['_vol_signal'] = 'NONE'
+            return 0, signals
+
+        # Average daily range (high-low) as % of close
+        avg_recent_range = 0
+        avg_hist_range = 0
+
+        for i, p in enumerate(recent):
+            h = recent_highs[i]
+            l = recent_lows[i]
+            c = recent_closes[i]
+            if c > 0 and h > 0 and l > 0:
+                avg_recent_range += (h - l) / c
+
+        for i, p in enumerate(hist):
+            h = hist_highs[i]
+            l = hist_lows[i]
+            c = p.get('close', 0)
+            if c > 0 and h > 0 and l > 0:
+                avg_hist_range += (h - l) / c
+
+        avg_recent_range = avg_recent_range / len(recent) if recent else 0
+        avg_hist_range = avg_hist_range / len(hist) if hist else 0
+
+        # Get accumulation context
+        accum_brokers = deep.get('inv_accum_brokers', 0)
+        accum_lot = deep.get('inv_total_accum_lot', 0)
+        is_accumulating = accum_brokers >= 3 and accum_lot > 0
+
+        # Price compression ratio (< 1 means recent range is tighter)
+        compression_ratio = avg_recent_range / avg_hist_range if avg_hist_range > 0 else 1.0
+
+        if compression_ratio < 0.6 and is_accumulating:
+            # Tight range + heavy accumulation = stealth accumulation
+            score += 5
+            signals['vol_stealth_accum'] = (
+                f"Harga menyempit ({compression_ratio:.1%}x range normal) "
+                f"+ {accum_brokers} broker akumulasi = stealth accumulation"
+            )
+            signals['_vol_signal'] = 'STEALTH_ACCUM'
+        elif compression_ratio < 0.8 and is_accumulating:
+            score += 3
+            signals['vol_quiet_accum'] = (
+                f"Harga relatif tenang ({compression_ratio:.1%}x range normal) "
+                f"+ akumulasi aktif"
+            )
+            signals['_vol_signal'] = 'QUIET_ACCUM'
+        elif compression_ratio > 1.5 and is_accumulating:
+            score += 2
+            signals['vol_active_breakout'] = (
+                f"Range harga melebar ({compression_ratio:.1%}x normal) "
+                f"+ akumulasi = potensi breakout aktif"
+            )
+            signals['_vol_signal'] = 'ACTIVE_BREAKOUT'
+        elif compression_ratio < 0.5 and not is_accumulating:
+            signals['vol_dead_stock'] = (
+                f"Harga sangat sempit ({compression_ratio:.1%}x normal) "
+                f"tanpa akumulasi = saham mati"
+            )
+            signals['_vol_signal'] = 'DEAD'
+        elif compression_ratio > 2.0 and not is_accumulating:
+            signals['vol_distribution_complete'] = (
+                f"Volatilitas tinggi ({compression_ratio:.1%}x normal) "
+                f"tanpa akumulasi = distribusi mungkin selesai"
+            )
+            signals['_vol_signal'] = 'DIST_COMPLETE'
+        else:
+            signals['_vol_signal'] = 'NEUTRAL'
+
+        return min(score, 5), signals
 
     def enrich_results_with_deep(
         self,
@@ -2214,7 +2544,7 @@ class BandarmologyAnalyzer:
                 r['deep_score'] = deep.get('deep_score', 0)
                 r['deep_trade_type'] = deep.get('deep_trade_type', '')
                 r['combined_score'] = r.get('total_score', 0) + deep.get('deep_score', 0)
-                r['max_combined_score'] = 200  # 100 base + 100 deep
+                r['max_combined_score'] = 215  # 100 base + 115 deep
 
                 # Inventory summary
                 r['inv_accum_brokers'] = deep.get('inv_accum_brokers', 0)
@@ -2280,6 +2610,23 @@ class BandarmologyAnalyzer:
                 r['breakout_probability'] = deep.get('breakout_probability', 0)
                 r['breakout_factors'] = deep.get('breakout_factors', {})
 
+                # Accumulation duration
+                r['accum_duration_days'] = deep.get('accum_duration_days', 0)
+
+                # Concentration risk
+                r['concentration_broker'] = deep.get('concentration_broker')
+                r['concentration_pct'] = deep.get('concentration_pct', 0.0)
+                r['concentration_risk'] = deep.get('concentration_risk', 'NONE')
+
+                # Smart money vs retail divergence
+                r['txn_smart_money_cum'] = deep.get('txn_smart_money_cum', 0)
+                r['txn_retail_cum_deep'] = deep.get('txn_retail_cum_deep', 0)
+                r['smart_retail_divergence'] = deep.get('smart_retail_divergence', 0)
+
+                # Volume context
+                r['volume_score'] = deep.get('volume_score', 0)
+                r['volume_signal'] = deep.get('volume_signal', 'NONE')
+
                 # Deep signals
                 r['deep_signals'] = deep.get('deep_signals', {})
 
@@ -2289,7 +2636,7 @@ class BandarmologyAnalyzer:
             else:
                 r['deep_score'] = 0
                 r['combined_score'] = r.get('total_score', 0)
-                r['max_combined_score'] = 200
+                r['max_combined_score'] = 215
                 r['has_deep'] = False
 
         # Re-sort by combined score
