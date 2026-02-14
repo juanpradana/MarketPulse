@@ -1,164 +1,159 @@
 {
   "brokers": [
     {
-      "code": "MG",
+      "code": "CC",
       "name": "Mandiri Sekuritas",
       "category": ["institutional"]
     },
     {
-      "code": "BB",
-      "name": "BCA Sekuritas",
-      "category": ["institutional"]
-    },
-    {
-      "code": "RX",
-      "name": "RHB Sekuritas",
-      "category": ["institutional"]
-    },
-    {
-      "code": "AK",
-      "name": "Trimegah Sekuritas",
-      "category": ["institutional"]
-    },
-    {
-      "code": "BK",
+      "code": "NI",
       "name": "BNI Sekuritas",
       "category": ["institutional"]
     },
     {
-      "code": "CC",
-      "name": "CGS-CIMB Sekuritas",
+      "code": "OD",
+      "name": "BRI Danareksa Sekuritas",
       "category": ["institutional"]
     },
     {
-      "code": "SS",
-      "name": "Samuel Sekuritas",
+      "code": "GR",
+      "name": "Panin Sekuritas Tbk.",
       "category": ["institutional"]
     },
     {
-      "code": "RH",
-      "name": "RHB Sekuritas",
+      "code": "SQ",
+      "name": "BCA Sekuritas",
       "category": ["institutional"]
     },
     {
-      "code": "OP",
-      "name": "OCBC Sekuritas",
-      "category": ["institutional"]
-    },
-    {
-      "code": "KE",
-      "name": "Kresna Sekuritas",
-      "category": ["institutional"]
-    },
-    {
-      "code": "UB",
-      "name": "UBS Sekuritas",
+      "code": "YU",
+      "name": "CGS International Sekuritas Indonesia",
       "category": ["foreign", "institutional"]
     },
     {
-      "code": "MS",
-      "name": "Morgan Stanley",
+      "code": "IF",
+      "name": "Samuel Sekuritas Indonesia",
+      "category": ["institutional"]
+    },
+    {
+      "code": "DR",
+      "name": "RHB Sekuritas Indonesia",
       "category": ["foreign", "institutional"]
     },
     {
-      "code": "GS",
-      "name": "Goldman Sachs",
+      "code": "TP",
+      "name": "OCBC Sekuritas Indonesia",
+      "category": ["foreign", "institutional"]
+    },
+    {
+      "code": "KI",
+      "name": "Ciptadana Sekuritas Asia",
+      "category": ["institutional"]
+    },
+    {
+      "code": "AK",
+      "name": "UBS Sekuritas Indonesia",
+      "category": ["foreign", "institutional"]
+    },
+    {
+      "code": "MG",
+      "name": "Semesta Indovest Sekuritas",
+      "category": ["retail"]
+    },
+    {
+      "code": "BK",
+      "name": "J.P. Morgan Sekuritas Indonesia",
       "category": ["foreign", "institutional"]
     },
     {
       "code": "CS",
-      "name": "Credit Suisse",
+      "name": "Credit Suisse Sekuritas Indonesia",
       "category": ["foreign", "institutional"]
     },
     {
       "code": "DB",
-      "name": "Deutsche Bank",
+      "name": "Deutsche Sekuritas Indonesia",
       "category": ["foreign", "institutional"]
     },
     {
       "code": "ML",
-      "name": "Merrill Lynch",
+      "name": "Merrill Lynch Indonesia",
       "category": ["foreign", "institutional"]
     },
     {
       "code": "JP",
-      "name": "JP Morgan",
+      "name": "J.P. Morgan Sekuritas Indonesia",
       "category": ["foreign", "institutional"]
     },
     {
       "code": "SC",
-      "name": "Standard Chartered",
-      "category": ["foreign", "institutional"]
+      "name": "IMG Sekuritas",
+      "category": ["retail"]
     },
     {
-      "code": "HS",
-      "name": "HSBC",
+      "code": "GW",
+      "name": "HSBC Sekuritas Indonesia",
       "category": ["foreign", "institutional"]
     },
     {
       "code": "BA",
-      "name": "Bank of America",
+      "name": "Bahana Sekuritas",
+      "category": ["institutional"]
+    },
+    {
+      "code": "CG",
+      "name": "Citigroup Sekuritas Indonesia",
       "category": ["foreign", "institutional"]
     },
     {
-      "code": "CI",
-      "name": "Citigroup",
-      "category": ["foreign", "institutional"]
-    },
-    {
-      "code": "MC",
-      "name": "Macquarie",
+      "code": "RX",
+      "name": "Macquarie Sekuritas Indonesia",
       "category": ["foreign", "institutional"]
     },
     {
       "code": "YP",
-      "name": "Yuanta Sekuritas",
-      "category": ["retail"]
+      "name": "Mirae Asset Sekuritas Indonesia",
+      "category": ["foreign", "institutional"]
     },
     {
       "code": "XL",
-      "name": "XL Axiata",
+      "name": "Stockbit Sekuritas Digital",
       "category": ["retail"]
     },
     {
       "code": "PD",
-      "name": "Panin Sekuritas",
-      "category": ["retail"]
+      "name": "Indo Premier Sekuritas",
+      "category": ["retail", "institutional"]
     },
     {
       "code": "XC",
-      "name": "Mirae Asset Sekuritas",
+      "name": "Ajaib Sekuritas Asia",
       "category": ["retail"]
     },
     {
-      "code": "AG",
-      "name": "Anugerah Sekuritas",
-      "category": ["retail"]
-    },
-    {
-      "code": "PH",
-      "name": "Phillip Sekuritas",
-      "category": ["retail"]
+      "code": "AZ",
+      "name": "Sucor Sekuritas",
+      "category": ["institutional"]
     },
     {
       "code": "KK",
-      "name": "Kim Eng Sekuritas",
-      "category": ["retail"]
+      "name": "Phillip Sekuritas Indonesia",
+      "category": ["institutional"]
     },
     {
-      "code": "IM",
-      "name": "Indo Premier Sekuritas",
-      "category": ["retail"]
+      "code": "FS",
+      "name": "Yuanta Sekuritas Indonesia",
+      "category": ["foreign", "institutional"]
     },
     {
-      "code": "IB",
-      "name": "Indopremier Sekuritas",
-      "category": ["retail"]
+      "code": "AH",
+      "name": "Shinhan Sekuritas Indonesia",
+      "category": ["foreign", "institutional"]
     },
     {
-      "code": "BN",
-      "name": "BNP Paribas",
-      "category": ["retail"]
+      "code": "ZP",
+      "name": "Maybank Sekuritas Indonesia",
+      "category": ["foreign", "institutional"]
     }
   ],
   "categories": {
