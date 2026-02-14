@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { StageStatus } from "../types";
 
 interface StageCardProps {
-    stageNumber: 1 | 2 | 3 | 4;
+    stageNumber: 1 | 2 | 3 | 4 | 5;
     title: string;
     description?: string;
     status: StageStatus;
@@ -101,23 +101,23 @@ export default function StageCard({
                 config.bgColor,
                 config.borderColor
             )}>
-                <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center">
-                                <Lock className="w-4 h-4 text-slate-500" />
+                <CardHeader className="pb-2 px-3 md:px-6">
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+                            <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-slate-800 flex items-center justify-center shrink-0">
+                                <Lock className="w-3.5 h-3.5 md:w-4 md:h-4 text-slate-500" />
                             </div>
-                            <div>
-                                <h3 className="text-lg font-semibold text-slate-500">
+                            <div className="min-w-0">
+                                <h3 className="text-sm md:text-lg font-semibold text-slate-500 truncate">
                                     Stage {stageNumber}: {title}
                                 </h3>
-                                <p className="text-sm text-slate-600">
+                                <p className="text-xs md:text-sm text-slate-600 hidden sm:block">
                                     Complete Stage {stageNumber - 1} first
                                 </p>
                             </div>
                         </div>
-                        <Badge variant="outline" className={config.badgeClass}>
-                            <Lock className="w-3 h-3 mr-1" />
+                        <Badge variant="outline" className={cn("text-xs shrink-0", config.badgeClass)}>
+                            <Lock className="w-3 h-3 mr-1 hidden sm:inline" />
                             Locked
                         </Badge>
                     </div>
@@ -134,47 +134,47 @@ export default function StageCard({
         )}>
             <CardHeader
                 className={cn(
-                    "pb-2",
+                    "pb-2 px-3 md:px-6",
                     isCollapsible && "cursor-pointer hover:bg-slate-800/30 transition-colors"
                 )}
                 onClick={handleToggle}
             >
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                         {/* Stage number with status indicator */}
                         <div className={cn(
-                            "w-8 h-8 rounded-full flex items-center justify-center transition-colors",
+                            "w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center transition-colors shrink-0",
                             status === 'ready' && "bg-emerald-500/20",
                             status === 'loading' && "bg-amber-500/20",
                             status === 'idle' && "bg-slate-800",
                             status === 'error' && "bg-red-500/20"
                         )}>
                             <StatusIcon className={cn(
-                                "w-4 h-4",
+                                "w-3.5 h-3.5 md:w-4 md:h-4",
                                 config.color,
                                 status === 'loading' && "animate-spin"
                             )} />
                         </div>
 
-                        <div>
+                        <div className="min-w-0">
                             <h3 className={cn(
-                                "text-lg font-semibold",
+                                "text-sm md:text-lg font-semibold truncate",
                                 status === 'ready' ? "text-emerald-400" : "text-slate-200"
                             )}>
                                 Stage {stageNumber}: {title}
                             </h3>
                             {description && (
-                                <p className="text-sm text-slate-500">
+                                <p className="text-xs md:text-sm text-slate-500 truncate hidden sm:block">
                                     {description}
                                 </p>
                             )}
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={config.badgeClass}>
+                    <div className="flex items-center gap-1 md:gap-2 shrink-0">
+                        <Badge variant="outline" className={cn("text-xs", config.badgeClass)}>
                             <StatusIcon className={cn(
-                                "w-3 h-3 mr-1",
+                                "w-3 h-3 mr-1 hidden sm:inline",
                                 status === 'loading' && "animate-spin"
                             )} />
                             {config.label}
@@ -195,7 +195,7 @@ export default function StageCard({
 
             {/* Content - collapsible */}
             {(!isCollapsible || !isCollapsed) && (
-                <CardContent className="pt-4">
+                <CardContent className="pt-4 px-3 md:px-6">
                     {children}
                 </CardContent>
             )}

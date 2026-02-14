@@ -9,6 +9,7 @@ import Stage1Summary from "@/components/alpha-hunter/stages/Stage1Summary";
 import Stage2VPACard from "@/components/alpha-hunter/stages/Stage2VPACard";
 import Stage3FlowCard from "@/components/alpha-hunter/stages/Stage3FlowCard";
 import Stage4SupplyCard from "@/components/alpha-hunter/stages/Stage4SupplyCard";
+import Stage5Conclusion from "@/components/alpha-hunter/stages/Stage5Conclusion";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -116,6 +117,9 @@ function AlphaHunterContent() {
 
                                 {/* Stage 4: Supply Analysis */}
                                 <Stage4SupplyCard ticker={selectedTicker} />
+
+                                {/* Stage 5: Final Conclusion */}
+                                <Stage5Conclusion ticker={selectedTicker} />
                             </div>
                         ) : (
                             // Fallback: No ticker selected
