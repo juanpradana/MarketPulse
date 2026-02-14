@@ -125,9 +125,27 @@ function generateChatText(data: StockDetailResponse): string {
     if (data.entry_price || data.target_price) {
         lines.push(`🎯 *ENTRY / TARGET*`);
         if (data.entry_price) lines.push(`  Entry: ${fmt(data.entry_price)}`);
-        if (data.target_price) lines.push(`  Target: ${fmt(data.target_price)}`);
-        if (data.stop_loss) lines.push(`  Stop Loss: ${fmt(data.stop_loss)}`);
+        if (data.target_price) lines.push(`  Target: ${fmt(data.target_price)} ${data.target_method ? `(${data.target_method})` : ''}`);
+        if (data.stop_loss) lines.push(`  Stop Loss: ${fmt(data.stop_loss)} ${data.stop_method ? `(${data.stop_method})` : ''}`);
         if (data.risk_reward_ratio) lines.push(`  R:R = 1:${data.risk_reward_ratio}`);
+        lines.push('');
+    }
+
+    // Data freshness warning
+    if ((data.data_freshness ?? 1) < 1) {
+        lines.push(`⚠️ *DATA FRESHNESS: ${(data.data_freshness! * 100).toFixed(0)}%*`);
+        lines.push(`  Source Date: ${data.data_source_date || 'unknown'}`);
+        if (data.original_deep_score && data.original_deep_score !== data.deep_score) {
+            lines.push(`  Score adjusted: ${data.original_deep_score} → ${data.deep_score}`);
+        }
+        lines.push('');
+    }
+
+    // Volume confirmation
+    if ((data.volume_confirmation_multiplier ?? 0) > 0) {
+        const volMult = data.volume_confirmation_multiplier!;
+        const volStatus = volMult > 1 ? '✓ Confirms' : volMult < 1 ? '! Contradicts' : '○ Neutral';
+        lines.push(`📊 *VOLUME CONFIRMATION: ${volMult}x* ${volStatus}`);
         lines.push('');
     }
 
@@ -687,6 +705,25 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
 
                     {data && !loading && (
                         <>
+                            {/* Data Freshness Warning */}
+                            {(data.data_freshness ?? 1) < 1 && (
+                                <div className="bg-amber-900/20 border border-amber-700/30 rounded-lg p-3 flex items-start gap-2">
+                                    <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                                    <div className="flex-1">
+                                        <div className="text-[11px] font-bold text-amber-400">Data Freshness Warning</div>
+                                        <div className="text-[10px] text-amber-300/80">
+                                            This analysis is based on data from {data.data_source_date || 'unknown date'}.
+                                            Confidence: {(data.data_freshness! * 100).toFixed(0)}%
+                                            {data.original_deep_score && data.original_deep_score !== data.deep_score && (
+                                                <span className="ml-1">
+                                                    (Original score: {data.original_deep_score}, Adjusted: {data.deep_score})
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Score Overview */}
                             <div className="grid grid-cols-6 gap-3">
                                 <MetricCard
@@ -746,7 +783,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                     icon={<Crosshair className="w-3 h-3 text-zinc-600" />}
                                 />
                                 <MetricCard
-                                    label="Target Price"
+                                    label={`Target Price ${data.target_method ? `(${data.target_method})` : ''}`}
                                     value={data.target_price ? data.target_price.toLocaleString('id-ID') : '—'}
                                     sub={data.risk_reward_ratio ? `R:R = 1:${data.risk_reward_ratio}` : ''}
                                     color="text-yellow-400"

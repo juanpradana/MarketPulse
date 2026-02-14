@@ -162,6 +162,7 @@ export interface BandarmologyItem {
     // Volume context
     volume_score?: number;
     volume_signal?: string;
+    volume_confirmation_multiplier?: number;
 
     // MA cross
     ma_cross_signal?: string;
@@ -190,6 +191,22 @@ export interface BandarmologyItem {
     pump_tomorrow_score?: number;
     pump_tomorrow_signal?: string;
     pump_tomorrow_factors?: Record<string, number>;
+
+    // Data freshness (Improvement 7)
+    data_freshness?: number;
+    data_source_date?: string;
+    original_deep_score?: number;
+
+    // Entry/target methods (Improvement 6)
+    target_method?: string;
+    stop_method?: string;
+
+    // Relative context (Improvement 4)
+    relative_context?: {
+        market_z_score?: number;
+        sector_z_score?: number;
+        relative_score?: number;
+    };
 
     // Signals
     deep_signals?: DeepSignals;
@@ -352,6 +369,7 @@ export interface StockDetailResponse {
     // Volume context
     volume_score?: number;
     volume_signal?: string;
+    volume_confirmation_multiplier?: number;
 
     // MA cross
     ma_cross_signal?: string;
@@ -380,6 +398,22 @@ export interface StockDetailResponse {
     pump_tomorrow_score?: number;
     pump_tomorrow_signal?: string;
     pump_tomorrow_factors?: Record<string, number>;
+
+    // Data freshness (Improvement 7)
+    data_freshness?: number;
+    data_source_date?: string;
+    original_deep_score?: number;
+
+    // Entry/target methods (Improvement 6)
+    target_method?: string;
+    stop_method?: string;
+
+    // Relative context (Improvement 4)
+    relative_context?: {
+        market_z_score?: number;
+        sector_z_score?: number;
+        relative_score?: number;
+    };
 
     // Detail data
     inventory_brokers: InvBrokerDetail[];

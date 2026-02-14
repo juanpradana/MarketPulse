@@ -540,6 +540,16 @@ export default function BandarmologyPage() {
                 </div>
             </div>
 
+            {/* Data Freshness Warning Banner */}
+            {processedData.some(r => (r.data_freshness ?? 1) < 1) && (
+                <div className="bg-amber-900/30 border-y border-amber-700/30 px-3 py-1.5 flex items-center gap-2">
+                    <AlertCircle className="w-3 h-3 text-amber-500" />
+                    <span className="text-[10px] text-amber-400">
+                        Some stocks have stale data. Check freshness indicator in details.
+                    </span>
+                </div>
+            )}
+
             {/* Table */}
             <div className="flex-1 overflow-auto relative bg-[#0f1115] min-h-[300px]">
                 {loading && (
@@ -580,6 +590,7 @@ export default function BandarmologyPage() {
                                 <SortableHeader label="INV" sortKey="inv_accum_brokers" className="w-[55px]" />
                                 <SortableHeader label="MM" sortKey="txn_mm_cum" className="w-[60px]" />
                                 <SortableHeader label="F.CUM" sortKey="txn_foreign_cum" className="w-[60px]" />
+                                <th className="px-1 py-2 text-[10px] font-bold uppercase tracking-tight text-center border-r border-zinc-700/30 w-[40px]" title="Volume Confirmation">VOL</th>
                                 <th className="px-1 py-2 text-[10px] font-bold uppercase tracking-tight text-center border-r border-zinc-700/30 w-[40px]">TOP B</th>
                                 <th className="px-1 py-2 text-[10px] font-bold uppercase tracking-tight text-center w-[40px]">TOP S</th>
                             </tr>
@@ -741,6 +752,21 @@ export default function BandarmologyPage() {
                                                 ) : <span className="text-zinc-800 text-[9px]">—</span>}
                                             </td>
 
+                                            {/* Volume Confirmation */}
+                                            <td className="px-1 py-1 text-center border-r border-zinc-800/30">
+                                                {(row.volume_confirmation_multiplier ?? 0) > 1 ? (
+                                                    <span className="text-[9px] font-bold text-cyan-400" title={`Volume confirms flow (${row.volume_confirmation_multiplier}x)`}>
+                                                        ✓{row.volume_confirmation_multiplier?.toFixed(1)}x
+                                                    </span>
+                                                ) : (row.volume_confirmation_multiplier ?? 0) < 1 ? (
+                                                    <span className="text-[9px] font-bold text-orange-400" title={`Volume contradicts flow (${row.volume_confirmation_multiplier}x)`}>
+                                                        !{row.volume_confirmation_multiplier?.toFixed(1)}x
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-zinc-800 text-[9px]">—</span>
+                                                )}
+                                            </td>
+
                                             {/* Top Buyer & Seller */}
                                             <td className="px-1 py-1 text-center border-r border-zinc-800/30">
                                                 <span className="text-emerald-400 font-bold text-[10px]">{row.top_buyer || '—'}</span>
@@ -753,7 +779,7 @@ export default function BandarmologyPage() {
                                 })
                             ) : (
                                 <tr>
-                                    <td colSpan={27} className="px-4 py-32 text-center text-zinc-600 italic">
+                                    <td colSpan={28} className="px-4 py-32 text-center text-zinc-600 italic">
                                         <div className="flex flex-col items-center gap-2">
                                             <AlertCircle className="w-6 h-6 opacity-20" />
                                             <span>{data.length === 0 ? "No data available. Run a Full Sync on Market Summary first." : "No stocks match your filter criteria."}</span>
