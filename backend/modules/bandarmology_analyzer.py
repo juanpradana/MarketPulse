@@ -1854,6 +1854,29 @@ class BandarmologyAnalyzer:
         deep['deep_score'] = round(deep_score, 1)
         deep['deep_signals'] = signals
 
+        # ---- DATA FRESHNESS DECAY ----
+        # Apply freshness penalty based on data source age
+        # Get the most recent data source date
+        data_source_date = None
+        if inventory_meta and inventory_meta.get('lastDate'):
+            data_source_date = inventory_meta['lastDate']
+        elif broker_summary_meta and broker_summary_meta.get('trade_date'):
+            data_source_date = broker_summary_meta['trade_date']
+
+        if data_source_date and analysis_date:
+            freshness = self._apply_freshness_decay(data_source_date, analysis_date)
+            deep['data_freshness'] = freshness
+            deep['data_source_date'] = data_source_date
+
+            if freshness < 1.0:
+                # Apply decay to the deep score
+                original_score = deep['deep_score']
+                deep['deep_score'] = round(original_score * freshness, 1)
+                deep['original_deep_score'] = original_score
+                signals['data_freshness_warning'] = (
+                    f"Data is {data_source_date} ({freshness:.0%} confidence)"
+                )
+
         # ---- BREAKOUT PROBABILITY SCORE ----
         bp, bp_factors = self._calculate_breakout_probability(deep, base_result)
         deep['breakout_probability'] = bp
