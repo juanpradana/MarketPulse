@@ -570,6 +570,78 @@ class BandarmologyAnalyzer:
         except Exception:
             return 50.0
 
+    def _resolve_data_source_conflicts(
+        self, scores_by_source: Dict[str, float]
+    ) -> Tuple[float, Dict]:
+        """
+        Detect and resolve conflicts between data sources.
+
+        When data sources disagree (e.g., inventory shows distribution while
+        transaction chart shows accumulation), reduce confidence in the score.
+
+        Args:
+            scores_by_source: Dict mapping source name to score
+                e.g., {'inventory': 15, 'transaction_chart': 25, 'broker_summary': 20}
+
+        Returns:
+            Tuple of (multiplier, signals)
+            - multiplier: 0.8 to 1.0 penalty factor
+            - signals: dict with conflict information
+        """
+        signals = {}
+
+        if len(scores_by_source) < 2:
+            return 1.0, signals
+
+        # Calculate statistics across sources
+        scores = list(scores_by_source.values())
+        mean_score = np.mean(scores)
+        std_score = np.std(scores)
+
+        # Calculate coefficient of variation (CV) - normalized measure of dispersion
+        cv = std_score / abs(mean_score) if mean_score != 0 else 0
+
+        # Detect directional conflict (positive vs negative signals)
+        positive_sources = [k for k, v in scores_by_source.items() if v > 5]
+        negative_sources = [k for k, v in scores_by_source.items() if v < 0]
+
+        has_directional_conflict = len(positive_sources) > 0 and len(negative_sources) > 0
+
+        # Calculate multiplier based on conflict severity
+        multiplier = 1.0
+
+        if has_directional_conflict:
+            # Severe conflict: some sources say buy, others say sell
+            multiplier = 0.8
+            signals['data_conflict_severe'] = (
+                f"Directional conflict: {', '.join(positive_sources)} positive vs "
+                f"{', '.join(negative_sources)} negative"
+            )
+        elif cv > 0.5:
+            # High variance in scores (>50% of mean)
+            multiplier = 0.85
+            signals['data_conflict_warning'] = (
+                f"High variance between sources (CV={cv:.2f}): "
+                f"scores range from {min(scores):.0f} to {max(scores):.0f}"
+            )
+        elif cv > 0.3:
+            # Moderate variance
+            multiplier = 0.9
+            signals['data_conflict_moderate'] = (
+                f"Moderate variance between sources (CV={cv:.2f})"
+            )
+
+        # Add diagnostic info
+        signals['_conflict_stats'] = {
+            'mean': round(mean_score, 2),
+            'std': round(std_score, 2),
+            'cv': round(cv, 2),
+            'sources': scores_by_source,
+            'multiplier': multiplier
+        }
+
+        return multiplier, signals
+
     def _score_symbol(
         self,
         symbol: str,
@@ -1152,6 +1224,10 @@ class BandarmologyAnalyzer:
             'accum_start_date': None,
             'accum_phase': 'UNKNOWN',
             'bandar_avg_cost': 0,
+            # Conflict resolution
+            'data_source_conflict': False,
+            'conflict_multiplier': 1.0,
+            'source_scores': {},
             'bandar_total_lot': 0,
             'coordination_score': 0,
             'phase_confidence': 'LOW',
@@ -1344,6 +1420,34 @@ class BandarmologyAnalyzer:
             deep['txn_institution_participation'] = _safe_float(txn_chart_data.get('part_institution'))
             deep['txn_mm_trend'] = txn_chart_data.get('mm_trend') or 'NEUTRAL'
             deep['txn_foreign_trend'] = txn_chart_data.get('foreign_trend') or 'NEUTRAL'
+
+        # ---- DATA SOURCE CONFLICT RESOLUTION ----
+        # Track scores by source for conflict detection
+        scores_by_source = {}
+        if inventory_data:
+            scores_by_source['inventory'] = inv_score
+        if txn_chart_data:
+            scores_by_source['transaction_chart'] = txn_score
+
+        # Store source scores for reference
+        deep['source_scores'] = scores_by_source.copy()
+
+        # Add broker summary score when available
+        if broker_summary_data:
+            broksum_score = deep.get('broksum_consistency_score', 0)
+            scores_by_source['broker_summary'] = broksum_score
+
+        # Filter out None values and zero scores (sources not providing meaningful data)
+        available_scores = {k: v for k, v in scores_by_source.items() if v is not None and v != 0}
+
+        if len(available_scores) >= 2:
+            conflict_mult, conflict_signals = self._resolve_data_source_conflicts(available_scores)
+            if conflict_mult != 1.0:
+                # Apply conflict penalty to deep score
+                deep_score = deep_score * conflict_mult
+                signals.update(conflict_signals)
+                deep['conflict_multiplier'] = conflict_mult
+                deep['data_source_conflict'] = True
 
         # ---- FLOW VELOCITY/ACCELERATION (max 15 pts) ----
         if txn_chart_data:
