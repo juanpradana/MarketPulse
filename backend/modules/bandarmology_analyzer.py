@@ -2272,28 +2272,36 @@ class BandarmologyAnalyzer:
         cum_foreign = _safe_float(txn.get('cum_foreign'))
         cum_inst = _safe_float(txn.get('cum_institution'))
 
-        mm_week = _safe_float(txn.get('cum_mm_week_ago'))
-        foreign_week = _safe_float(txn.get('cum_foreign_week_ago'))
-        inst_week = _safe_float(txn.get('cum_institution_week_ago'))
+        # Get raw values to check existence vs zero values
+        mm_week_raw = txn.get('cum_mm_week_ago')
+        foreign_week_raw = txn.get('cum_foreign_week_ago')
+        inst_week_raw = txn.get('cum_institution_week_ago')
+        mm_month_raw = txn.get('cum_mm_month_ago')
+        foreign_month_raw = txn.get('cum_foreign_month_ago')
+        inst_month_raw = txn.get('cum_institution_month_ago')
 
-        mm_month = _safe_float(txn.get('cum_mm_month_ago'))
-        foreign_month = _safe_float(txn.get('cum_foreign_month_ago'))
-        inst_month = _safe_float(txn.get('cum_institution_month_ago'))
+        mm_week = _safe_float(mm_week_raw)
+        foreign_week = _safe_float(foreign_week_raw)
+        inst_week = _safe_float(inst_week_raw)
 
-        # Skip if no historical data available
-        if mm_week == 0 and mm_month == 0 and foreign_week == 0:
+        mm_month = _safe_float(mm_month_raw)
+        foreign_month = _safe_float(foreign_month_raw)
+        inst_month = _safe_float(inst_month_raw)
+
+        # Skip if no historical data available (check raw values for None)
+        if mm_week_raw is None and mm_month_raw is None and foreign_week_raw is None:
             return 0, signals, velocity_data
 
         # ---- Calculate velocities (change per trading day) ----
-        # 5-day velocity (short-term momentum)
-        vel_mm_5d = (cum_mm - mm_week) / 5.0 if mm_week != 0 or cum_mm != 0 else 0
-        vel_foreign_5d = (cum_foreign - foreign_week) / 5.0
-        vel_inst_5d = (cum_inst - inst_week) / 5.0
+        # 5-day velocity (short-term momentum) - only if week-ago data exists
+        vel_mm_5d = (cum_mm - mm_week) / 5.0 if mm_week_raw is not None else 0
+        vel_foreign_5d = (cum_foreign - foreign_week) / 5.0 if foreign_week_raw is not None else 0
+        vel_inst_5d = (cum_inst - inst_week) / 5.0 if inst_week_raw is not None else 0
 
-        # 20-day velocity (medium-term trend)
-        vel_mm_20d = (cum_mm - mm_month) / 20.0 if mm_month != 0 or cum_mm != 0 else 0
-        vel_foreign_20d = (cum_foreign - foreign_month) / 20.0
-        vel_inst_20d = (cum_inst - inst_month) / 20.0
+        # 20-day velocity (medium-term trend) - only if month-ago data exists
+        vel_mm_20d = (cum_mm - mm_month) / 20.0 if mm_month_raw is not None else 0
+        vel_foreign_20d = (cum_foreign - foreign_month) / 20.0 if foreign_month_raw is not None else 0
+        vel_inst_20d = (cum_inst - inst_month) / 20.0 if inst_month_raw is not None else 0
 
         # ---- Calculate acceleration (change in velocity) ----
         accel_mm = vel_mm_5d - vel_mm_20d
