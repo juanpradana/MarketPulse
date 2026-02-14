@@ -240,7 +240,7 @@ export default function BrokerStalkerAdvanced() {
                                 </div>
 
                                 <div className="h-[250px] w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
+                                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                         <BarChart data={DAILY_CHART_DATA}>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff05" />
                                             <XAxis
@@ -274,7 +274,7 @@ export default function BrokerStalkerAdvanced() {
                                 </div>
 
                                 <div className="h-[250px] w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
+                                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                         <LineChart data={DAILY_CHART_DATA}>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff05" />
                                             <XAxis

@@ -844,7 +844,7 @@ export default function NeoBDMTrackerPage() {
                         </div>
                     ) : (
                         <div className="flex-1 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                 <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                                     <defs>
                                         <linearGradient id="colorFlow" x1="0" y1="0" x2="0" y2="1">
@@ -953,7 +953,7 @@ export default function NeoBDMTrackerPage() {
                         </div>
                     ) : (
                         <div className="flex-1 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                 <BarChart data={volumeData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
                                     <XAxis
