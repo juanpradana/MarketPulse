@@ -921,6 +921,9 @@ class BandarmologyAnalyzer:
             # Volume context
             'volume_score': 0,
             'volume_signal': 'NONE',
+            'volume_confirmation_multiplier': 1.0,
+            'volume_lot_total': 0,
+            'volume_proxy_participation': 0,
             # MA cross
             'ma_cross_signal': 'NONE',
             'ma_cross_score': 0,
@@ -1043,8 +1046,27 @@ class BandarmologyAnalyzer:
         # ---- TRANSACTION CHART ANALYSIS (max 30 pts) ----
         if txn_chart_data:
             txn_score, txn_signals = self._score_transaction_chart(txn_chart_data)
-            deep_score += txn_score
+
+            # ---- VOLUME CONFIRMATION MULTIPLIER ----
+            vol_mult, vol_conf_signals = self._score_volume_confirmed_flow(
+                txn_chart_data, broker_summary_data
+            )
+            deep['volume_confirmation_multiplier'] = vol_mult
+
+            # Apply volume multiplier to transaction score
+            adjusted_txn_score = txn_score * vol_mult
+            deep['txn_score_raw'] = txn_score
+            deep['txn_score_adjusted'] = adjusted_txn_score
+
+            deep_score += adjusted_txn_score
             signals.update(txn_signals)
+            signals.update(vol_conf_signals)
+
+            # Populate volume metrics from signals
+            if 'volume_lot_total' in vol_conf_signals:
+                deep['volume_lot_total'] = vol_conf_signals.get('volume_lot_total', 0)
+            if 'volume_proxy_participation' in vol_conf_signals:
+                deep['volume_proxy_participation'] = vol_conf_signals.get('volume_proxy_participation', 0)
 
             # Populate txn metrics
             deep['txn_mm_cum'] = _safe_float(txn_chart_data.get('cum_mm'))
@@ -1635,6 +1657,89 @@ class BandarmologyAnalyzer:
             score += 3
 
         return min(score, 30), signals
+
+    def _score_volume_confirmed_flow(
+        self, txn: Dict, broker_summary_data: Optional[Dict] = None
+    ) -> Tuple[float, Dict]:
+        """
+        Calculate volume confirmation multiplier for flow scores.
+
+        Strong flows on high volume = higher confidence (multiplier > 1.0)
+        Strong flows on low volume = lower confidence (multiplier < 1.0)
+
+        Uses broker summary lot data as volume proxy, or participation ratios
+        as fallback if broker summary not available.
+
+        Returns: (multiplier, signals)
+        - multiplier: 0.5 to 1.5 range
+        - signals: dict with volume confirmation info
+        """
+        signals = {}
+        multiplier = 1.0  # Default: no adjustment
+
+        # Calculate volume proxy from broker summary
+        total_lot = 0
+        if broker_summary_data:
+            buy_list = broker_summary_data.get('buy', [])
+            sell_list = broker_summary_data.get('sell', [])
+            total_buy_lot = sum(
+                self._parse_broksum_num(b.get('nlot', 0)) for b in buy_list
+            )
+            total_sell_lot = sum(
+                self._parse_broksum_num(s.get('nlot', 0)) for s in sell_list
+            )
+            total_lot = total_buy_lot + total_sell_lot
+
+        # Get flow direction
+        daily_mm = _safe_float(txn.get('daily_mm'))
+        cum_mm = _safe_float(txn.get('cum_mm'))
+        flow_positive = daily_mm > 0 or cum_mm > 0
+
+        if not flow_positive:
+            # For negative flows, volume confirmation is less relevant
+            return 1.0, signals
+
+        # Volume-based scoring thresholds (in lot units)
+        if total_lot > 0:
+            # High volume threshold: > 1000 lots
+            # Low volume threshold: < 100 lots
+            if total_lot >= 1000:
+                multiplier = 1.3
+                signals['vol_confirmed_strong'] = f"Strong flow confirmed by high volume ({total_lot:,.0f} lots)"
+            elif total_lot >= 500:
+                multiplier = 1.15
+                signals['vol_confirmed_good'] = f"Good volume confirmation ({total_lot:,.0f} lots)"
+            elif total_lot >= 200:
+                multiplier = 1.0
+                # Neutral - normal volume
+            elif total_lot >= 100:
+                multiplier = 0.85
+                signals['vol_weak'] = f"Weak volume ({total_lot:,.0f} lots), flow less reliable"
+            else:
+                multiplier = 0.7
+                signals['vol_very_weak'] = f"Very low volume ({total_lot:,.0f} lots), flow may be misleading"
+
+            signals['volume_lot_total'] = total_lot
+
+        else:
+            # Fallback: use participation ratios as volume proxy
+            part_foreign = _safe_float(txn.get('part_foreign'))
+            part_inst = _safe_float(txn.get('part_institution'))
+            total_participation = part_foreign + part_inst
+
+            if total_participation >= 0.6:
+                multiplier = 1.2
+                signals['vol_proxy_strong'] = f"High institutional participation ({total_participation:.0%})"
+            elif total_participation >= 0.4:
+                multiplier = 1.1
+                signals['vol_proxy_moderate'] = f"Moderate institutional participation ({total_participation:.0%})"
+            elif total_participation <= 0.2:
+                multiplier = 0.8
+                signals['vol_proxy_weak'] = f"Low institutional participation ({total_participation:.0%})"
+
+            signals['volume_proxy_participation'] = total_participation
+
+        return multiplier, signals
 
     def _score_flow_velocity(self, txn: Dict) -> Tuple[int, Dict, Dict]:
         """
