@@ -10,6 +10,8 @@ import Stage2VPACard from "@/components/alpha-hunter/stages/Stage2VPACard";
 import Stage3FlowCard from "@/components/alpha-hunter/stages/Stage3FlowCard";
 import Stage4SupplyCard from "@/components/alpha-hunter/stages/Stage4SupplyCard";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 function AlphaHunterContent() {
     const { selectedTicker, investigations, isAtScanner, addInvestigation } = useAlphaHunter();
@@ -43,10 +45,39 @@ function AlphaHunterContent() {
 
     return (
         <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-100">
-            {/* Left Sidebar: Watchlist */}
-            <div className={sidebarCollapsed ? "w-14 shrink-0 transition-all" : "w-80 shrink-0 transition-all"}>
+            {/* Left Sidebar: Watchlist - Hidden on mobile */}
+            <div className={cn(
+                "shrink-0 transition-all hidden md:block",
+                sidebarCollapsed ? "w-14" : "w-80"
+            )}>
                 <WatchlistSidebar isCollapsed={sidebarCollapsed} onToggle={toggleSidebar} />
             </div>
+
+            {/* Mobile Watchlist Toggle */}
+            <div className="md:hidden fixed bottom-4 right-4 z-50">
+                <button
+                    onClick={toggleSidebar}
+                    className="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-500 text-white shadow-lg flex items-center justify-center"
+                >
+                    {sidebarCollapsed ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                </button>
+            </div>
+
+            {/* Mobile Watchlist Drawer */}
+            <div className={cn(
+                "fixed inset-y-0 left-0 z-40 w-80 bg-slate-900 transform transition-transform duration-300 md:hidden",
+                sidebarCollapsed ? "-translate-x-full" : "translate-x-0"
+            )}>
+                <WatchlistSidebar isCollapsed={false} onToggle={toggleSidebar} />
+            </div>
+
+            {/* Mobile Overlay */}
+            {!sidebarCollapsed && (
+                <div
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden"
+                    onClick={() => setSidebarCollapsed(true)}
+                />
+            )}
 
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col overflow-hidden">
@@ -55,7 +86,7 @@ function AlphaHunterContent() {
 
                 {/* Content Area */}
                 <ScrollArea className="flex-1">
-                    <div className="p-6">
+                    <div className="p-4 md:p-6">
                         {isAtScanner ? (
                             // Scanner View
                             <div className="space-y-6">

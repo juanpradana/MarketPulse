@@ -621,7 +621,7 @@ export default function BrokerSummaryPage() {
 
     return (
         <div className="min-h-screen bg-[#09090b] text-zinc-100 font-sans selection:bg-blue-500/30 pb-12">
-            <header className="sticky top-0 z-50 border-b border-zinc-800/50 bg-[#09090b]/80 backdrop-blur-xl px-6 py-4 flex items-center justify-between">
+            <header className="sticky top-14 lg:top-0 z-40 border-b border-zinc-800/50 bg-[#09090b]/80 backdrop-blur-xl px-4 lg:px-6 py-3 lg:py-4 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <div className="p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
                         <ArrowRightLeft className="w-5 h-5 text-blue-400" />

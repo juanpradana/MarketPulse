@@ -361,7 +361,7 @@ export default function BandarmologyPage() {
         <>
         <div className="flex flex-col gap-0 p-0 min-h-screen bg-[#0f1115] text-zinc-100 font-mono">
             {/* Header Bar */}
-            <div className="bg-[#181a1f] border-b border-zinc-800/60 sticky top-0 z-50 backdrop-blur-md bg-opacity-95">
+            <div className="bg-[#181a1f] border-b border-zinc-800/60 sticky top-14 lg:top-0 z-40 backdrop-blur-md bg-opacity-95">
                 <div className="flex flex-wrap items-center justify-between gap-2 p-2">
                     <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2">
@@ -541,7 +541,7 @@ export default function BandarmologyPage() {
             </div>
 
             {/* Table */}
-            <div className="flex-1 overflow-hidden relative bg-[#0f1115]">
+            <div className="flex-1 overflow-auto relative bg-[#0f1115] min-h-[300px]">
                 {loading && (
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-30 flex flex-col items-center justify-center gap-3">
                         <RefreshCcw className="w-10 h-10 text-purple-500 animate-spin" />
@@ -767,26 +767,27 @@ export default function BandarmologyPage() {
             </div>
 
             {/* Footer */}
-            <div className="bg-[#181a1f] border-t border-zinc-800 px-3 py-1 text-[9px] text-zinc-500 flex justify-between items-center select-none h-[28px]">
-                <div className="flex gap-4 items-center">
-                    <span>Showing {paginatedData.length} of {processedData.length} stocks</span>
-                    {error && <span className="text-red-500 flex items-center gap-1 font-bold"><AlertCircle className="w-3 h-3" /> {error}</span>}
+            <div className="bg-[#181a1f] border-t border-zinc-800 px-2 lg:px-3 py-1.5 lg:py-1 text-[9px] text-zinc-500 flex flex-wrap justify-between items-center select-none gap-2">
+                <div className="flex gap-2 lg:gap-4 items-center order-2 lg:order-1">
+                    <span className="hidden sm:inline">Showing {paginatedData.length} of {processedData.length} stocks</span>
+                    <span className="sm:hidden">{paginatedData.length}/{processedData.length}</span>
+                    {error && <span className="text-red-500 flex items-center gap-1 font-bold"><AlertCircle className="w-3 h-3" /> <span className="hidden sm:inline">{error}</span></span>}
                 </div>
 
                 {/* Pagination */}
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 order-1 lg:order-2 w-full lg:w-auto justify-center">
                     <button
                         onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                         disabled={currentPage === 1}
-                        className="px-1.5 py-0.5 bg-zinc-800 rounded hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed text-zinc-300 text-[8px]"
+                        className="px-2 lg:px-1.5 py-1 lg:py-0.5 bg-zinc-800 rounded hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed text-zinc-300 text-[10px] lg:text-[8px]"
                     >
                         Prev
                     </button>
-                    <span className="text-zinc-400 text-[8px] mx-1">Page {currentPage} of {totalPages || 1}</span>
+                    <span className="text-zinc-400 text-[10px] lg:text-[8px] mx-2 lg:mx-1">Page {currentPage} of {totalPages || 1}</span>
                     <button
                         onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                         disabled={currentPage === totalPages || totalPages === 0}
-                        className="px-1.5 py-0.5 bg-zinc-800 rounded hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed text-zinc-300 text-[8px]"
+                        className="px-2 lg:px-1.5 py-1 lg:py-0.5 bg-zinc-800 rounded hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed text-zinc-300 text-[10px] lg:text-[8px]"
                     >
                         Next
                     </button>
@@ -794,7 +795,7 @@ export default function BandarmologyPage() {
 
                 <button
                     onClick={handleExportCSV}
-                    className="flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity cursor-pointer text-[8px]"
+                    className="hidden sm:flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity cursor-pointer text-[8px] order-3"
                 >
                     <Download className="w-2.5 h-2.5" /> Export CSV
                 </button>

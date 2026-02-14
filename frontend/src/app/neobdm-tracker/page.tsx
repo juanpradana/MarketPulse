@@ -297,7 +297,7 @@ export default function NeoBDMTrackerPage() {
     return (
         <div className="flex flex-col gap-0 min-h-screen bg-[#0f1115] text-zinc-100 font-mono">
             {/* Top Navigation Bar */}
-            <div className="flex items-center justify-between bg-[#181a1f] p-2 border-b border-zinc-800/60 sticky top-0 z-50 backdrop-blur-md bg-opacity-90">
+            <div className="flex flex-wrap items-center justify-between bg-[#181a1f] p-2 border-b border-zinc-800/60 sticky top-14 lg:top-0 z-40 backdrop-blur-md bg-opacity-90 gap-2">
                 <div className="flex items-center gap-4">
                     <Link href="/neobdm-summary" className="hover:bg-zinc-800 p-1 rounded-sm transition-colors group">
                         <ArrowLeft className="w-4 h-4 text-zinc-400 group-hover:text-zinc-100" />

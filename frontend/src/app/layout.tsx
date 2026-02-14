@@ -1,10 +1,18 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/sidebar";
 
 export const metadata: Metadata = {
   title: "MarketPulse - Investment Intelligence Platform",
   description: "Next-gen investment intelligence platform with real-time market insights",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: "#09090b",
 };
 
 import { FilterProvider } from "@/context/filter-context";
@@ -16,11 +24,24 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className="font-sans bg-zinc-950 text-zinc-100 overflow-hidden" suppressHydrationWarning>
+      <body
+        className="font-sans bg-zinc-950 text-zinc-100 overflow-hidden"
+        suppressHydrationWarning
+      >
         <FilterProvider>
           <div className="flex h-screen">
-            <Sidebar />
-            <main className="flex-1 overflow-auto p-8">
+            {/* Desktop Sidebar */}
+            <div className="hidden lg:block">
+              <Sidebar />
+            </div>
+
+            {/* Mobile Navigation */}
+            <div className="lg:hidden">
+              <Sidebar mobile />
+            </div>
+
+            {/* Main Content */}
+            <main className="flex-1 overflow-auto w-full lg:p-8 pt-16 lg:pt-8 px-4 pb-4">
               {children}
             </main>
           </div>
