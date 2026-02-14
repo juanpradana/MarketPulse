@@ -543,16 +543,19 @@ class BandarmologyAnalyzer:
         # z > -1.0: 0.9 multiplier (10% penalty)
         # z < -1.0: 0.8 multiplier (20% penalty)
 
+        # Check strongest signals first (both positive and negative)
         if best_z_score >= 1.0 and best_z_sign > 0:
             multiplier = 1.2
+        elif best_z_score >= 1.0 and best_z_sign < 0:
+            multiplier = 0.8  # Strong negative signal
         elif best_z_score >= 0.5 and best_z_sign > 0:
             multiplier = 1.1
-        elif best_z_score >= 0.5 or (best_z_score >= 0 and best_z_sign >= 0):
+        elif best_z_score >= 0.5 and best_z_sign < 0:
+            multiplier = 0.9  # Moderate negative signal
+        elif best_z_score >= 0 or best_z_sign >= 0:
             multiplier = 1.0
-        elif best_z_score >= 1.0 and best_z_sign < 0:
-            multiplier = 0.8
         else:
-            multiplier = 0.9
+            multiplier = 0.9  # Negative but weak
 
         context_info['relative_score'] = multiplier
         context_info['z_score_used'] = round(best_z_score, 2) if sector else round(market_z_score, 2)
@@ -899,10 +902,11 @@ class BandarmologyAnalyzer:
         momentum_score = 0
         if d_0_mm > 0 and pct_1d > 0:
             momentum_score = 10
+        elif d_0_mm > 0 and pct_1d < -3:
+            # Inflow despite price drop = potential reversal (check before general d_0_mm > 0)
+            momentum_score = 2
         elif d_0_mm > 0 or pct_1d > 0:
             momentum_score = 5
-        elif d_0_mm > 0 and pct_1d < -3:
-            momentum_score = 2  # Inflow despite price drop = potential reversal
 
         scores['momentum'] = momentum_score
         total_score += momentum_score
@@ -1585,14 +1589,14 @@ class BandarmologyAnalyzer:
             deep['broksum_total_sell_val'] = total_sell_val
 
             # Calculate weighted avg buy/sell prices
-            if total_buy_lot > 0:
+            if total_buy_lot > 0 and total_buy_val > 0:
                 deep['broksum_avg_buy_price'] = round(
                     (total_buy_val * 1e9) / (total_buy_lot * 100), 0
-                ) if total_buy_val > 0 else 0
-            if total_sell_lot > 0:
+                )
+            if total_sell_lot > 0 and total_sell_val > 0:
                 deep['broksum_avg_sell_price'] = round(
                     (total_sell_val * 1e9) / (total_sell_lot * 100), 0
-                ) if total_sell_val > 0 else 0
+                )
 
             # Top 5 buyers and sellers
             deep['broksum_top_buyers'] = [
@@ -2949,7 +2953,7 @@ class BandarmologyAnalyzer:
         # 9. Smart money vs retail divergence (weight 5%)
         sr_div = deep.get('smart_retail_divergence', 0)
         # Convert -100..+100 to 0..100 scale
-        sr_factor = max(0, min(100, (sr_div + 100) // 2))
+        sr_factor = max(0, min(100, (sr_div + 100) / 2))
         factors['smart_retail'] = sr_factor
         weights['smart_retail'] = 0.05
 
@@ -3762,9 +3766,11 @@ class BandarmologyAnalyzer:
         daily_smart = _safe_float(txn.get('daily_smart'))
         daily_retail = _safe_float(txn.get('daily_retail'))
 
-        # Historical data for context
-        smart_week_ago = _safe_float(txn.get('cum_smart_week_ago'))
-        retail_week_ago = _safe_float(txn.get('cum_retail_week_ago'))
+        # Historical data for context (get raw values to check existence)
+        smart_week_raw = txn.get('cum_smart_week_ago')
+        retail_week_raw = txn.get('cum_retail_week_ago')
+        smart_week_ago = _safe_float(smart_week_raw)
+        retail_week_ago = _safe_float(retail_week_raw)
 
         # Skip if no meaningful data
         if cum_smart == 0 and cum_retail == 0:
@@ -3826,7 +3832,7 @@ class BandarmologyAnalyzer:
             )
 
         # ---- HISTORICAL CONTEXT ----
-        if smart_week_ago != 0 or retail_week_ago != 0:
+        if smart_week_raw is not None or retail_week_raw is not None:
             # Calculate historical divergence
             hist_divergence = 0
             if abs(retail_week_ago) > 0:
