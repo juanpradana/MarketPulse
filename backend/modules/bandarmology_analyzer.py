@@ -768,7 +768,7 @@ class BandarmologyAnalyzer:
         signals = {}
         deep_score = 0
 
-        # ---- INVENTORY METRICS (scoring handled by controlling broker detection below) ----
+        # ---- INVENTORY METRICS (populated for display, scored separately below) ----
         if inventory_data:
             # Populate inventory metrics for display
             accum = [b for b in inventory_data if b.get('is_accumulating') or b.get('isAccumulating')]
@@ -819,6 +819,11 @@ class BandarmologyAnalyzer:
                 }
                 for b in distrib_sorted[:3]
             ]
+
+            # ---- INVENTORY SCORING (max 30 pts) ----
+            inv_score, inv_signals = self._score_inventory(inventory_data)
+            deep_score += inv_score
+            signals.update(inv_signals)
 
         # ---- TRANSACTION CHART ANALYSIS (max 30 pts) ----
         if txn_chart_data:
