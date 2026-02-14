@@ -9,8 +9,11 @@ import json
 import os
 import re
 import logging
+import math
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
+
+import numpy as np
 
 import config
 
@@ -557,11 +560,11 @@ class BandarmologyAnalyzer:
         return multiplier, context_info
 
     @staticmethod
+    @staticmethod
     def _z_score_to_percentile(z_score: float) -> float:
         """Convert z-score to approximate percentile (0-100)."""
         # Approximation using error function
         try:
-            import math
             percentile = 50 * (1 + math.erf(z_score / math.sqrt(2)))
             return round(percentile, 1)
         except Exception:
