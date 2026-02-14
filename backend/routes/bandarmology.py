@@ -180,6 +180,18 @@ def _create_minimal_result_from_deep(ticker: str, deep_data: dict, analysis_date
         'score_trend': deep_data.get('score_trend', 'NONE'),
         'pump_tomorrow_score': deep_data.get('pump_tomorrow_score', 0),
         'pump_tomorrow_signal': deep_data.get('pump_tomorrow_signal', 'NONE'),
+
+        # Volume confirmation (Improvement 2)
+        'volume_confirmation_multiplier': deep_data.get('volume_confirmation_multiplier', 0),
+
+        # Data freshness (Improvement 7)
+        'data_freshness': deep_data.get('data_freshness', 1.0),
+        'data_source_date': deep_data.get('data_source_date', ''),
+        'original_deep_score': deep_data.get('original_deep_score', 0),
+
+        # Target/stop method (Improvement 6)
+        'target_method': deep_data.get('target_method', ''),
+        'stop_method': deep_data.get('stop_method', ''),
     }
 
     return result
@@ -930,6 +942,8 @@ async def get_stock_detail(
                 "target_price": deep_cache.get('target_price', 0),
                 "stop_loss": deep_cache.get('stop_loss', 0),
                 "risk_reward_ratio": deep_cache.get('risk_reward_ratio', 0),
+                "target_method": deep_cache.get('target_method', ''),
+                "stop_method": deep_cache.get('stop_method', ''),
 
                 # Controlling broker analysis
                 "controlling_brokers": deep_cache.get('controlling_brokers', []),
@@ -977,6 +991,7 @@ async def get_stock_detail(
                 # Volume context
                 "volume_score": deep_cache.get('volume_score', 0),
                 "volume_signal": deep_cache.get('volume_signal', 'NONE'),
+                "volume_confirmation_multiplier": deep_cache.get('volume_confirmation_multiplier', 0),
 
                 # MA cross
                 "ma_cross_signal": deep_cache.get('ma_cross_signal', 'NONE'),
@@ -1005,6 +1020,11 @@ async def get_stock_detail(
                 "pump_tomorrow_score": deep_cache.get('pump_tomorrow_score', 0),
                 "pump_tomorrow_signal": deep_cache.get('pump_tomorrow_signal', 'NONE'),
                 "pump_tomorrow_factors": deep_cache.get('pump_tomorrow_factors', {}),
+
+                # Data freshness (Improvement 7)
+                "data_freshness": deep_cache.get('data_freshness', 1.0),
+                "data_source_date": deep_cache.get('data_source_date', ''),
+                "original_deep_score": deep_cache.get('original_deep_score', 0),
             })
         else:
             detail.update({

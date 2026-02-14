@@ -4252,6 +4252,8 @@ class BandarmologyAnalyzer:
                 r['target_price'] = deep.get('target_price', 0)
                 r['stop_loss'] = deep.get('stop_loss', 0)
                 r['risk_reward_ratio'] = deep.get('risk_reward_ratio', 0)
+                r['target_method'] = deep.get('target_method', '')
+                r['stop_method'] = deep.get('stop_method', '')
 
                 # Controlling broker analysis
                 r['controlling_brokers'] = deep.get('controlling_brokers', [])
@@ -4299,6 +4301,7 @@ class BandarmologyAnalyzer:
                 # Volume context
                 r['volume_score'] = deep.get('volume_score', 0)
                 r['volume_signal'] = deep.get('volume_signal', 'NONE')
+                r['volume_confirmation_multiplier'] = deep.get('volume_confirmation_multiplier', 0)
 
                 # MA cross
                 r['ma_cross_signal'] = deep.get('ma_cross_signal', 'NONE')
@@ -4327,6 +4330,11 @@ class BandarmologyAnalyzer:
                 r['pump_tomorrow_score'] = deep.get('pump_tomorrow_score', 0)
                 r['pump_tomorrow_signal'] = deep.get('pump_tomorrow_signal', 'NONE')
                 r['pump_tomorrow_factors'] = deep.get('pump_tomorrow_factors', {})
+
+                # Data freshness (Improvement 7)
+                r['data_freshness'] = deep.get('data_freshness', 1.0)
+                r['data_source_date'] = deep.get('data_source_date', '')
+                r['original_deep_score'] = deep.get('original_deep_score', 0)
 
                 # Deep signals
                 r['deep_signals'] = deep.get('deep_signals', {})

@@ -755,11 +755,11 @@ export default function BandarmologyPage() {
                                             {/* Volume Confirmation */}
                                             <td className="px-1 py-1 text-center border-r border-zinc-800/30">
                                                 {(row.volume_confirmation_multiplier ?? 0) > 1 ? (
-                                                    <span className="text-[9px] font-bold text-cyan-400" title={`Volume confirms flow (${row.volume_confirmation_multiplier}x)`}>
+                                                    <span className="text-[9px] font-bold text-cyan-400" title={`Volume confirms flow (${row.volume_confirmation_multiplier?.toFixed(2)}x)`}>
                                                         ✓{row.volume_confirmation_multiplier?.toFixed(1)}x
                                                     </span>
-                                                ) : (row.volume_confirmation_multiplier ?? 0) < 1 ? (
-                                                    <span className="text-[9px] font-bold text-orange-400" title={`Volume contradicts flow (${row.volume_confirmation_multiplier}x)`}>
+                                                ) : (row.volume_confirmation_multiplier ?? 0) > 0 && (row.volume_confirmation_multiplier ?? 0) < 1 ? (
+                                                    <span className="text-[9px] font-bold text-orange-400" title={`Volume contradicts flow (${row.volume_confirmation_multiplier?.toFixed(2)}x)`}>
                                                         !{row.volume_confirmation_multiplier?.toFixed(1)}x
                                                     </span>
                                                 ) : (
