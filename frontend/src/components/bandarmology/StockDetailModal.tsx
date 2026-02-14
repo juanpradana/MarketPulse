@@ -650,8 +650,8 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-purple-900/60 to-blue-900/60 border-b border-zinc-700/30">
-                    <div className="flex items-center gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between px-3 sm:px-5 py-3 bg-gradient-to-r from-purple-900/60 to-blue-900/60 border-b border-zinc-700/30 gap-2 sm:gap-0">
+                    <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                         <span className="text-xl font-black text-blue-300 tracking-tight">{ticker}</span>
                         {data && (
                             <>
@@ -682,7 +682,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                             </>
                         )}
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
                         {data && !loading && (
                             <>
                                 <button
@@ -715,7 +715,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto p-5 space-y-5 scrollbar-thin scrollbar-thumb-zinc-800">
+                <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-5 scrollbar-thin scrollbar-thumb-zinc-800">
                     {loading && (
                         <div className="flex items-center justify-center py-20">
                             <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
@@ -777,7 +777,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                         <TrendingUp className="w-3 h-3" />
                                         Market/Sector Context
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3 text-[10px]">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[10px]">
                                         <div>
                                             <div className="text-zinc-500">Market Comparison</div>
                                             <div className="text-zinc-300">
@@ -808,7 +808,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                             )}
 
                             {/* Score Overview */}
-                            <div className="grid grid-cols-6 gap-3">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                                 <MetricCard
                                     label="Base Score"
                                     value={data.base_score}
@@ -877,7 +877,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                             {/* Entry/Target/SL Bar */}
                             {data.entry_price && data.target_price && data.stop_loss ? (
                                 <div className="bg-zinc-800/30 rounded-lg p-3 border border-zinc-700/20">
-                                    <div className="flex items-center justify-between text-[10px] mb-2">
+                                    <div className="grid grid-cols-2 sm:flex sm:items-center sm:justify-between text-[10px] mb-2 gap-1 sm:gap-0">
                                         <span className="text-red-400 font-bold">SL: {data.stop_loss.toLocaleString('id-ID')}</span>
                                         <span className="text-cyan-400 font-bold">Entry: {data.entry_price.toLocaleString('id-ID')}</span>
                                         <span className="text-zinc-300 font-bold">Current: {data.price.toLocaleString('id-ID')}</span>
@@ -944,7 +944,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                     </div>
 
                                     {/* Summary row */}
-                                    <div className="flex items-center gap-4 text-[9px] mb-3 pb-2 border-b border-zinc-700/30">
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-[9px] mb-3 pb-2 border-b border-zinc-700/30">
                                         {data.accum_start_date && (
                                             <span className="text-zinc-500">
                                                 Accumulation started: <span className="text-amber-400 font-bold">{data.accum_start_date}</span>
@@ -1051,7 +1051,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                                     data.breakout_probability >= 40 ? 'text-amber-400' : 'text-orange-400'
                                                 )}>{data.breakout_probability}%</span>
                                             </div>
-                                            <div className="grid grid-cols-4 gap-x-4 gap-y-1">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2">
                                                 {Object.entries(data.breakout_factors).map(([key, val]) => (
                                                     <div key={key} className="flex items-center gap-1.5">
                                                         <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
@@ -1093,7 +1093,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                                     </span>
                                                 </span>
                                             </div>
-                                            <div className="grid grid-cols-4 gap-x-4 gap-y-1">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2">
                                                 {Object.entries(data.pump_tomorrow_factors).map(([key, val]) => (
                                                     <div key={key} className="flex items-center gap-1.5">
                                                         <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
@@ -1118,7 +1118,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
 
                                     {/* Multi-Day Consistency */}
                                     {(data.broksum_days_analyzed ?? 0) >= 2 && (
-                                        <div className="mb-3 flex items-center gap-3 text-[9px] px-1">
+                                        <div className="mb-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 text-[9px] px-1">
                                             <span className="text-zinc-500">
                                                 Consistency ({data.broksum_days_analyzed}d):
                                                 <span className={cn(
@@ -1128,7 +1128,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                                 )}>{data.broksum_consistency_score ?? 0}/100</span>
                                             </span>
                                             {data.broksum_consistent_buyers && data.broksum_consistent_buyers.length > 0 && (
-                                                <span className="text-zinc-500">
+                                                <span className="text-zinc-500 truncate">
                                                     Consistent buyers: {data.broksum_consistent_buyers.slice(0, 5).map(b => (
                                                         <span key={b.code} className={cn("font-bold ml-0.5", b.is_bandar ? 'text-emerald-400' : 'text-zinc-400')}>
                                                             {b.code}{b.is_bandar ? '★' : ''}
@@ -1137,7 +1137,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                                 </span>
                                             )}
                                             {data.broksum_consistent_sellers && data.broksum_consistent_sellers.filter(s => s.is_bandar).length > 0 && (
-                                                <span className="text-red-400">
+                                                <span className="text-red-400 truncate">
                                                     Bandar selling: {data.broksum_consistent_sellers.filter(s => s.is_bandar).map(s => s.code).join(', ')}
                                                 </span>
                                             )}
@@ -1145,7 +1145,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                     )}
 
                                     {/* New Improvement Banners */}
-                                    <div className="grid grid-cols-2 gap-2 mb-3">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                                         {/* Accumulation Duration */}
                                         {(data.accum_duration_days ?? 0) > 0 && (
                                             <div className={cn(
@@ -1217,9 +1217,9 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                                     : 'bg-blue-500/10 border-blue-500/20'
                                             )}>
                                                 <Users className="w-3.5 h-3.5 flex-shrink-0 text-zinc-500" />
-                                                <div className="flex-1">
+                                                <div className="flex-1 min-w-0">
                                                     <div className="text-[8px] text-zinc-500 font-bold uppercase">Smart Money vs Retail</div>
-                                                    <div className="flex items-center gap-3">
+                                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                                                         <span className={cn("font-bold",
                                                             (data.txn_smart_money_cum ?? 0) > 0 ? 'text-emerald-400' :
                                                             (data.txn_smart_money_cum ?? 0) < 0 ? 'text-red-400' : 'text-zinc-500'
@@ -1436,10 +1436,10 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                                             ({(data.flow_velocity_score ?? 0) > 0 ? '+' : ''}{data.flow_velocity_score ?? 0} pts)
                                                         </span>
                                                     </div>
-                                                    <div className="text-[9px] text-zinc-500 mt-0.5">
-                                                        MM: {(data.flow_velocity_mm ?? 0) > 0 ? '+' : ''}{(data.flow_velocity_mm ?? 0).toFixed(1)}B/d
-                                                        {' | '}FGN: {(data.flow_velocity_foreign ?? 0) > 0 ? '+' : ''}{(data.flow_velocity_foreign ?? 0).toFixed(1)}B/d
-                                                        {' | '}INST: {(data.flow_velocity_institution ?? 0) > 0 ? '+' : ''}{(data.flow_velocity_institution ?? 0).toFixed(1)}B/d
+                                                    <div className="text-[9px] text-zinc-500 mt-0.5 flex flex-wrap gap-x-2">
+                                                        <span>MM: {(data.flow_velocity_mm ?? 0) > 0 ? '+' : ''}{(data.flow_velocity_mm ?? 0).toFixed(1)}B/d</span>
+                                                        <span>FGN: {(data.flow_velocity_foreign ?? 0) > 0 ? '+' : ''}{(data.flow_velocity_foreign ?? 0).toFixed(1)}B/d</span>
+                                                        <span>INST: {(data.flow_velocity_institution ?? 0) > 0 ? '+' : ''}{(data.flow_velocity_institution ?? 0).toFixed(1)}B/d</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1493,7 +1493,8 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                     </div>
 
                                     {/* Broker table */}
-                                    <table className="w-full text-[10px]">
+                                    <div className="overflow-x-auto -mx-2 px-2">
+                                    <table className="w-full text-[10px] min-w-[600px]">
                                         <thead>
                                             <tr className="text-zinc-600 border-b border-zinc-700/30">
                                                 <th className="text-left py-1 font-bold">Broker</th>
@@ -1568,11 +1569,12 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                             ))}
                                         </tbody>
                                     </table>
+                                    </div>
                                 </div>
                             )}
 
                             {/* Two Column Layout */}
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                 {/* Left: Transaction Flow */}
                                 <div className="bg-zinc-800/20 rounded-lg p-4 border border-zinc-700/20">
                                     <h3 className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
