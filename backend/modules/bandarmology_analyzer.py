@@ -1393,11 +1393,11 @@ class BandarmologyAnalyzer:
             vol_mult, vol_conf_signals = self._score_volume_confirmed_flow(
                 txn_chart_data, broker_summary_data
             )
-            deep['volume_confirmation_multiplier'] = vol_mult
+            deep['volume_confirmation_multiplier'] = round(vol_mult, 2)
 
             # Apply volume multiplier to transaction score
-            adjusted_txn_score = txn_score * vol_mult
-            deep['txn_score_raw'] = txn_score
+            adjusted_txn_score = round(txn_score * vol_mult, 1)
+            deep['txn_score_raw'] = round(txn_score, 1)
             deep['txn_score_adjusted'] = adjusted_txn_score
 
             deep_score += adjusted_txn_score
@@ -1411,13 +1411,13 @@ class BandarmologyAnalyzer:
                 deep['volume_proxy_participation'] = vol_conf_signals.get('volume_proxy_participation', 0)
 
             # Populate txn metrics
-            deep['txn_mm_cum'] = _safe_float(txn_chart_data.get('cum_mm'))
-            deep['txn_foreign_cum'] = _safe_float(txn_chart_data.get('cum_foreign'))
-            deep['txn_institution_cum'] = _safe_float(txn_chart_data.get('cum_institution'))
-            deep['txn_retail_cum'] = _safe_float(txn_chart_data.get('cum_retail'))
-            deep['txn_cross_index'] = _safe_float(txn_chart_data.get('cross_index'))
-            deep['txn_foreign_participation'] = _safe_float(txn_chart_data.get('part_foreign'))
-            deep['txn_institution_participation'] = _safe_float(txn_chart_data.get('part_institution'))
+            deep['txn_mm_cum'] = round(_safe_float(txn_chart_data.get('cum_mm')), 2)
+            deep['txn_foreign_cum'] = round(_safe_float(txn_chart_data.get('cum_foreign')), 2)
+            deep['txn_institution_cum'] = round(_safe_float(txn_chart_data.get('cum_institution')), 2)
+            deep['txn_retail_cum'] = round(_safe_float(txn_chart_data.get('cum_retail')), 2)
+            deep['txn_cross_index'] = round(_safe_float(txn_chart_data.get('cross_index')), 2)
+            deep['txn_foreign_participation'] = round(_safe_float(txn_chart_data.get('part_foreign')), 2)
+            deep['txn_institution_participation'] = round(_safe_float(txn_chart_data.get('part_institution')), 2)
             deep['txn_mm_trend'] = txn_chart_data.get('mm_trend') or 'NEUTRAL'
             deep['txn_foreign_trend'] = txn_chart_data.get('foreign_trend') or 'NEUTRAL'
 
@@ -1444,9 +1444,9 @@ class BandarmologyAnalyzer:
             conflict_mult, conflict_signals = self._resolve_data_source_conflicts(available_scores)
             if conflict_mult != 1.0:
                 # Apply conflict penalty to deep score
-                deep_score = deep_score * conflict_mult
+                deep_score = round(deep_score * conflict_mult, 1)
                 signals.update(conflict_signals)
-                deep['conflict_multiplier'] = conflict_mult
+                deep['conflict_multiplier'] = round(conflict_mult, 2)
                 deep['data_source_conflict'] = True
                 # Remove internal diagnostic data from signals (not JSON serializable for frontend)
                 deep['conflict_stats'] = signals.pop('_conflict_stats', None)
@@ -1744,7 +1744,7 @@ class BandarmologyAnalyzer:
             deep_score += synergy_score
             signals.update(synergy_signals)
 
-        deep['deep_score'] = deep_score
+        deep['deep_score'] = round(deep_score, 1)
         deep['deep_signals'] = signals
 
         # ---- BREAKOUT PROBABILITY SCORE ----
@@ -4070,9 +4070,9 @@ class BandarmologyAnalyzer:
             symbol = r.get('symbol', '')
             deep = deep_cache.get(symbol)
             if deep:
-                r['deep_score'] = deep.get('deep_score', 0)
+                r['deep_score'] = round(deep.get('deep_score', 0), 1)
                 r['deep_trade_type'] = deep.get('deep_trade_type', '')
-                r['combined_score'] = r.get('total_score', 0) + deep.get('deep_score', 0)
+                r['combined_score'] = round(r.get('total_score', 0) + deep.get('deep_score', 0), 1)
                 r['max_combined_score'] = 250  # 100 base + 150 deep
 
                 # Inventory summary
