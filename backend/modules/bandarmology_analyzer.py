@@ -623,6 +623,162 @@ class BandarmologyAnalyzer:
         finally:
             conn.close()
 
+    # ==================== DATA VALIDATION ====================
+
+    def _validate_data_consistency(
+        self,
+        target_date: str,
+        inventory_data: Optional[List[Dict]] = None,
+        txn_chart_data: Optional[Dict] = None,
+        broker_summary_data: Optional[Dict] = None
+    ) -> Tuple[bool, List[str], Dict[str, str]]:
+        """
+        Validate that all data sources are within acceptable date range of each other.
+
+        Args:
+            target_date: Expected analysis date (YYYY-MM-DD)
+            inventory_data: Inventory data with date metadata
+            txn_chart_data: Transaction chart with date metadata
+            broker_summary_data: Broker summary with date metadata
+
+        Returns:
+            Tuple of (is_valid, warnings, date_info)
+            - is_valid: True if all dates align within tolerance
+            - warnings: List of warning messages for mismatched dates
+            - date_info: Dict mapping source names to their actual dates
+        """
+        warnings = []
+        date_info = {'target': target_date}
+
+        if not target_date:
+            return False, ["No target date provided"], date_info
+
+        try:
+            target_dt = datetime.strptime(target_date, '%Y-%m-%d')
+        except ValueError:
+            return False, [f"Invalid target date format: {target_date}"], date_info
+
+        # Extract dates from each data source
+        source_dates = {}
+
+        # Inventory data: check lastDate (most recent data point)
+        if inventory_data:
+            # Inventory from API has firstDate/lastDate in the parent structure
+            # When passed directly, we need to check if it's wrapped with metadata
+            inv_date = None
+            if isinstance(inventory_data, dict):
+                inv_date = inventory_data.get('lastDate') or inventory_data.get('date_end')
+            elif isinstance(inventory_data, list) and len(inventory_data) > 0:
+                # Check if brokers have date info, otherwise use txn_chart or broker_summary as proxy
+                first_broker = inventory_data[0]
+                if isinstance(first_broker, dict):
+                    inv_date = first_broker.get('date') or first_broker.get('date_end')
+            source_dates['inventory'] = inv_date
+
+        # Transaction chart data
+        if txn_chart_data:
+            txn_date = txn_chart_data.get('lastDate') or txn_chart_data.get('date_end')
+            source_dates['transaction_chart'] = txn_date
+
+        # Broker summary data
+        if broker_summary_data:
+            # Broker summary might have trade_date at top level or in metadata
+            broksum_date = broker_summary_data.get('trade_date')
+            if not broksum_date and isinstance(broker_summary_data, dict):
+                # Try to infer from first buy/sell entry
+                buy_list = broker_summary_data.get('buy', [])
+                if buy_list and isinstance(buy_list[0], dict):
+                    broksum_date = buy_list[0].get('trade_date')
+            source_dates['broker_summary'] = broksum_date
+
+        date_info.update(source_dates)
+
+        # Check each source against target date (allow 1 trading day tolerance)
+        max_date_diff_days = 3  # Allow weekend + 1 day buffer
+
+        for source_name, source_date in source_dates.items():
+            if not source_date:
+                warnings.append(f"{source_name}: No date information available")
+                continue
+
+            try:
+                # Handle different date formats
+                if isinstance(source_date, str):
+                    if 'T' in source_date:
+                        source_dt = datetime.strptime(source_date.split('T')[0], '%Y-%m-%d')
+                    else:
+                        source_dt = datetime.strptime(source_date, '%Y-%m-%d')
+                else:
+                    continue
+
+                date_diff = abs((source_dt - target_dt).days)
+
+                if date_diff > max_date_diff_days:
+                    warnings.append(
+                        f"{source_name}: Date mismatch - expected {target_date}, "
+                        f"got {source_date} ({date_diff} days difference)"
+                    )
+            except ValueError as e:
+                warnings.append(f"{source_name}: Could not parse date '{source_date}': {e}")
+
+        # Check cross-source consistency (if multiple sources provided)
+        available_dates = {k: v for k, v in source_dates.items() if v}
+        if len(available_dates) >= 2:
+            try:
+                dates = []
+                for d in available_dates.values():
+                    if isinstance(d, str):
+                        if 'T' in d:
+                            dates.append(datetime.strptime(d.split('T')[0], '%Y-%m-%d'))
+                        else:
+                            dates.append(datetime.strptime(d, '%Y-%m-%d'))
+
+                if dates:
+                    date_range = max(dates) - min(dates)
+                    if date_range.days > max_date_diff_days:
+                        warnings.append(
+                            f"Cross-source date range: {date_range.days} days between "
+                            f"earliest and latest data sources"
+                        )
+            except ValueError:
+                pass
+
+        is_valid = len(warnings) == 0
+        return is_valid, warnings, date_info
+
+    def _apply_freshness_decay(self, deep_cache_date: str, analysis_date: str) -> float:
+        """
+        Calculate confidence multiplier based on data age.
+
+        Args:
+            deep_cache_date: Date of cached deep analysis (YYYY-MM-DD)
+            analysis_date: Current analysis date (YYYY-MM-DD)
+
+        Returns:
+            Float multiplier (0.0-1.0) for confidence decay
+        """
+        try:
+            cache_dt = datetime.strptime(deep_cache_date, '%Y-%m-%d')
+            current_dt = datetime.strptime(analysis_date, '%Y-%m-%d')
+            days_old = (current_dt - cache_dt).days
+
+            if days_old < 0:
+                return 1.0  # Future data, assume full confidence
+            elif days_old == 0:
+                return 1.0  # Same day, full confidence
+            elif days_old <= 1:
+                return 0.95  # 1 day old
+            elif days_old <= 3:
+                return 0.90  # 2-3 days old
+            elif days_old <= 7:
+                return 0.80  # Week old
+            elif days_old <= 14:
+                return 0.65  # Two weeks old
+            else:
+                return 0.50  # > 50% decay for older data
+        except ValueError:
+            return 1.0  # Assume full confidence if dates unparseable
+
     # ==================== DEEP ANALYSIS (Inventory + Txn Chart) ====================
 
     def analyze_deep(
@@ -767,6 +923,38 @@ class BandarmologyAnalyzer:
 
         signals = {}
         deep_score = 0
+
+        # ---- DATA SOURCE VALIDATION ----
+        # Get analysis date from base_result or use today
+        analysis_date = None
+        if base_result:
+            analysis_date = base_result.get('date') or base_result.get('analysis_date')
+        if not analysis_date:
+            analysis_date = datetime.now().strftime('%Y-%m-%d')
+
+        # Validate data source date consistency
+        is_valid, validation_warnings, date_info = self._validate_data_consistency(
+            target_date=analysis_date,
+            inventory_data=inventory_data,
+            txn_chart_data=txn_chart_data,
+            broker_summary_data=broker_summary_data
+        )
+
+        # Add validation info to deep results
+        deep['data_validation'] = {
+            'is_valid': is_valid,
+            'warnings': validation_warnings,
+            'source_dates': date_info,
+            'analysis_date': analysis_date
+        }
+
+        # Log warnings if data is inconsistent
+        if not is_valid:
+            for warning in validation_warnings:
+                logger.warning(f"[{ticker}] Data validation: {warning}")
+            # Add warning signals
+            if validation_warnings:
+                signals['data_date_mismatch'] = f"Date mismatch: {'; '.join(validation_warnings[:2])}"
 
         # ---- INVENTORY METRICS (populated for display, scored separately below) ----
         if inventory_data:
@@ -1159,6 +1347,14 @@ class BandarmologyAnalyzer:
         if previous_deep:
             comparison = self._compare_with_previous(deep, previous_deep)
             deep.update(comparison)
+
+            # Apply freshness decay to historical comparison scores
+            prev_date = previous_deep.get('analysis_date')
+            if prev_date and analysis_date:
+                freshness = self._apply_freshness_decay(prev_date, analysis_date)
+                deep['historical_freshness'] = freshness
+                if freshness < 1.0:
+                    deep['historical_warning'] = f"Previous analysis is {freshness:.0%} fresh ({prev_date})"
 
         return deep
 
