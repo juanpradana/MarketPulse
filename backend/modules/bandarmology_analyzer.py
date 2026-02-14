@@ -918,6 +918,7 @@ class BandarmologyAnalyzer:
             'txn_smart_money_cum': 0,
             'txn_retail_cum_deep': 0,
             'smart_retail_divergence': 0,
+            'smart_retail_divergence_ratio': 0.0,
             # Volume context
             'volume_score': 0,
             'volume_signal': 'NONE',
@@ -1098,6 +1099,7 @@ class BandarmologyAnalyzer:
             deep['txn_smart_money_cum'] = _safe_float(txn_chart_data.get('cum_smart'))
             deep['txn_retail_cum_deep'] = _safe_float(txn_chart_data.get('cum_retail'))
             deep['smart_retail_divergence'] = sr_signals.pop('_sr_divergence', 0)
+            deep['smart_retail_divergence_ratio'] = sr_signals.pop('_sr_divergence_ratio', 0.0)
             signals.update(sr_signals)
 
         # ---- BROKER SUMMARY ANALYSIS (max 20 pts) ----
@@ -3230,11 +3232,16 @@ class BandarmologyAnalyzer:
     def _score_smart_retail_divergence(self, txn: Dict) -> Tuple[int, Dict]:
         """
         Score Smart Money vs Retail divergence from transaction chart.
-        
+
+        Enhanced scoring based on:
+        1. Classic divergence patterns (direction)
+        2. Magnitude ratio (how extreme is the divergence)
+        3. Historical context (compare to week-ago baseline)
+
         Classic signals:
         - Smart money accumulating + retail selling = strong bullish (max 5 pts)
         - Smart money selling + retail buying = bearish trap warning
-        
+
         Returns: (score, signals)
         Max 5 points.
         """
@@ -3246,56 +3253,116 @@ class BandarmologyAnalyzer:
         daily_smart = _safe_float(txn.get('daily_smart'))
         daily_retail = _safe_float(txn.get('daily_retail'))
 
+        # Historical data for context
+        smart_week_ago = _safe_float(txn.get('cum_smart_week_ago'))
+        retail_week_ago = _safe_float(txn.get('cum_retail_week_ago'))
+
         # Skip if no meaningful data
         if cum_smart == 0 and cum_retail == 0:
             return 0, signals
 
+        # ---- MAGNITUDE-BASED DIVERGENCE SCORING ----
+        divergence_ratio = 0
+        if abs(cum_retail) > 0:
+            divergence_ratio = abs(cum_smart / cum_retail)
+
         # Classic divergence: smart money accumulating, retail selling
         if cum_smart > 0 and cum_retail < 0:
-            score += 5
-            signals['sr_classic_bullish'] = (
-                f"Smart money akumulasi ({cum_smart:+.1f}B) vs retail distribusi ({cum_retail:+.1f}B) "
-                f"= sinyal klasik kuat"
-            )
+            # Base score + magnitude bonus
+            base_score = 3
+            # Strong divergence when smart > 2x retail magnitude
+            if divergence_ratio >= 2.0:
+                base_score = 5
+                signals['sr_strong_divergence'] = (
+                    f"Smart money ({cum_smart:+.1f}B) > 2x retail magnitude ({abs(cum_retail):.1f}B) "
+                    f"= divergensi sangat kuat"
+                )
+            elif divergence_ratio >= 1.5:
+                base_score = 4
+                signals['sr_moderate_divergence'] = (
+                    f"Smart money ({cum_smart:+.1f}B) vs retail ({cum_retail:+.1f}B) "
+                    f"= divergensi moderat ({divergence_ratio:.1f}x)"
+                )
+            else:
+                signals['sr_classic_bullish'] = (
+                    f"Smart money akumulasi ({cum_smart:+.1f}B) vs retail distribusi ({cum_retail:+.1f}B)"
+                )
+            score += base_score
+
         # Both accumulating (broad buying)
         elif cum_smart > 0 and cum_retail > 0:
             score += 2
             signals['sr_broad_buying'] = (
                 f"Smart money ({cum_smart:+.1f}B) & retail ({cum_retail:+.1f}B) sama-sama beli"
             )
+
         # Bearish divergence: smart money selling, retail buying (retail trap)
         elif cum_smart < 0 and cum_retail > 0:
             score -= 2
-            signals['sr_retail_trap'] = (
-                f"WARNING: Smart money jual ({cum_smart:+.1f}B) tapi retail beli ({cum_retail:+.1f}B) "
-                f"= potensi jebakan retail"
-            )
+            if divergence_ratio >= 2.0:
+                signals['sr_strong_retail_trap'] = (
+                    f"WARNING: Retail buying ({cum_retail:+.1f}B) > 2x smart selling ({abs(cum_smart):.1f}B) "
+                    f"= jebakan retail sangat kuat"
+                )
+            else:
+                signals['sr_retail_trap'] = (
+                    f"WARNING: Smart money jual ({cum_smart:+.1f}B) tapi retail beli ({cum_retail:+.1f}B) "
+                    f"= potensi jebakan retail"
+                )
+
         # Both selling
         elif cum_smart < 0 and cum_retail < 0:
             signals['sr_broad_selling'] = (
                 f"Smart money ({cum_smart:+.1f}B) & retail ({cum_retail:+.1f}B) sama-sama jual"
             )
 
-        # Daily momentum bonus
+        # ---- HISTORICAL CONTEXT ----
+        if smart_week_ago != 0 or retail_week_ago != 0:
+            # Calculate historical divergence
+            hist_divergence = 0
+            if abs(retail_week_ago) > 0:
+                hist_divergence = abs(smart_week_ago / retail_week_ago)
+
+            current_divergence = divergence_ratio if divergence_ratio > 0 else 0
+
+            # Compare current vs historical
+            if current_divergence > hist_divergence * 1.5 and cum_smart > 0 and cum_retail < 0:
+                # Divergence is strengthening significantly
+                if score < 5:
+                    score = min(score + 1, 5)
+                signals['sr_divergence_strengthening'] = (
+                    f"Divergensi memperkuat dari minggu lalu ({hist_divergence:.1f}x → {current_divergence:.1f}x)"
+                )
+            elif current_divergence < hist_divergence * 0.5 and cum_smart > 0 and cum_retail < 0:
+                # Divergence is weakening
+                signals['sr_divergence_weakening'] = (
+                    f"Divergensi melemah dari minggu lalu ({hist_divergence:.1f}x → {current_divergence:.1f}x)"
+                )
+
+        # Daily momentum bonus (only if cumulative already shows divergence)
         if daily_smart > 0 and daily_retail < 0 and cum_smart > 0:
             if score < 5:
                 score = min(score + 1, 5)
             signals['sr_daily_divergence'] = (
-                f"Hari ini: smart money beli, retail jual"
+                f"Hari ini: smart money beli ({daily_smart:+.1f}B), retail jual ({daily_retail:+.1f}B)"
             )
 
-        # Calculate divergence score (0-100) for display
+        # ---- DIVERGENCE METRICS ----
         if cum_smart != 0 or cum_retail != 0:
+            # Standardized divergence score (-100 to +100)
             # Positive = smart buying & retail selling (bullish)
             # Negative = smart selling & retail buying (bearish)
             total_abs = abs(cum_smart) + abs(cum_retail)
             if total_abs > 0:
                 divergence = int(((cum_smart - cum_retail) / total_abs) * 100)
                 signals['_sr_divergence'] = max(-100, min(100, divergence))
+                signals['_sr_divergence_ratio'] = round(divergence_ratio, 2)
             else:
                 signals['_sr_divergence'] = 0
+                signals['_sr_divergence_ratio'] = 0
         else:
             signals['_sr_divergence'] = 0
+            signals['_sr_divergence_ratio'] = 0
 
         return max(-2, min(score, 5)), signals
 
