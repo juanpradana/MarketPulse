@@ -1448,6 +1448,8 @@ class BandarmologyAnalyzer:
                 signals.update(conflict_signals)
                 deep['conflict_multiplier'] = conflict_mult
                 deep['data_source_conflict'] = True
+                # Remove internal diagnostic data from signals (not JSON serializable for frontend)
+                deep['conflict_stats'] = signals.pop('_conflict_stats', None)
 
         # ---- FLOW VELOCITY/ACCELERATION (max 15 pts) ----
         if txn_chart_data:
