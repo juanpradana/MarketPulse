@@ -203,10 +203,33 @@ export interface BandarmologyItem {
 
     // Relative context (Improvement 4)
     relative_context?: {
-        market_z_score?: number;
-        sector_z_score?: number;
+        market_context?: {
+            stock_flow?: number;
+            market_avg?: number;
+            market_std?: number;
+            z_score?: number;
+            percentile?: number;
+        };
+        sector_context?: {
+            sector?: string;
+            stock_flow?: number;
+            sector_avg?: number;
+            sector_count?: number;
+            diff_pct?: number;
+        };
         relative_score?: number;
+        z_score_used?: number;
     };
+
+    // Conflict warning (Improvement 5)
+    conflict_stats?: {
+        mean: number;
+        std: number;
+        cv: number;
+        sources: Record<string, number>;
+        multiplier: number;
+    } | null;
+    data_source_conflict?: boolean;
 
     // Signals
     deep_signals?: DeepSignals;
@@ -410,10 +433,33 @@ export interface StockDetailResponse {
 
     // Relative context (Improvement 4)
     relative_context?: {
-        market_z_score?: number;
-        sector_z_score?: number;
+        market_context?: {
+            stock_flow?: number;
+            market_avg?: number;
+            market_std?: number;
+            z_score?: number;
+            percentile?: number;
+        };
+        sector_context?: {
+            sector?: string;
+            stock_flow?: number;
+            sector_avg?: number;
+            sector_count?: number;
+            diff_pct?: number;
+        };
         relative_score?: number;
+        z_score_used?: number;
     };
+
+    // Conflict warning (Improvement 5)
+    conflict_stats?: {
+        mean: number;
+        std: number;
+        cv: number;
+        sources: Record<string, number>;
+        multiplier: number;
+    } | null;
+    data_source_conflict?: boolean;
 
     // Detail data
     inventory_brokers: InvBrokerDetail[];

@@ -192,6 +192,13 @@ def _create_minimal_result_from_deep(ticker: str, deep_data: dict, analysis_date
         # Target/stop method (Improvement 6)
         'target_method': deep_data.get('target_method', ''),
         'stop_method': deep_data.get('stop_method', ''),
+
+        # Relative context (Improvement 4)
+        'relative_context': deep_data.get('relative_context', {}),
+
+        # Conflict warning (Improvement 5)
+        'conflict_stats': deep_data.get('conflict_stats', None),
+        'data_source_conflict': deep_data.get('data_source_conflict', False),
     }
 
     return result
@@ -1025,6 +1032,13 @@ async def get_stock_detail(
                 "data_freshness": deep_cache.get('data_freshness', 1.0),
                 "data_source_date": deep_cache.get('data_source_date', ''),
                 "original_deep_score": deep_cache.get('original_deep_score', 0),
+
+                # Relative context (Improvement 4)
+                "relative_context": deep_cache.get('relative_context', {}),
+
+                # Conflict warning (Improvement 5)
+                "conflict_stats": deep_cache.get('conflict_stats', None),
+                "data_source_conflict": deep_cache.get('data_source_conflict', False),
             })
         else:
             detail.update({

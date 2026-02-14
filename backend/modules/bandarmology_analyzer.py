@@ -4336,6 +4336,13 @@ class BandarmologyAnalyzer:
                 r['data_source_date'] = deep.get('data_source_date', '')
                 r['original_deep_score'] = deep.get('original_deep_score', 0)
 
+                # Relative context (Improvement 4)
+                r['relative_context'] = deep.get('relative_context', {})
+
+                # Conflict warning (Improvement 5)
+                r['conflict_stats'] = deep.get('conflict_stats', None)
+                r['data_source_conflict'] = deep.get('data_source_conflict', False)
+
                 # Deep signals
                 r['deep_signals'] = deep.get('deep_signals', {})
 

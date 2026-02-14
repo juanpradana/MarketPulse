@@ -149,6 +149,32 @@ function generateChatText(data: StockDetailResponse): string {
         lines.push('');
     }
 
+    // Conflict Warning
+    if (data.data_source_conflict) {
+        lines.push(`⚠️ *DATA SOURCE CONFLICT*`);
+        lines.push(`  Data sources disagree on signals`);
+        if (data.conflict_stats) {
+            lines.push(`  CV: ${data.conflict_stats.cv.toFixed(2)} | Mean: ${data.conflict_stats.mean.toFixed(1)} | Std: ${data.conflict_stats.std.toFixed(1)}`);
+        }
+        lines.push('');
+    }
+
+    // Relative Context
+    if (data.relative_context?.market_context) {
+        const ctx = data.relative_context.market_context;
+        lines.push(`📈 *MARKET CONTEXT*`);
+        lines.push(`  Stock: ${ctx.stock_flow?.toFixed(1)}B vs Market Avg: ${ctx.market_avg?.toFixed(1)}B`);
+        lines.push(`  Z-Score: ${ctx.z_score?.toFixed(2)} (Percentile: ${ctx.percentile?.toFixed(0)}%)`);
+        if (data.relative_context.sector_context) {
+            const sec = data.relative_context.sector_context;
+            lines.push(`  Sector ${sec.sector}: ${sec.diff_pct?.toFixed(1)}% vs sector avg`);
+        }
+        if (data.relative_context.relative_score && data.relative_context.relative_score !== 1.0) {
+            lines.push(`  Relative Multiplier: ${data.relative_context.relative_score}x`);
+        }
+        lines.push('');
+    }
+
     if (data.has_deep && data.controlling_brokers && data.controlling_brokers.length > 0) {
         lines.push(`🏦 *CONTROLLING BROKERS*`);
         if (data.accum_phase && data.accum_phase !== 'UNKNOWN') lines.push(`  Fase: ${data.accum_phase}`);
@@ -721,6 +747,63 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                             )}
                                         </div>
                                     </div>
+                                </div>
+                            )}
+
+                            {/* Conflict Warning */}
+                            {data.data_source_conflict && (
+                                <div className="bg-red-900/20 border border-red-700/30 rounded-lg p-3 flex items-start gap-2">
+                                    <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                                    <div className="flex-1">
+                                        <div className="text-[11px] font-bold text-red-400">⚠️ Data Source Conflict</div>
+                                        <div className="text-[10px] text-red-300/80">
+                                            Data sources disagree on accumulation/distribution signals.
+                                            {data.conflict_stats && (
+                                                <span className="block mt-1">
+                                                    CV: {data.conflict_stats.cv.toFixed(2)} |
+                                                    Mean: {data.conflict_stats.mean.toFixed(1)} |
+                                                    Std: {data.conflict_stats.std.toFixed(1)}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Relative Context */}
+                            {data.relative_context?.market_context && (
+                                <div className="bg-blue-900/20 border border-blue-700/30 rounded-lg p-3">
+                                    <div className="text-[11px] font-bold text-blue-400 mb-2 flex items-center gap-1">
+                                        <TrendingUp className="w-3 h-3" />
+                                        Market/Sector Context
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3 text-[10px]">
+                                        <div>
+                                            <div className="text-zinc-500">Market Comparison</div>
+                                            <div className="text-zinc-300">
+                                                Stock: {data.relative_context.market_context.stock_flow?.toFixed(1)}B<br/>
+                                                Market Avg: {data.relative_context.market_context.market_avg?.toFixed(1)}B<br/>
+                                                Z-Score: {data.relative_context.market_context.z_score?.toFixed(2)}<br/>
+                                                Percentile: {data.relative_context.market_context.percentile?.toFixed(0)}%
+                                            </div>
+                                        </div>
+                                        {data.relative_context.sector_context && (
+                                            <div>
+                                                <div className="text-zinc-500">Sector: {data.relative_context.sector_context.sector}</div>
+                                                <div className="text-zinc-300">
+                                                    Stock: {data.relative_context.sector_context.stock_flow?.toFixed(1)}B<br/>
+                                                    Sector Avg: {data.relative_context.sector_context.sector_avg?.toFixed(1)}B<br/>
+                                                    Diff: {data.relative_context.sector_context.diff_pct?.toFixed(1)}%
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {data.relative_context.relative_score && data.relative_context.relative_score !== 1.0 && (
+                                        <div className="mt-2 text-[10px] text-blue-300/80">
+                                            Relative Score Multiplier: {data.relative_context.relative_score}x
+                                            ({data.relative_context.relative_score >= 1.1 ? 'Above Average' : data.relative_context.relative_score <= 0.9 ? 'Below Average' : 'Neutral'})
+                                        </div>
+                                    )}
                                 </div>
                             )}
 

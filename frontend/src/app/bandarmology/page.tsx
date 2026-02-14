@@ -591,6 +591,7 @@ export default function BandarmologyPage() {
                                 <SortableHeader label="MM" sortKey="txn_mm_cum" className="w-[60px]" />
                                 <SortableHeader label="F.CUM" sortKey="txn_foreign_cum" className="w-[60px]" />
                                 <th className="px-1 py-2 text-[10px] font-bold uppercase tracking-tight text-center border-r border-zinc-700/30 w-[40px]" title="Volume Confirmation">VOL</th>
+                                <th className="px-1 py-2 text-[10px] font-bold uppercase tracking-tight text-center border-r border-zinc-700/30 w-[35px]" title="Data Conflict Warning">⚠️</th>
                                 <th className="px-1 py-2 text-[10px] font-bold uppercase tracking-tight text-center border-r border-zinc-700/30 w-[40px]">TOP B</th>
                                 <th className="px-1 py-2 text-[10px] font-bold uppercase tracking-tight text-center w-[40px]">TOP S</th>
                             </tr>
@@ -728,14 +729,32 @@ export default function BandarmologyPage() {
                                                 ) : <span className="text-zinc-800 text-[9px]">—</span>}
                                             </td>
 
-                                            {/* Txn MM Cumulative */}
+                                            {/* Txn MM Cumulative with Relative Context Tooltip */}
                                             <td className="px-1 py-1 text-center border-r border-zinc-800/30">
                                                 {row.txn_mm_cum != null && row.txn_mm_cum !== 0 ? (
-                                                    <span className={cn(
-                                                        "text-[9px] font-bold tabular-nums",
-                                                        row.txn_mm_cum > 0 ? 'text-emerald-400' : 'text-red-400'
-                                                    )}>
+                                                    <span
+                                                        className={cn(
+                                                            "text-[9px] font-bold tabular-nums cursor-help",
+                                                            row.txn_mm_cum > 0 ? 'text-emerald-400' : 'text-red-400'
+                                                        )}
+                                                        title={row.relative_context?.market_context ?
+                                                            `Market Context:\n` +
+                                                            `  Stock: ${row.relative_context.market_context.stock_flow?.toFixed(1)}B\n` +
+                                                            `  Market Avg: ${row.relative_context.market_context.market_avg?.toFixed(1)}B\n` +
+                                                            `  Z-Score: ${row.relative_context.market_context.z_score?.toFixed(2)}\n` +
+                                                            `  Percentile: ${row.relative_context.market_context.percentile?.toFixed(0)}%` +
+                                                            (row.relative_context.sector_context ?
+                                                                `\n\nSector (${row.relative_context.sector_context.sector}):\n` +
+                                                                `  Diff: ${row.relative_context.sector_context.diff_pct?.toFixed(1)}%` : '')
+                                                            : 'No relative context data'
+                                                        }
+                                                    >
                                                         {row.txn_mm_cum > 0 ? '+' : ''}{row.txn_mm_cum.toFixed(0)}
+                                                        {row.relative_context?.relative_score && row.relative_context.relative_score !== 1.0 && (
+                                                            <span className="ml-0.5 text-[7px] opacity-70">
+                                                                ({row.relative_context.relative_score >= 1.1 ? '↑' : row.relative_context.relative_score <= 0.9 ? '↓' : '→'})
+                                                            </span>
+                                                        )}
                                                     </span>
                                                 ) : <span className="text-zinc-800 text-[9px]">—</span>}
                                             </td>
@@ -767,6 +786,23 @@ export default function BandarmologyPage() {
                                                 )}
                                             </td>
 
+                                            {/* Conflict Warning */}
+                                            <td className="px-1 py-1 text-center border-r border-zinc-800/30">
+                                                {row.data_source_conflict ? (
+                                                    <span
+                                                        className="text-[11px] cursor-help"
+                                                        title={row.conflict_stats ?
+                                                            `Data Conflict: CV=${row.conflict_stats.cv.toFixed(2)} Sources: ${Object.keys(row.conflict_stats.sources).join(', ')}` :
+                                                            'Data sources disagree'
+                                                        }
+                                                    >
+                                                        ⚠️
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-zinc-800 text-[9px]">—</span>
+                                                )}
+                                            </td>
+
                                             {/* Top Buyer & Seller */}
                                             <td className="px-1 py-1 text-center border-r border-zinc-800/30">
                                                 <span className="text-emerald-400 font-bold text-[10px]">{row.top_buyer || '—'}</span>
@@ -779,7 +815,7 @@ export default function BandarmologyPage() {
                                 })
                             ) : (
                                 <tr>
-                                    <td colSpan={28} className="px-4 py-32 text-center text-zinc-600 italic">
+                                    <td colSpan={29} className="px-4 py-32 text-center text-zinc-600 italic">
                                         <div className="flex flex-col items-center gap-2">
                                             <AlertCircle className="w-6 h-6 opacity-20" />
                                             <span>{data.length === 0 ? "No data available. Run a Full Sync on Market Summary first." : "No stocks match your filter criteria."}</span>
