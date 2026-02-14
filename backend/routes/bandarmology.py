@@ -34,6 +34,157 @@ def sanitize_data(data):
     return data
 
 
+def _create_minimal_result_from_deep(ticker: str, deep_data: dict, analysis_date: str) -> dict:
+    """
+    Create a minimal base result entry for a ticker that has deep cache data
+    but isn't in the base screening results (e.g., manually deep-analyzed ticker).
+    """
+    # Get price from deep data if available
+    entry_price = deep_data.get('entry_price', 0)
+    target_price = deep_data.get('target_price', 0)
+    stop_loss = deep_data.get('stop_loss', 0)
+
+    # Use average buy price as current price proxy if entry price not available
+    price = entry_price or deep_data.get('broksum_avg_buy_price', 0)
+
+    # Calculate base score from deep data components (simplified)
+    # Deep score already has the comprehensive analysis
+    deep_score = deep_data.get('deep_score', 0)
+
+    # Base score is derived from available deep metrics
+    base_score = min(30, deep_score // 3)  # Conservative estimate
+
+    # Determine confluence status from deep data
+    txn_mm_cum = deep_data.get('txn_mm_cum', 0)
+    txn_foreign_cum = deep_data.get('txn_foreign_cum', 0)
+    txn_institution_cum = deep_data.get('txn_institution_cum', 0)
+
+    # Build positive methods list for confluence display
+    positive_methods = []
+    if txn_mm_cum > 0:
+        positive_methods.append('MM')
+    if txn_foreign_cum > 0:
+        positive_methods.append('FF')
+    if txn_institution_cum > 0:
+        positive_methods.append('INST')
+
+    # Determine confluence status
+    if len(positive_methods) >= 3:
+        confluence_status = 'TRIPLE'
+    elif len(positive_methods) == 2:
+        confluence_status = 'DOUBLE'
+    elif len(positive_methods) == 1:
+        confluence_status = 'SINGLE'
+    else:
+        confluence_status = 'NONE'
+
+    # Get top buyer/seller from deep data if available
+    top_buyers = deep_data.get('broksum_top_buyers', [])
+    top_sellers = deep_data.get('broksum_top_sellers', [])
+    top_buyer = top_buyers[0].get('code', '') if top_buyers else ''
+    top_seller = top_sellers[0].get('code', '') if top_sellers else ''
+
+    # Build minimal result structure matching the expected format
+    result = {
+        'symbol': ticker.upper(),
+        'name': ticker.upper(),  # Will display ticker as name
+        'price': price,
+        'pct_1d': 0,  # Not available for non-screened tickers
+        'total_score': base_score,
+        'max_score': 100,
+        'trade_type': deep_data.get('deep_trade_type', 'WATCH'),
+        'ma_above_count': 0,
+        'scores': {
+            'price_position': 0,
+            'flow_alignment': 0,
+            'confluence': 0,
+            'broker_activity': 0,
+            'momentum': 0,
+        },
+        'confluence_status': confluence_status,
+        'positive_methods': positive_methods,  # Required for confluence tooltip
+        'pinky': False,
+        'crossing': False,
+        'unusual': False,
+        'likuid': False,
+        'flags_detail': {},
+        # Weekly/daily flows - not available from base screening
+        'w_4': 0, 'w_3': 0, 'w_2': 0, 'w_1': 0,
+        'd_0_mm': 0, 'd_0_nr': 0, 'd_0_ff': 0,
+
+        # Broker summary fields (for table display)
+        'inst_net_lot': deep_data.get('broksum_net_institutional', 0),
+        'foreign_net_lot': deep_data.get('broksum_net_foreign', 0),
+        'top_buyer': top_buyer,
+        'top_seller': top_seller,
+
+        # Deep analysis fields
+        'has_deep': True,
+        'deep_score': deep_score,
+        'combined_score': base_score + deep_score,
+        'max_combined_score': 250,
+        'deep_trade_type': deep_data.get('deep_trade_type', '—'),
+        'deep_signals': deep_data.get('deep_signals', {}),
+
+        # Inventory
+        'inv_accum_brokers': deep_data.get('inv_accum_brokers', 0),
+        'inv_distrib_brokers': deep_data.get('inv_distrib_brokers', 0),
+        'inv_clean_brokers': deep_data.get('inv_clean_brokers', 0),
+        'inv_tektok_brokers': deep_data.get('inv_tektok_brokers', 0),
+        'inv_total_accum_lot': deep_data.get('inv_total_accum_lot', 0),
+        'inv_top_accum_broker': deep_data.get('inv_top_accum_broker', ''),
+
+        # Transaction chart
+        'txn_mm_cum': txn_mm_cum,
+        'txn_foreign_cum': txn_foreign_cum,
+        'txn_institution_cum': txn_institution_cum,
+        'txn_cross_index': deep_data.get('txn_cross_index', 0),
+        'txn_mm_trend': deep_data.get('txn_mm_trend', ''),
+        'txn_foreign_trend': deep_data.get('txn_foreign_trend', ''),
+
+        # Broker summary
+        'broksum_avg_buy_price': deep_data.get('broksum_avg_buy_price', 0),
+        'broksum_avg_sell_price': deep_data.get('broksum_avg_sell_price', 0),
+        'broksum_floor_price': deep_data.get('broksum_floor_price', 0),
+        'broksum_total_buy_lot': deep_data.get('broksum_total_buy_lot', 0),
+        'broksum_total_sell_lot': deep_data.get('broksum_total_sell_lot', 0),
+        'broksum_net_institutional': deep_data.get('broksum_net_institutional', 0),
+        'broksum_net_foreign': deep_data.get('broksum_net_foreign', 0),
+        'broksum_top_buyers': top_buyers,
+        'broksum_top_sellers': top_sellers,
+
+        # Entry/target
+        'entry_price': entry_price,
+        'target_price': target_price,
+        'stop_loss': stop_loss,
+        'risk_reward_ratio': deep_data.get('risk_reward_ratio', 0),
+
+        # Controlling broker
+        'controlling_brokers': deep_data.get('controlling_brokers', []),
+        'accum_phase': deep_data.get('accum_phase', 'UNKNOWN'),
+        'bandar_avg_cost': deep_data.get('bandar_avg_cost', 0),
+        'coordination_score': deep_data.get('coordination_score', 0),
+        'phase_confidence': deep_data.get('phase_confidence', 'LOW'),
+        'breakout_signal': deep_data.get('breakout_signal', 'NONE'),
+        'breakout_probability': deep_data.get('breakout_probability', 0),
+
+        # Other deep fields
+        'accum_duration_days': deep_data.get('accum_duration_days', 0),
+        'concentration_broker': deep_data.get('concentration_broker'),
+        'concentration_pct': deep_data.get('concentration_pct', 0),
+        'concentration_risk': deep_data.get('concentration_risk', 'NONE'),
+        'bandar_confirmation': deep_data.get('bandar_confirmation', 'NONE'),
+        'broksum_consistency_score': deep_data.get('broksum_consistency_score', 0),
+        'ma_cross_signal': deep_data.get('ma_cross_signal', 'NONE'),
+        'phase_transition': deep_data.get('phase_transition', 'NONE'),
+        'score_trend': deep_data.get('score_trend', 'NONE'),
+        'pump_tomorrow_score': deep_data.get('pump_tomorrow_score', 0),
+        'pump_tomorrow_signal': deep_data.get('pump_tomorrow_signal', 'NONE'),
+    }
+
+    return result
+
+
 @router.get("/bandarmology")
 async def get_bandarmology_screening(
     date: Optional[str] = Query(None, description="Analysis date (YYYY-MM-DD). None = latest."),
@@ -55,12 +206,26 @@ async def get_bandarmology_screening(
         actual_date = analyzer._resolve_date(date)
 
         # Enrich with deep analysis data if available
+        deep_cache = {}
         if include_deep and actual_date:
             try:
                 band_repo = BandarmologyRepository()
                 deep_cache = band_repo.get_deep_cache_batch(actual_date)
                 if deep_cache:
+                    # First enrich existing results
                     results = analyzer.enrich_results_with_deep(results, deep_cache)
+
+                    # Add tickers that have deep cache but aren't in base results
+                    # (e.g., manually deep-analyzed tickers)
+                    base_symbols = {r['symbol'] for r in results}
+                    for ticker, deep_data in deep_cache.items():
+                        if ticker not in base_symbols:
+                            # Create minimal base result for this ticker
+                            minimal_result = _create_minimal_result_from_deep(ticker, deep_data, actual_date)
+                            results.append(minimal_result)
+
+                    # Re-sort to include new entries
+                    results.sort(key=lambda x: x.get('combined_score', x.get('total_score', 0)), reverse=True)
             except Exception as e:
                 logger.warning(f"Failed to load deep cache: {e}")
 
@@ -650,14 +815,19 @@ async def get_stock_detail(
         results = analyzer.analyze(target_date=actual_date)
         base_result = next((r for r in results if r['symbol'] == ticker_upper), None)
 
+        # 2. Get deep cache (check early to handle tickers not in screening)
+        deep_cache = band_repo.get_deep_cache(ticker_upper, actual_date)
+
+        # If not in screening results but has deep cache, create minimal base result
+        if not base_result and deep_cache:
+            logger.info(f"Ticker {ticker_upper} not in screening but has deep cache, using deep data only")
+            base_result = _create_minimal_result_from_deep(ticker_upper, deep_cache, actual_date)
+
         if not base_result:
             return JSONResponse(
                 status_code=404,
-                content={"error": f"Stock {ticker_upper} not found in screening results"}
+                content={"error": f"Stock {ticker_upper} not found in screening results or deep analysis cache"}
             )
-
-        # 2. Get deep cache
-        deep_cache = band_repo.get_deep_cache(ticker_upper, actual_date)
 
         # 3. Get inventory brokers from DB
         inventory_brokers = band_repo.get_inventory(ticker_upper)
