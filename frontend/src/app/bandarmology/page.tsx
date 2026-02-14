@@ -562,7 +562,7 @@ export default function BandarmologyPage() {
                 )}
 
                 <div className="overflow-auto h-full scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
-                    <table className="w-auto text-left text-[11px] border-collapse leading-none tracking-tight table-fixed">
+                    <table className="w-auto text-left text-[11px] border-collapse leading-none tracking-tight table-fixed hidden lg:table">
                         <thead className="sticky top-0 z-20 shadow-md">
                             <tr className="bg-gradient-to-r from-purple-900/80 to-blue-900/80 text-zinc-200 border-b border-purple-500/30">
                                 <SortableHeader label="#" sortKey="total_score" className="w-[30px]" />
@@ -597,7 +597,8 @@ export default function BandarmologyPage() {
                             </tr>
                         </thead>
 
-                        <tbody className="bg-[#0f1115] divide-y divide-zinc-800/30">
+                        {/* Desktop Table View */}
+                        <tbody className="bg-[#0f1115] divide-y divide-zinc-800/30 hidden lg:table-row-group">
                             {paginatedData.length > 0 ? (
                                 paginatedData.map((row, idx) => {
                                     const rank = (currentPage - 1) * pageSize + idx + 1;
@@ -825,6 +826,143 @@ export default function BandarmologyPage() {
                             )}
                         </tbody>
                     </table>
+
+                    {/* Mobile Card View */}
+                    <div className="lg:hidden space-y-2 p-2">
+                        {paginatedData.length > 0 ? (
+                            paginatedData.map((row, idx) => {
+                                const rank = (currentPage - 1) * pageSize + idx + 1;
+                                const typeConfig = TRADE_TYPE_CONFIG[row.trade_type] || TRADE_TYPE_CONFIG['—'];
+                                const conflConfig = CONFLUENCE_CONFIG[row.confluence_status] || CONFLUENCE_CONFIG['NONE'];
+
+                                return (
+                                    <div
+                                        key={row.symbol}
+                                        onClick={() => setSelectedTicker(row.symbol)}
+                                        className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-3 space-y-2 active:bg-zinc-800/50 transition-colors cursor-pointer"
+                                    >
+                                        {/* Header: Rank, Symbol, Type */}
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-zinc-600 text-xs font-mono">#{rank}</span>
+                                                <span className="text-blue-300 font-black text-base tracking-tight">{row.symbol}</span>
+                                                <span className={cn(
+                                                    "text-[10px] font-bold px-1.5 py-0.5 rounded border",
+                                                    typeConfig.bg, typeConfig.color
+                                                )}>
+                                                    {typeConfig.label}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                {row.data_source_conflict && <span className="text-xs">⚠️</span>}
+                                                {(row.volume_confirmation_multiplier ?? 0) > 1 && (
+                                                    <span className="text-[10px] text-cyan-400 font-bold">✓{row.volume_confirmation_multiplier?.toFixed(1)}x</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Score Bar */}
+                                        <div className="flex items-center gap-2">
+                                            <ScoreBar score={row.combined_score ?? row.total_score} max={row.max_combined_score ?? 100} />
+                                            {(row.deep_score ?? 0) > 0 && (
+                                                <span className={cn(
+                                                    "text-xs font-bold tabular-nums shrink-0",
+                                                    (row.deep_score ?? 0) >= 40 ? 'text-amber-400' :
+                                                    (row.deep_score ?? 0) >= 20 ? 'text-blue-400' : 'text-zinc-500'
+                                                )}>
+                                                    +{row.deep_score}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* Key Metrics Grid */}
+                                        <div className="grid grid-cols-4 gap-2 text-xs">
+                                            {/* Price */}
+                                            <div className="text-center">
+                                                <div className="text-[10px] text-zinc-500">Price</div>
+                                                <div className="font-bold text-zinc-300">
+                                                    {row.price > 0 ? row.price.toLocaleString('id-ID') : '—'}
+                                                </div>
+                                                {row.pct_1d !== 0 ? (
+                                                    <div className={cn(
+                                                        "text-[10px] font-bold",
+                                                        row.pct_1d > 0 ? 'text-emerald-400' : 'text-red-400'
+                                                    )}>
+                                                        {row.pct_1d > 0 ? '+' : ''}{row.pct_1d.toFixed(1)}%
+                                                    </div>
+                                                ) : <div className="text-[10px] text-zinc-700">0%</div>}
+                                            </div>
+
+                                            {/* Confluence */}
+                                            <div className="text-center">
+                                                <div className="text-[10px] text-zinc-500">Flow</div>
+                                                <div className={cn("text-sm font-bold tracking-widest", conflConfig.color)}>
+                                                    {conflConfig.label}
+                                                </div>
+                                                <div className="text-[10px] text-zinc-600 truncate">
+                                                    {row.positive_methods.slice(0, 2).join(', ')}
+                                                </div>
+                                            </div>
+
+                                            {/* Daily Flow */}
+                                            <div className="text-center">
+                                                <div className="text-[10px] text-zinc-500">D-0 MM</div>
+                                                <div className={cn(
+                                                    "font-bold tabular-nums",
+                                                    (row.d_0_mm ?? 0) > 0 ? 'text-emerald-400' : (row.d_0_mm ?? 0) < 0 ? 'text-red-400' : 'text-zinc-600'
+                                                )}>
+                                                    {(row.d_0_mm ?? 0) > 0 ? '+' : ''}{row.d_0_mm?.toFixed(1) || '—'}
+                                                </div>
+                                                <div className="text-[10px] text-zinc-600">{row.ma_above_count}/5 MA</div>
+                                            </div>
+
+                                            {/* Inventory */}
+                                            <div className="text-center">
+                                                <div className="text-[10px] text-zinc-500">Inv</div>
+                                                {(row.inv_accum_brokers ?? 0) > 0 ? (
+                                                    <div className="text-xs font-bold">
+                                                        <span className="text-emerald-400">{row.inv_accum_brokers}A</span>
+                                                    </div>
+                                                ) : <div className="text-zinc-700">—</div>}
+                                                <div className="text-[10px] flex justify-center gap-1">
+                                                    {row.pinky && <span className="text-pink-400">PK</span>}
+                                                    {row.crossing && <span className="text-pink-400">CR</span>}
+                                                    {row.unusual && <span className="text-pink-400">UN</span>}
+                                                    {row.likuid && <span className="text-pink-400">LQ</span>}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Cumulative Flows */}
+                                        <div className="flex justify-between text-xs border-t border-zinc-800 pt-2">
+                                            <div className="flex gap-3">
+                                                <span className="text-zinc-500">MM: <span className={cn(
+                                                    "font-bold",
+                                                    (row.txn_mm_cum ?? 0) > 0 ? 'text-emerald-400' : (row.txn_mm_cum ?? 0) < 0 ? 'text-red-400' : 'text-zinc-600'
+                                                )}>{(row.txn_mm_cum ?? 0) > 0 ? '+' : ''}{row.txn_mm_cum?.toFixed(0) || '—'}</span></span>
+                                                <span className="text-zinc-500">FF: <span className={cn(
+                                                    "font-bold",
+                                                    (row.txn_foreign_cum ?? 0) > 0 ? 'text-emerald-400' : (row.txn_foreign_cum ?? 0) < 0 ? 'text-red-400' : 'text-zinc-600'
+                                                )}>{(row.txn_foreign_cum ?? 0) > 0 ? '+' : ''}{row.txn_foreign_cum?.toFixed(0) || '—'}</span></span>
+                                            </div>
+                                            <div className="flex gap-2 text-[10px]">
+                                                <span className="text-emerald-400 font-bold">{row.top_buyer || '—'}</span>
+                                                <span className="text-zinc-600">/</span>
+                                                <span className="text-red-400 font-bold">{row.top_seller || '—'}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <div className="px-4 py-16 text-center text-zinc-600 italic">
+                                <div className="flex flex-col items-center gap-2">
+                                    <AlertCircle className="w-6 h-6 opacity-20" />
+                                    <span>{data.length === 0 ? "No data available. Run a Full Sync on Market Summary first." : "No stocks match your filter criteria."}</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
