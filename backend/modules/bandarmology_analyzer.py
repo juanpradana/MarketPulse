@@ -560,7 +560,6 @@ class BandarmologyAnalyzer:
         return multiplier, context_info
 
     @staticmethod
-    @staticmethod
     def _z_score_to_percentile(z_score: float) -> float:
         """Convert z-score to approximate percentile (0-100)."""
         # Approximation using error function
@@ -569,6 +568,96 @@ class BandarmologyAnalyzer:
             return round(percentile, 1)
         except Exception:
             return 50.0
+
+    def _calculate_dynamic_target(self, deep_data: Dict, price_series: List[Dict], current_price: float) -> Tuple[Optional[float], Optional[float]]:
+        """
+        Calculate ATR-based dynamic target and stop loss.
+
+        Uses Average True Range (ATR) to set volatility-adjusted targets
+        based on the accumulation phase.
+
+        Args:
+            deep_data: Deep analysis data dict with 'accum_phase' key
+            price_series: List of price candles with 'high', 'low', 'close' keys
+            current_price: Current stock price
+
+        Returns:
+            Tuple of (target_price, stop_loss) or (None, None) if calculation fails
+        """
+        try:
+            if len(price_series) < 14:
+                return None, None
+
+            # Calculate ATR (Average True Range)
+            atr = self._calculate_atr(price_series, period=14)
+            if atr is None or atr <= 0:
+                return None, None
+
+            phase = deep_data.get('accum_phase', 'UNKNOWN')
+
+            # Phase-based multipliers for target
+            phase_multipliers = {
+                'ACCUMULATION': 2.0,   # 2x ATR target (more aggressive in early phase)
+                'HOLDING': 1.5,        # 1.5x ATR target
+                'DISTRIBUTION': 0.5,   # 0.5x ATR target (conservative)
+                'UNKNOWN': 1.0
+            }
+            multiplier = phase_multipliers.get(phase, 1.0)
+
+            # Calculate target and stop
+            target = current_price + (atr * multiplier)
+            stop_loss = current_price - (atr * 1.5)  # 1.5x ATR stop
+
+            return round(target, 2), round(stop_loss, 2)
+        except Exception as e:
+            logger.warning(f"Error calculating dynamic target: {e}")
+            return None, None
+
+    def _calculate_atr(self, price_series: List[Dict], period: int = 14) -> Optional[float]:
+        """
+        Calculate Average True Range (ATR) for volatility measurement.
+
+        Args:
+            price_series: List of price candles with 'high', 'low', 'close' keys
+            period: ATR calculation period (default 14)
+
+        Returns:
+            ATR value or None if calculation fails
+        """
+        try:
+            if len(price_series) < period + 1:
+                return None
+
+            true_ranges = []
+
+            for i in range(1, len(price_series)):
+                current = price_series[i]
+                previous = price_series[i - 1]
+
+                high = current.get('high', 0)
+                low = current.get('low', 0)
+                prev_close = previous.get('close', 0)
+
+                if high <= 0 or low <= 0 or prev_close <= 0:
+                    continue
+
+                # True Range = max(high-low, |high-prev_close|, |low-prev_close|)
+                tr1 = high - low
+                tr2 = abs(high - prev_close)
+                tr3 = abs(low - prev_close)
+
+                true_range = max(tr1, tr2, tr3)
+                true_ranges.append(true_range)
+
+            if len(true_ranges) < period:
+                return None
+
+            # Calculate simple moving average of true ranges
+            atr = sum(true_ranges[-period:]) / period
+            return round(atr, 2)
+        except Exception as e:
+            logger.warning(f"Error calculating ATR: {e}")
+            return None
 
     def _resolve_data_source_conflicts(
         self, scores_by_source: Dict[str, float]
@@ -1655,9 +1744,20 @@ class BandarmologyAnalyzer:
             else:
                 deep['entry_price'] = round(current_price * 0.97, 0)
 
-            # Target price: institutional sell avg, or bandar cost + 10-20% markup
+            # Calculate ATR-based dynamic target if price series available
+            atr_target, atr_stop = None, None
+            if price_series and len(price_series) >= 14:
+                atr_target, atr_stop = self._calculate_dynamic_target(
+                    deep, price_series, current_price
+                )
+
+            # Target price: prioritize institutional target, then ATR-based, then phase-based markup
             if target_inst > 0 and target_inst > deep['entry_price']:
                 deep['target_price'] = target_inst
+            elif atr_target and atr_target > deep['entry_price']:
+                # Use ATR-based dynamic target
+                deep['target_price'] = round(atr_target, 0)
+                deep['target_method'] = 'ATR_BASED'
             elif bandar_cost > 0:
                 # Markup depends on accumulation phase
                 phase = deep.get('accum_phase', 'UNKNOWN')
@@ -1668,18 +1768,25 @@ class BandarmologyAnalyzer:
                 else:
                     markup = 1.05  # 5% conservative
                 deep['target_price'] = round(bandar_cost * markup, 0)
+                deep['target_method'] = 'PHASE_BASED'
             elif deep['entry_price'] > 0:
                 deep['target_price'] = round(deep['entry_price'] * 1.05, 0)
+                deep['target_method'] = 'DEFAULT'
 
-            # Stop loss = entry * 0.95 (5% risk) or lowest controlling broker cost * 0.97
-            if deep['entry_price'] > 0:
+            # Stop loss: prioritize ATR-based, then controlling broker cost, then default 5%
+            if atr_stop and atr_stop < deep['entry_price']:
+                deep['stop_loss'] = round(atr_stop, 0)
+                deep['stop_method'] = 'ATR_BASED'
+            elif deep['entry_price'] > 0:
                 cbs = deep.get('controlling_brokers', [])
                 cb_costs = [cb['avg_buy_price'] for cb in cbs if cb.get('avg_buy_price', 0) > 0]
                 if cb_costs:
                     min_cb_cost = min(cb_costs)
                     deep['stop_loss'] = round(min_cb_cost * 0.95, 0)
+                    deep['stop_method'] = 'BROKER_COST'
                 else:
                     deep['stop_loss'] = round(deep['entry_price'] * 0.95, 0)
+                    deep['stop_method'] = 'DEFAULT'
 
             # Risk/reward ratio
             if deep['entry_price'] > 0 and deep['stop_loss'] > 0 and deep['target_price'] > 0:
