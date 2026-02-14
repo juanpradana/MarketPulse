@@ -83,7 +83,7 @@ export default function BrokerStalkerAdvanced() {
             </div>
 
             {/* Header */}
-            <header className="sticky top-14 lg:top-0 z-40 border-b border-white/5 bg-[#050507]/80 backdrop-blur-2xl px-4 lg:px-8 py-3 lg:py-4 flex flex-wrap items-center justify-between gap-2">
+            <header className="sticky top-0 z-40 border-b border-white/5 bg-[#050507]/80 backdrop-blur-2xl px-4 lg:px-8 py-3 lg:py-4 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-5">
                     <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.3)] border border-blue-400/30">
                         <Target className="w-6 h-6 text-white" />

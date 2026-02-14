@@ -248,7 +248,7 @@ export default function NeoBDMSummaryPage() {
     return (
         <div className="flex flex-col gap-0 p-0 min-h-screen bg-[#0f1115] text-zinc-100 font-mono">
             {/* Header / Config Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-2 bg-[#181a1f] p-2 lg:p-1 border-b border-zinc-800/60 sticky top-14 lg:top-0 z-40 backdrop-blur-md bg-opacity-90">
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-[#181a1f] p-2 lg:p-1 border-b border-zinc-800/60 sticky top-0 z-40 backdrop-blur-md bg-opacity-90">
                 <div className="flex flex-wrap items-center gap-2 lg:gap-3 w-full lg:w-auto">
                     {/* Method Selector */}
                     <div className="space-y-0.5">
