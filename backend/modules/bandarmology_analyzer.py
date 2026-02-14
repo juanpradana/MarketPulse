@@ -74,14 +74,37 @@ def _load_broker_classifications() -> Dict[str, Dict]:
 class BandarmologyAnalyzer:
     """
     Bandarmology screening engine.
-    
+
     Combines market summary data across all 3 methods (MM, NR, Foreign)
     with broker summary data to score and classify stocks.
     """
 
+    # Sector mapping for stocks (can be populated from external source)
+    # Format: { 'TICKER': 'SECTOR_NAME' }
+    _sector_mapping: Dict[str, str] = {}
+
     def __init__(self, db_path: Optional[str] = None):
         self.db_path = db_path or os.path.join(config.DATA_DIR, "market_sentinel.db")
         self.broker_classes = _load_broker_classifications()
+        self._market_averages_cache: Optional[Dict] = None
+        self._sector_averages_cache: Optional[Dict] = None
+
+    @classmethod
+    def load_sector_mapping(cls, mapping: Dict[str, str]):
+        """Load sector mapping from external source."""
+        cls._sector_mapping.update(mapping)
+        logger.info(f"Loaded sector mapping for {len(mapping)} stocks")
+
+    @classmethod
+    def clear_sector_mapping(cls):
+        """Clear all sector mappings."""
+        cls._sector_mapping.clear()
+        logger.info("Cleared sector mapping")
+
+    def clear_caches(self):
+        """Clear internal caches (call when data changes)."""
+        self._market_averages_cache = None
+        self._sector_averages_cache = None
 
     def _get_conn(self):
         import sqlite3
@@ -90,13 +113,16 @@ class BandarmologyAnalyzer:
     def analyze(self, target_date: Optional[str] = None) -> List[Dict]:
         """
         Run full bandarmology analysis.
-        
+
         Args:
             target_date: Specific date to analyze (YYYY-MM-DD). None = latest.
-        
+
         Returns:
             List of scored stock dicts, sorted by score descending.
         """
+        # Clear caches for fresh analysis
+        self.clear_caches()
+
         # 1. Get market summary data for all methods
         daily_data = self._get_market_summary_data('d', target_date)
         cumulative_data = self._get_market_summary_data('c', target_date)
@@ -325,6 +351,222 @@ class BandarmologyAnalyzer:
         finally:
             conn.close()
 
+    # ==================== MARKET/SECTOR CONTEXT COMPARISON ====================
+
+    def _get_stock_sector(self, symbol: str) -> Optional[str]:
+        """Get sector for a stock. Returns None if not mapped."""
+        return self._sector_mapping.get(symbol.upper())
+
+    def _calculate_market_averages(
+        self, daily_data: Dict[str, Dict[str, Dict]], cumulative_data: Dict[str, Dict[str, Dict]]
+    ) -> Dict:
+        """
+        Calculate market-wide average flows for context comparison.
+
+        Returns:
+            Dict with average flows per method:
+            {
+                'mm': {'avg_cum': X, 'avg_daily': Y, 'median_cum': Z},
+                'nr': {...},
+                'f': {...}
+            }
+        """
+        if self._market_averages_cache:
+            return self._market_averages_cache
+
+        averages = {'mm': {}, 'nr': {}, 'f': {}}
+
+        for method in ['m', 'nr', 'f']:
+            method_key = 'mm' if method == 'm' else method
+            cum_values = []
+            daily_values = []
+
+            # Get cumulative values
+            method_cum = cumulative_data.get(method, {})
+            for symbol, data in method_cum.items():
+                d_0 = _parse_numeric(data.get('d_0'))
+                c_5 = _parse_numeric(data.get('c_5'))
+                if c_5 != 0:
+                    cum_values.append(c_5)
+                if d_0 != 0:
+                    daily_values.append(d_0)
+
+            if cum_values:
+                averages[method_key]['avg_cum'] = np.mean(cum_values)
+                averages[method_key]['median_cum'] = np.median(cum_values)
+                averages[method_key]['std_cum'] = np.std(cum_values)
+                averages[method_key]['count'] = len(cum_values)
+            else:
+                averages[method_key] = {
+                    'avg_cum': 0, 'median_cum': 0, 'std_cum': 0, 'count': 0
+                }
+
+            if daily_values:
+                averages[method_key]['avg_daily'] = np.mean(daily_values)
+                averages[method_key]['median_daily'] = np.median(daily_values)
+
+        self._market_averages_cache = averages
+        return averages
+
+    def _calculate_sector_averages(
+        self, daily_data: Dict[str, Dict[str, Dict]], cumulative_data: Dict[str, Dict[str, Dict]]
+    ) -> Dict:
+        """
+        Calculate sector-average flows for stocks with sector mapping.
+
+        Returns:
+            Dict keyed by sector name with average flows.
+        """
+        if self._sector_averages_cache:
+            return self._sector_averages_cache
+
+        # Group stocks by sector
+        sector_data: Dict[str, Dict[str, List[float]]] = {}
+
+        for method in ['m', 'nr', 'f']:
+            method_key = 'mm' if method == 'm' else method
+
+            method_cum = cumulative_data.get(method, {})
+            for symbol, data in method_cum.items():
+                sector = self._get_stock_sector(symbol)
+                if not sector:
+                    continue
+
+                if sector not in sector_data:
+                    sector_data[sector] = {'mm': [], 'nr': [], 'f': []}
+
+                c_5 = _parse_numeric(data.get('c_5'))
+                if c_5 != 0:
+                    sector_data[sector][method_key].append(c_5)
+
+        # Calculate averages per sector
+        sector_averages = {}
+        for sector, method_data in sector_data.items():
+            sector_averages[sector] = {}
+            for method_key, values in method_data.items():
+                if values:
+                    sector_averages[sector][method_key] = {
+                        'avg_cum': np.mean(values),
+                        'median_cum': np.median(values),
+                        'count': len(values)
+                    }
+                else:
+                    sector_averages[sector][method_key] = {
+                        'avg_cum': 0, 'median_cum': 0, 'count': 0
+                    }
+
+        self._sector_averages_cache = sector_averages
+        return sector_averages
+
+    def _calculate_relative_flow_score(
+        self,
+        symbol: str,
+        daily_data: Dict[str, Dict[str, Dict]],
+        cumulative_data: Dict[str, Dict[str, Dict]]
+    ) -> Tuple[float, Dict]:
+        """
+        Calculate relative flow score comparing stock to market and sector averages.
+
+        Returns:
+            Tuple of (multiplier, context_info)
+            - multiplier: 0.8 to 1.2 adjustment factor
+            - context_info: dict with comparison details
+        """
+        context_info = {
+            'market_context': {},
+            'sector_context': {},
+            'relative_score': 1.0
+        }
+
+        # Get market averages
+        market_avg = self._calculate_market_averages(daily_data, cumulative_data)
+
+        # Get stock's MM cumulative flow
+        mm_cum = cumulative_data.get('m', {}).get(symbol, {})
+        stock_mm_flow = _parse_numeric(mm_cum.get('c_5', 0))
+
+        if stock_mm_flow == 0:
+            return 1.0, context_info
+
+        # Market comparison
+        market_mm = market_avg.get('mm', {})
+        market_avg_cum = market_mm.get('avg_cum', 0)
+        market_std = market_mm.get('std_cum', 1)  # Avoid division by zero
+
+        market_z_score = 0
+        if market_std > 0:
+            market_z_score = (stock_mm_flow - market_avg_cum) / market_std
+
+        context_info['market_context'] = {
+            'stock_flow': round(stock_mm_flow, 2),
+            'market_avg': round(market_avg_cum, 2),
+            'market_std': round(market_std, 2),
+            'z_score': round(market_z_score, 2),
+            'percentile': self._z_score_to_percentile(market_z_score)
+        }
+
+        # Sector comparison (if sector data available)
+        sector = self._get_stock_sector(symbol)
+        sector_z_score = 0
+
+        if sector:
+            sector_avg = self._calculate_sector_averages(daily_data, cumulative_data)
+            sector_mm = sector_avg.get(sector, {}).get('mm', {})
+            sector_avg_cum = sector_mm.get('avg_cum', 0)
+            sector_count = sector_mm.get('count', 0)
+
+            if sector_count >= 3 and sector_avg_cum != 0:  # Need at least 3 stocks for meaningful average
+                # Simple comparison (sector std not available with small sample)
+                sector_diff_pct = (stock_mm_flow - sector_avg_cum) / abs(sector_avg_cum) if sector_avg_cum != 0 else 0
+                sector_z_score = sector_diff_pct * 2  # Approximate z-score
+
+                context_info['sector_context'] = {
+                    'sector': sector,
+                    'stock_flow': round(stock_mm_flow, 2),
+                    'sector_avg': round(sector_avg_cum, 2),
+                    'sector_count': sector_count,
+                    'diff_pct': round(sector_diff_pct * 100, 1)
+                }
+
+        # Calculate relative score multiplier
+        # Use the better of market or sector comparison
+        best_z_score = max(abs(market_z_score), abs(sector_z_score)) if sector else abs(market_z_score)
+        best_z_sign = np.sign(market_z_score if abs(market_z_score) >= abs(sector_z_score) else sector_z_score)
+
+        # Convert z-score to multiplier
+        # z > 1.0 (top 16%): 1.2 multiplier (20% bonus)
+        # z > 0.5 (top 31%): 1.1 multiplier (10% bonus)
+        # z > -0.5: 1.0 multiplier (neutral)
+        # z > -1.0: 0.9 multiplier (10% penalty)
+        # z < -1.0: 0.8 multiplier (20% penalty)
+
+        if best_z_score >= 1.0 and best_z_sign > 0:
+            multiplier = 1.2
+        elif best_z_score >= 0.5 and best_z_sign > 0:
+            multiplier = 1.1
+        elif best_z_score >= 0.5 or (best_z_score >= 0 and best_z_sign >= 0):
+            multiplier = 1.0
+        elif best_z_score >= 1.0 and best_z_sign < 0:
+            multiplier = 0.8
+        else:
+            multiplier = 0.9
+
+        context_info['relative_score'] = multiplier
+        context_info['z_score_used'] = round(best_z_score, 2) if sector else round(market_z_score, 2)
+
+        return multiplier, context_info
+
+    @staticmethod
+    def _z_score_to_percentile(z_score: float) -> float:
+        """Convert z-score to approximate percentile (0-100)."""
+        # Approximation using error function
+        try:
+            import math
+            percentile = 50 * (1 + math.erf(z_score / math.sqrt(2)))
+            return round(percentile, 1)
+        except Exception:
+            return 50.0
+
     def _score_symbol(
         self,
         symbol: str,
@@ -514,9 +756,23 @@ class BandarmologyAnalyzer:
         scores['institutional'] = inst_score
         total_score += inst_score
 
+        # 10. Relative Market/Sector Context (±20% adjustment)
+        rel_multiplier, rel_context = self._calculate_relative_flow_score(
+            symbol, daily_data, cumulative_data
+        )
+        # Apply multiplier to total score
+        adjusted_total_score = int(total_score * rel_multiplier)
+
+        # Add context info to scores
+        scores['relative_context'] = rel_context
+        scores['relative_multiplier'] = rel_multiplier
+
+        # Use adjusted score for classification but keep raw for reference
+        classification_score = adjusted_total_score
+
         # --- CLASSIFICATION ---
         trade_type = self._classify_trade_type(
-            total_score, scores, pinky, crossing, unusual, likuid,
+            classification_score, scores, pinky, crossing, unusual, likuid,
             positive_weeks, d_0_mm, pct_1d, ma_above_count,
             w_1, w_2, c_3, c_5
         )
@@ -524,7 +780,8 @@ class BandarmologyAnalyzer:
         # --- Build result ---
         return {
             'symbol': symbol,
-            'total_score': total_score,
+            'total_score': adjusted_total_score,
+            'total_score_raw': total_score,
             'max_score': 100,
             'trade_type': trade_type,
             'pinky': pinky,
@@ -563,6 +820,11 @@ class BandarmologyAnalyzer:
             'top_seller': broker_info.get('top_seller'),
             'brokers_buying': broker_info.get('total_brokers_buying', 0),
             'brokers_selling': broker_info.get('total_brokers_selling', 0),
+
+            # Relative market/sector context
+            'relative_multiplier': rel_multiplier,
+            'market_context': rel_context.get('market_context', {}),
+            'sector_context': rel_context.get('sector_context', {}),
 
             # Score breakdown
             'scores': scores,
