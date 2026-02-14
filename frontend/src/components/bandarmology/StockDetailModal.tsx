@@ -1627,7 +1627,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                     </h3>
                                     {data.has_deep && (data.inv_accum_brokers ?? 0) > 0 ? (
                                         <div className="space-y-1.5">
-                                            <div className="flex items-center gap-3 text-[9px] mb-2">
+                                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[9px] mb-2">
                                                 <span className="text-emerald-400 font-bold">{data.inv_accum_brokers} Accumulating</span>
                                                 <span className="text-red-400 font-bold">{data.inv_distrib_brokers} Distributing</span>
                                                 <span className="text-cyan-400 font-bold">{data.inv_clean_brokers}&#10003;</span>
@@ -1664,11 +1664,12 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                     Broker Summary (Today)
                                 </h3>
                                 {data.broker_summary && (data.broker_summary.buy.length > 0 || data.broker_summary.sell.length > 0) ? (
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                         {/* Buy Side */}
                                         <div>
                                             <div className="text-[9px] font-bold text-emerald-400 uppercase mb-1.5">Net Buyers</div>
-                                            <table className="w-full text-[10px]">
+                                            <div className="overflow-x-auto -mx-1 px-1">
+                                            <table className="w-full text-[10px] min-w-[200px]">
                                                 <thead>
                                                     <tr className="text-zinc-600 border-b border-zinc-700/30">
                                                         <th className="text-left py-0.5 font-bold">Broker</th>
@@ -1688,6 +1689,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                                     ))}
                                                 </tbody>
                                             </table>
+                                            </div>
                                             {data.broksum_avg_buy_price ? (
                                                 <div className="mt-2 text-[9px] text-zinc-500">
                                                     Weighted Avg Buy: <span className="text-cyan-400 font-bold">{data.broksum_avg_buy_price.toLocaleString('id-ID')}</span>
@@ -1698,7 +1700,8 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                         {/* Sell Side */}
                                         <div>
                                             <div className="text-[9px] font-bold text-red-400 uppercase mb-1.5">Net Sellers</div>
-                                            <table className="w-full text-[10px]">
+                                            <div className="overflow-x-auto -mx-1 px-1">
+                                            <table className="w-full text-[10px] min-w-[200px]">
                                                 <thead>
                                                     <tr className="text-zinc-600 border-b border-zinc-700/30">
                                                         <th className="text-left py-0.5 font-bold">Broker</th>
@@ -1718,6 +1721,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                                     ))}
                                                 </tbody>
                                             </table>
+                                            </div>
                                             {data.broksum_avg_sell_price ? (
                                                 <div className="mt-2 text-[9px] text-zinc-500">
                                                     Weighted Avg Sell: <span className="text-orange-400 font-bold">{data.broksum_avg_sell_price.toLocaleString('id-ID')}</span>
@@ -1731,7 +1735,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
 
                                 {/* Institutional/Foreign Net */}
                                 {data.has_deep && (data.broksum_net_institutional || data.broksum_net_foreign) ? (
-                                    <div className="flex items-center gap-4 mt-3 pt-2 border-t border-zinc-700/30 text-[10px]">
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3 pt-2 border-t border-zinc-700/30 text-[10px]">
                                         <span className="text-zinc-500">Institutional Net:</span>
                                         <span className={cn("font-bold", (data.broksum_net_institutional ?? 0) > 0 ? 'text-emerald-400' : 'text-red-400')}>
                                             {(data.broksum_net_institutional ?? 0) > 0 ? '+' : ''}{(data.broksum_net_institutional ?? 0).toLocaleString('id-ID')} lot
@@ -1745,14 +1749,14 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                             </div>
 
                             {/* Weekly Flow + Signals */}
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                 {/* Weekly Flow */}
                                 <div className="bg-zinc-800/20 rounded-lg p-4 border border-zinc-700/20">
                                     <h3 className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                                         <BarChart3 className="w-3.5 h-3.5 text-blue-400" />
                                         Weekly Accumulation
                                     </h3>
-                                    <div className="grid grid-cols-4 gap-2 text-center">
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
                                         {[
                                             { label: 'W-4', value: data.w_4 },
                                             { label: 'W-3', value: data.w_3 },
@@ -1814,9 +1818,9 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                         <Shield className="w-3.5 h-3.5 text-cyan-400" />
                                         Top Holders (Cumulative Net Buy)
                                     </h3>
-                                    <div className="flex gap-3">
+                                    <div className="flex flex-wrap gap-3">
                                         {data.top_holders.map((h, i) => (
-                                            <div key={i} className="bg-zinc-800/50 rounded-lg p-2 text-center min-w-[80px] border border-zinc-700/20">
+                                            <div key={i} className="bg-zinc-800/50 rounded-lg p-2 text-center min-w-[80px] flex-1 sm:flex-none border border-zinc-700/20">
                                                 <div className="text-emerald-400 font-black text-sm">{h.broker_code}</div>
                                                 <div className="text-zinc-300 font-bold text-[10px] tabular-nums">
                                                     +{h.total_net_lot.toLocaleString('id-ID')} lot
