@@ -361,7 +361,7 @@ export default function BandarmologyPage() {
         <>
         <div className="flex flex-col gap-0 p-0 min-h-screen bg-[#0f1115] text-zinc-100 font-mono">
             {/* Header Bar */}
-            <div className="bg-[#181a1f] border-b border-zinc-800/60 sticky top-0 z-40 backdrop-blur-md bg-opacity-95">
+            <div className="bg-[#181a1f] border-b border-zinc-800/60 sticky top-0 z-30 lg:z-40 backdrop-blur-md bg-opacity-95">
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 p-2">
                     <div className="flex flex-wrap items-center gap-2 lg:gap-3">
                         <div className="flex items-center gap-2">

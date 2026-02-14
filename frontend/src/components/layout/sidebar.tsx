@@ -117,7 +117,7 @@ export const Sidebar = ({ mobile }: SidebarProps) => {
                 {/* Mobile Menu Overlay */}
                 {isMobileMenuOpen && (
                     <div
-                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
                         onClick={() => setIsMobileMenuOpen(false)}
                     />
                 )}
@@ -125,7 +125,7 @@ export const Sidebar = ({ mobile }: SidebarProps) => {
                 {/* Mobile Navigation Drawer */}
                 <div
                     className={cn(
-                        "fixed top-14 left-0 right-0 bottom-0 bg-[#09090b] border-r border-zinc-800/40 z-40 transform transition-transform duration-300 ease-out overflow-hidden",
+                        "fixed top-14 left-0 right-0 bottom-0 bg-[#09090b] border-r border-zinc-800/40 z-50 transform transition-transform duration-300 ease-out overflow-hidden",
                         isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
                     )}
                 >
