@@ -621,18 +621,18 @@ export default function BrokerSummaryPage() {
 
     return (
         <div className="min-h-screen bg-[#09090b] text-zinc-100 font-sans selection:bg-blue-500/30 pb-12">
-            <header className="sticky top-14 lg:top-0 z-40 border-b border-zinc-800/50 bg-[#09090b]/80 backdrop-blur-xl px-4 lg:px-6 py-3 lg:py-4 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <div className="p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
-                        <ArrowRightLeft className="w-5 h-5 text-blue-400" />
+            <header className="sticky top-14 lg:top-0 z-40 border-b border-zinc-800/50 bg-[#09090b]/80 backdrop-blur-xl px-3 lg:px-6 py-2 lg:py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
+                <div className="flex items-center gap-3 lg:gap-4">
+                    <div className="p-1.5 lg:p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
+                        <ArrowRightLeft className="w-4 h-4 lg:w-5 lg:h-5 text-blue-400" />
                     </div>
                     <div>
-                        <h1 className="text-lg font-bold tracking-tight">Broker Analysis</h1>
-                        <p className="text-xs text-zinc-500 font-medium">Flow Distribution Summary</p>
+                        <h1 className="text-base lg:text-lg font-bold tracking-tight">Broker Analysis</h1>
+                        <p className="hidden lg:block text-xs text-zinc-500 font-medium">Flow Distribution Summary</p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2 lg:gap-3">
                     <div className="flex flex-col gap-1">
                         <div
                             className={cn(
@@ -647,7 +647,7 @@ export default function BrokerSummaryPage() {
                                 onChange={(e) => setTicker(e.target.value.toUpperCase())}
                                 onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
                                 placeholder="TICKER..."
-                                className="bg-transparent border-none outline-none text-sm font-bold w-24 uppercase placeholder:text-zinc-700 font-mono"
+                                className="bg-transparent border-none outline-none text-sm font-bold w-20 lg:w-24 uppercase placeholder:text-zinc-700 font-mono"
                                 aria-invalid={!!tickerError}
                             />
                         </div>
@@ -655,17 +655,17 @@ export default function BrokerSummaryPage() {
                             <span className="text-[10px] text-red-400 font-bold">{tickerError}</span>
                         )}
                     </div>
-                    <div className="flex items-center gap-2 bg-zinc-900/50 border border-zinc-800 rounded-lg px-3 py-1.5 focus-within:border-blue-500/50 transition-colors">
-                        <Calendar className="w-4 h-4 text-zinc-500" />
+                    <div className="flex items-center gap-2 bg-zinc-900/50 border border-zinc-800 rounded-lg px-2 lg:px-3 py-1.5 focus-within:border-blue-500/50 transition-colors">
+                        <Calendar className="w-4 h-4 text-zinc-500 hidden lg:block" />
                         <input
                             type="date"
                             value={date}
                             onChange={(e) => setDate(e.target.value)}
-                            className="bg-transparent border-none outline-none text-sm font-medium [color-scheme:dark]"
+                            className="bg-transparent border-none outline-none text-xs lg:text-sm font-medium [color-scheme:dark]"
                         />
                     </div>
 
-                    <div className="flex items-center gap-2 ml-2">
+                    <div className="flex items-center gap-2">
                         <button
                             onClick={() => {
                                 setBatchTickers(ticker);
@@ -675,7 +675,7 @@ export default function BrokerSummaryPage() {
                             disabled={syncing || loading}
                             title="Open scraping tools (single or batch)"
                             className={cn(
-                                "flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-bold transition-all shadow-lg active:scale-95",
+                                "flex items-center gap-2 px-3 lg:px-4 py-1.5 rounded-lg text-xs lg:text-sm font-bold transition-all shadow-lg active:scale-95",
                                 syncing || loading
                                     ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
                                     : "bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-blue-500/20"
@@ -687,13 +687,13 @@ export default function BrokerSummaryPage() {
                     </div>
 
                     {/* Scrape Status Button */}
-                    <div className="ml-2">
+                    <div>
                         <ScrapeStatusModal />
                     </div>
                 </div>
-            </header >
+            </header>
 
-            <main className="p-6 max-w-[1600px] mx-auto space-y-6">
+            <main className="p-3 lg:p-6 max-w-[1600px] mx-auto space-y-4 lg:space-y-6">
 
                 <AnimatePresence>
                     {(error || success) && (
@@ -836,11 +836,11 @@ export default function BrokerSummaryPage() {
 
                     {/* FLOOR PRICE ANALYSIS SECTION */}
                     <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-widest px-1 flex items-center gap-2">
-                                <TrendingUp className="w-4 h-4 text-teal-500" />
-                                Floor Price Analysis - {ticker || 'Select a ticker'}
-                                <div className="group relative">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <h2 className="text-xs lg:text-sm font-bold text-zinc-400 uppercase tracking-widest px-1 flex items-center gap-2">
+                                <TrendingUp className="w-4 h-4 text-teal-500 flex-shrink-0" />
+                                <span className="truncate">Floor Price - {ticker || 'Select ticker'}</span>
+                                <div className="group relative flex-shrink-0">
                                     <Info className="w-4 h-4 text-zinc-600 hover:text-zinc-400 cursor-help" />
                                     <div className="invisible group-hover:visible absolute left-0 top-6 w-72 bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-[10px] text-zinc-300 normal-case font-normal shadow-xl z-50">
                                         <div className="font-bold mb-1">Floor Price Methodology:</div>

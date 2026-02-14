@@ -297,8 +297,8 @@ export default function NeoBDMTrackerPage() {
     return (
         <div className="flex flex-col gap-0 min-h-screen bg-[#0f1115] text-zinc-100 font-mono">
             {/* Top Navigation Bar */}
-            <div className="flex flex-wrap items-center justify-between bg-[#181a1f] p-2 border-b border-zinc-800/60 sticky top-14 lg:top-0 z-40 backdrop-blur-md bg-opacity-90 gap-2">
-                <div className="flex items-center gap-4">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between bg-[#181a1f] p-2 border-b border-zinc-800/60 sticky top-14 lg:top-0 z-40 backdrop-blur-md bg-opacity-90 gap-2">
+                <div className="flex items-center gap-3 lg:gap-4">
                     <Link href="/neobdm-summary" className="hover:bg-zinc-800 p-1 rounded-sm transition-colors group">
                         <ArrowLeft className="w-4 h-4 text-zinc-400 group-hover:text-zinc-100" />
                     </Link>
@@ -310,7 +310,7 @@ export default function NeoBDMTrackerPage() {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2 lg:gap-3">
                     <div className="relative" ref={dropdownRef}>
                         <div className="flex items-center gap-2 bg-[#23252b] px-2 py-1 rounded-sm border border-zinc-700/50 focus-within:border-blue-500/50 transition-all">
                             <Search className="w-3.5 h-3.5 text-zinc-500" />
@@ -350,7 +350,7 @@ export default function NeoBDMTrackerPage() {
                         )}
                     </div>
 
-                    <div className="h-6 w-px bg-zinc-800 mx-1" />
+                    <div className="hidden lg:block h-6 w-px bg-zinc-800 mx-1" />
 
                     <div className="flex items-center gap-2">
                         {/* Metric Detail Selector */}
@@ -385,10 +385,10 @@ export default function NeoBDMTrackerPage() {
 
             {/* Hot Signals Section - Grid Layout */}
             {hotSignals.length > 0 && (
-                <div className="bg-gradient-to-br from-[#0a0a0c] via-[#0f0f11] to-[#0a0a0c] border-b border-zinc-800/50 px-6 py-4 flex-shrink-0">
+                <div className="bg-gradient-to-br from-[#0a0a0c] via-[#0f0f11] to-[#0a0a0c] border-b border-zinc-800/50 px-3 lg:px-6 py-3 lg:py-4 flex-shrink-0">
                     {/* Header Row */}
-                    <div className="flex items-center justify-between gap-3 mb-4">
-                        <div className="flex items-center gap-3">
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 lg:gap-3 mb-3 lg:mb-4">
+                        <div className="flex flex-wrap items-center gap-2 lg:gap-3">
                             <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
                                 <span className="animate-pulse">🔥</span>
                                 HOT SIGNALS
@@ -402,7 +402,7 @@ export default function NeoBDMTrackerPage() {
                         </div>
 
                         {/* Controls */}
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                             {/* Price Filter */}
                             <div className="flex items-center gap-1.5">
                                 <label className="text-[9px] text-zinc-500 uppercase tracking-wide">Price:</label>

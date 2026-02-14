@@ -295,7 +295,7 @@ export default function NeoBDMSummaryPage() {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center gap-2 lg:gap-4 w-full lg:w-auto">
                     <button
                         onClick={handleBatchSync}
                         disabled={loading || isBatchLoading}

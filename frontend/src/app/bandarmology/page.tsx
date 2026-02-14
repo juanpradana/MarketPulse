@@ -362,15 +362,15 @@ export default function BandarmologyPage() {
         <div className="flex flex-col gap-0 p-0 min-h-screen bg-[#0f1115] text-zinc-100 font-mono">
             {/* Header Bar */}
             <div className="bg-[#181a1f] border-b border-zinc-800/60 sticky top-14 lg:top-0 z-40 backdrop-blur-md bg-opacity-95">
-                <div className="flex flex-wrap items-center justify-between gap-2 p-2">
-                    <div className="flex items-center gap-3">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 p-2">
+                    <div className="flex flex-wrap items-center gap-2 lg:gap-3">
                         <div className="flex items-center gap-2">
                             <Target className="w-5 h-5 text-purple-400" />
                             <h1 className="text-[16px] font-black tracking-tight text-zinc-100">
                                 BANDARMOLOGY
                             </h1>
                         </div>
-                        <div className="h-5 w-px bg-zinc-700" />
+                        <div className="hidden lg:block h-5 w-px bg-zinc-700" />
 
                         {/* Date Selector */}
                         <div className="space-y-0">
@@ -454,7 +454,7 @@ export default function BandarmologyPage() {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
                         {/* Manual Deep Analyze */}
                         <div className="flex items-center gap-1">
                             <input
@@ -476,7 +476,7 @@ export default function BandarmologyPage() {
                                 Deep
                             </button>
                         </div>
-                        <div className="h-5 w-px bg-zinc-700" />
+                        <div className="hidden lg:block h-5 w-px bg-zinc-700" />
                         <button
                             onClick={handleTriggerDeep}
                             disabled={loading || deepLoading || (deepStatus?.running ?? false)}
@@ -501,7 +501,7 @@ export default function BandarmologyPage() {
                 </div>
 
                 {/* Stats Bar */}
-                <div className="flex items-center gap-4 px-3 py-1 bg-[#12141a] border-t border-zinc-800/40 text-[9px]">
+                <div className="flex items-center gap-3 lg:gap-4 px-3 py-1 bg-[#12141a] border-t border-zinc-800/40 text-[9px] overflow-x-auto scrollbar-none">
                     <div className="flex items-center gap-1.5">
                         <span className="text-zinc-500">TOTAL:</span>
                         <span className="text-zinc-300 font-bold">{processedData.length}</span>
