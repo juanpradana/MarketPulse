@@ -605,6 +605,17 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
 
                 # 4. Run deep analysis
                 base_result = base_lookup.get(ticker)
+
+                # Prepare metadata for data validation
+                inventory_meta = None
+                if raw_inv:
+                    inventory_meta = {
+                        'firstDate': raw_inv.get('firstDate'),
+                        'lastDate': raw_inv.get('lastDate')
+                    }
+
+                broker_summary_meta = {'trade_date': analysis_date} if analysis_date else None
+
                 deep_result = analyzer.analyze_deep(
                     ticker,
                     inventory_data=inv_data,
@@ -614,7 +625,9 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                     price_series=price_series,
                     base_result=base_result,
                     previous_deep=previous_deep,
-                    important_dates_data=important_dates_data if important_dates_data else None
+                    important_dates_data=important_dates_data if important_dates_data else None,
+                    inventory_meta=inventory_meta,
+                    broker_summary_meta=broker_summary_meta
                 )
 
                 # 5. Save to cache

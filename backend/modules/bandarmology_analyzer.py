@@ -630,16 +630,20 @@ class BandarmologyAnalyzer:
         target_date: str,
         inventory_data: Optional[List[Dict]] = None,
         txn_chart_data: Optional[Dict] = None,
-        broker_summary_data: Optional[Dict] = None
+        broker_summary_data: Optional[Dict] = None,
+        inventory_meta: Optional[Dict] = None,
+        broker_summary_meta: Optional[Dict] = None
     ) -> Tuple[bool, List[str], Dict[str, str]]:
         """
         Validate that all data sources are within acceptable date range of each other.
 
         Args:
             target_date: Expected analysis date (YYYY-MM-DD)
-            inventory_data: Inventory data with date metadata
+            inventory_data: Inventory data (list of brokers)
             txn_chart_data: Transaction chart with date metadata
-            broker_summary_data: Broker summary with date metadata
+            broker_summary_data: Broker summary dict with 'buy'/'sell' lists
+            inventory_meta: Optional dict with inventory metadata (firstDate, lastDate)
+            broker_summary_meta: Optional dict with broker summary metadata (trade_date)
 
         Returns:
             Tuple of (is_valid, warnings, date_info)
@@ -661,18 +665,27 @@ class BandarmologyAnalyzer:
         # Extract dates from each data source
         source_dates = {}
 
-        # Inventory data: check lastDate (most recent data point)
-        if inventory_data:
-            # Inventory from API has firstDate/lastDate in the parent structure
-            # When passed directly, we need to check if it's wrapped with metadata
+        # Inventory data: check metadata first, then try to extract from data
+        if inventory_data or inventory_meta:
             inv_date = None
-            if isinstance(inventory_data, dict):
+            # First check metadata if provided
+            if inventory_meta and isinstance(inventory_meta, dict):
+                inv_date = inventory_meta.get('lastDate') or inventory_meta.get('date_end')
+            # Check if inventory_data is a dict with metadata (full API response)
+            if not inv_date and isinstance(inventory_data, dict):
                 inv_date = inventory_data.get('lastDate') or inventory_data.get('date_end')
-            elif isinstance(inventory_data, list) and len(inventory_data) > 0:
-                # Check if brokers have date info, otherwise use txn_chart or broker_summary as proxy
-                first_broker = inventory_data[0]
-                if isinstance(first_broker, dict):
-                    inv_date = first_broker.get('date') or first_broker.get('date_end')
+            # Check individual broker records for date_end
+            if not inv_date and isinstance(inventory_data, list) and len(inventory_data) > 0:
+                # Most recent broker record date
+                dates = []
+                for b in inventory_data:
+                    if isinstance(b, dict):
+                        d = b.get('date_end') or b.get('scraped_at')
+                        if d:
+                            dates.append(d)
+                if dates:
+                    # Use most recent date
+                    inv_date = max(dates)
             source_dates['inventory'] = inv_date
 
         # Transaction chart data
@@ -681,14 +694,19 @@ class BandarmologyAnalyzer:
             source_dates['transaction_chart'] = txn_date
 
         # Broker summary data
-        if broker_summary_data:
-            # Broker summary might have trade_date at top level or in metadata
-            broksum_date = broker_summary_data.get('trade_date')
+        if broker_summary_data or broker_summary_meta:
+            broksum_date = None
+            # First check metadata if provided
+            if broker_summary_meta and isinstance(broker_summary_meta, dict):
+                broksum_date = broker_summary_meta.get('trade_date') or broker_summary_meta.get('date')
+            # Check broker_summary_data dict
             if not broksum_date and isinstance(broker_summary_data, dict):
+                broksum_date = broker_summary_data.get('trade_date') or broker_summary_data.get('date')
                 # Try to infer from first buy/sell entry
-                buy_list = broker_summary_data.get('buy', [])
-                if buy_list and isinstance(buy_list[0], dict):
-                    broksum_date = buy_list[0].get('trade_date')
+                if not broksum_date:
+                    buy_list = broker_summary_data.get('buy', [])
+                    if buy_list and isinstance(buy_list[0], dict):
+                        broksum_date = buy_list[0].get('trade_date')
             source_dates['broker_summary'] = broksum_date
 
         date_info.update(source_dates)
@@ -791,11 +809,13 @@ class BandarmologyAnalyzer:
         price_series: Optional[List[Dict]] = None,
         base_result: Optional[Dict] = None,
         previous_deep: Optional[Dict] = None,
-        important_dates_data: Optional[List[Dict]] = None
+        important_dates_data: Optional[List[Dict]] = None,
+        inventory_meta: Optional[Dict] = None,
+        broker_summary_meta: Optional[Dict] = None
     ) -> Dict:
         """
         Perform deep analysis on a single ticker using inventory + transaction chart + broker summary data.
-        
+
         Enhances the base screening score with:
         - Controlling broker detection & accumulation phase analysis
         - Inventory accumulation patterns (broker-level)
@@ -803,15 +823,20 @@ class BandarmologyAnalyzer:
         - Cross-index scoring
         - Broker summary analysis (avg price, lot, entry/target)
         - Enhanced trade type classification
-        
+
         Args:
             ticker: Stock ticker
             inventory_data: List of broker inventory records (from DB or scraper)
             txn_chart_data: Transaction chart record (from DB or scraper)
             broker_summary_data: Broker summary dict with 'buy' and 'sell' lists
+            broksum_multiday_data: Multi-day broker summary for consistency analysis
             price_series: List of price OHLC dicts from inventory chart
             base_result: Existing bandarmology result dict to enhance
-        
+            previous_deep: Previous deep analysis for historical comparison
+            important_dates_data: Broker summary data for important dates
+            inventory_meta: Metadata for inventory (firstDate, lastDate)
+            broker_summary_meta: Metadata for broker summary (trade_date)
+
         Returns:
             Enhanced result dict with deep_* fields added
         """
@@ -937,7 +962,9 @@ class BandarmologyAnalyzer:
             target_date=analysis_date,
             inventory_data=inventory_data,
             txn_chart_data=txn_chart_data,
-            broker_summary_data=broker_summary_data
+            broker_summary_data=broker_summary_data,
+            inventory_meta=inventory_meta,
+            broker_summary_meta=broker_summary_meta
         )
 
         # Add validation info to deep results
