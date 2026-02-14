@@ -31,10 +31,16 @@ export default function DashboardPage() {
             volume: [] as number[]
         }
     });
+    const [hasData, setHasData] = useState(false);
 
     const fetchMetrics = async () => {
         try {
             const stats = await api.getDashboardStats(ticker, dateRange.start, dateRange.end);
+            // Check if we have meaningful data
+            const hasPriceData = (stats.price ?? stats.current_price ?? 0) > 0;
+            const hasNewsData = (stats.volume ?? stats.news_volume ?? 0) > 0;
+            setHasData(hasPriceData || hasNewsData);
+
             // Map API response to local state structure
             setMetrics({
                 price: stats.price ?? stats.current_price ?? 0,
@@ -52,6 +58,7 @@ export default function DashboardPage() {
             });
         } catch (error) {
             console.error("Failed to fetch metrics:", error);
+            setHasData(false);
         }
     };
 
@@ -121,36 +128,40 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard
                     title="Latest Price"
-                    value={metrics.price.toLocaleString()}
-                    delta={`${metrics.price_delta > 0 ? '+' : ''}${metrics.price_delta.toFixed(2)}`}
+                    value={hasData && metrics.price > 0 ? metrics.price.toLocaleString() : 'No Data'}
+                    delta={hasData && metrics.price > 0 ? `${metrics.price_delta > 0 ? '+' : ''}${metrics.price_delta.toFixed(2)}` : '-'}
                     icon={TrendingUp}
                     trend={metrics.price_delta >= 0 ? 'up' : 'down'}
                     sparklineData={metrics.trends.price}
+                    hasData={hasData && metrics.price > 0}
                 />
                 <MetricCard
                     title="Market Mood"
-                    value={metrics.mood_label}
-                    delta={`${metrics.mood_score.toFixed(2)} Index`}
+                    value={hasData && metrics.volume > 0 ? metrics.mood_label : 'No Data'}
+                    delta={hasData && metrics.volume > 0 ? `${metrics.mood_score.toFixed(2)} Index` : '-'}
                     icon={Zap}
                     trend={metrics.mood_score >= 0 ? 'up' : 'down'}
                     sparklineData={metrics.trends.mood}
+                    hasData={hasData && metrics.volume > 0}
                 />
                 <MetricCard
                     title="Correlation (Pearson)"
-                    value={`${metrics.correlation.toFixed(2)}`}
-                    delta={metrics.correlation > 0.5 ? "Strong Pos" : metrics.correlation < -0.5 ? "Strong Neg" : "Weak"}
+                    value={hasData && metrics.volume > 0 ? `${metrics.correlation.toFixed(2)}` : 'No Data'}
+                    delta={hasData && metrics.volume > 0 ? (metrics.correlation > 0.5 ? "Strong Pos" : metrics.correlation < -0.5 ? "Strong Neg" : "Weak") : '-'}
                     icon={Users}
                     trend={metrics.correlation >= 0 ? 'up' : 'down'}
                     sparklineData={metrics.trends.correlation}
                     tooltip="Measuring the linear relationship between stock price and sentiment. 1.0 = Perfect Positive, -1.0 = Perfect Negative."
+                    hasData={hasData && metrics.volume > 0}
                 />
                 <MetricCard
                     title="News Volume"
-                    value={metrics.volume > 1000 ? `${(metrics.volume / 1000).toFixed(1)}k` : metrics.volume.toString()}
-                    delta="Total News"
+                    value={hasData && metrics.volume > 0 ? (metrics.volume > 1000 ? `${(metrics.volume / 1000).toFixed(1)}k` : metrics.volume.toString()) : 'No Data'}
+                    delta={hasData && metrics.volume > 0 ? "Total News" : '-'}
                     icon={Newspaper}
                     trend="neutral"
                     sparklineData={metrics.trends.volume}
+                    hasData={hasData && metrics.volume > 0}
                 />
             </div>
 
@@ -171,15 +182,15 @@ export default function DashboardPage() {
     );
 }
 
-function MetricCard({ title, value, delta, icon: Icon, trend, sparklineData, tooltip }: any) {
+function MetricCard({ title, value, delta, icon: Icon, trend, sparklineData, tooltip, hasData = true }: any) {
     const chartData = (sparklineData || []).map((val: number, i: number) => ({ val, i }));
 
     return (
-        <Card className="bg-zinc-950/50 border-zinc-900 backdrop-blur-sm shadow-xl relative overflow-hidden group">
+        <Card className={`bg-zinc-950/50 border-zinc-900 backdrop-blur-sm shadow-xl relative overflow-hidden group ${!hasData ? 'opacity-70' : ''}`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6">
                 <div className="flex items-center gap-1.5">
                     <CardTitle className="text-[10px] sm:text-xs font-semibold text-zinc-500 uppercase tracking-wider">{title}</CardTitle>
-                    {tooltip && (
+                    {tooltip && hasData && (
                         <div className="group/tooltip relative hidden sm:block">
                             <HelpCircle className="w-3 h-3 text-zinc-700 cursor-help" />
                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-zinc-900 border border-zinc-800 rounded-lg text-[10px] text-zinc-400 invisible group-hover/tooltip:visible z-50 shadow-2xl backdrop-blur-md">
@@ -188,17 +199,17 @@ function MetricCard({ title, value, delta, icon: Icon, trend, sparklineData, too
                         </div>
                     )}
                 </div>
-                <Icon className="h-3 w-3 sm:h-4 sm:w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+                <Icon className={`h-3 w-3 sm:h-4 sm:w-4 transition-colors ${hasData ? 'text-zinc-600 group-hover:text-zinc-400' : 'text-zinc-700'}`} />
             </CardHeader>
             <CardContent className="px-3 sm:px-6">
                 <div className="flex items-end justify-between">
                     <div className="min-w-0 flex-1">
-                        <div className="text-xl sm:text-2xl font-bold text-zinc-100 truncate">{value}</div>
-                        <div className={`text-[10px] sm:text-xs mt-1 font-medium ${trend === 'up' ? 'text-emerald-500' : trend === 'down' ? 'text-rose-500' : 'text-zinc-500'}`}>
-                            {delta} {trend !== 'neutral' && <span className="text-zinc-600 font-normal ml-1 hidden sm:inline">vs prev</span>}
+                        <div className={`text-lg sm:text-2xl font-bold truncate ${hasData ? 'text-zinc-100' : 'text-zinc-600'}`}>{value}</div>
+                        <div className={`text-[10px] sm:text-xs mt-1 font-medium ${!hasData ? 'text-zinc-600' : trend === 'up' ? 'text-emerald-500' : trend === 'down' ? 'text-rose-500' : 'text-zinc-500'}`}>
+                            {delta} {trend !== 'neutral' && hasData && <span className="text-zinc-600 font-normal ml-1 hidden sm:inline">vs prev</span>}
                         </div>
                     </div>
-                    {chartData.length > 0 && (
+                    {hasData && chartData.length > 0 && (
                         <div className="h-8 sm:h-10 w-16 sm:w-20 mb-1 opacity-50 group-hover:opacity-100 transition-opacity flex-shrink-0">
                             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                 <LineChart data={chartData}>
