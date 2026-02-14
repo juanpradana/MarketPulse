@@ -3,6 +3,11 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
+  allowedDevOrigins: [
+    '*.ngrok-free.app',
+    '*.ngrok.io',
+    'localhost',
+  ],
   experimental: {
     proxyTimeout: 180000, // 3 minutes - prevent socket hang up on large datasets
   },
