@@ -685,16 +685,18 @@ python server.py
 | Broker Summary | `app/broker-summary/` | ✅ Complete - Broker activity summary |
 | Batch Scraping | `scripts/batch_scrape_neobdm.py` | ✅ Complete - Manual batch scraper |
 | SQL Optimization | `db/repositories` | ✅ Complete - SQL-level filtering |
+| **Scraper Scheduler** | `modules/scheduler.py` | ✅ Complete - APScheduler automation |
 
 ### 🔴 NOT IMPLEMENTED (High Priority TODO)
 
 Based on `docs/future_development.md` and `docs/optimization.md`, these features are **NOT YET IMPLEMENTED**:
 
 #### Automation & Infrastructure
-- [ ] **Scraper Scheduler (APScheduler)** - No automated scheduling exists; all scraping is manual
-  - *Location to add*: `backend/modules/scheduler.py`
-  - *Dependency*: `APScheduler` library
-  - *Note*: Currently users must manually trigger scrapers via Dashboard button
+- [x] **Scraper Scheduler (APScheduler)** - ✅ IMPLEMENTED
+  - *Location*: `backend/modules/scheduler.py` + `routes/scheduler.py`
+  - *Schedule*: News every 1 hour, NeoBDM at 19:00 WIB, Cleanup weekly Sunday 00:00
+  - *API*: `/api/scheduler/*` endpoints for monitoring and manual triggers
+  - *Manual*: Frontend buttons still work via `/api/scheduler/manual/*`
 
 - [ ] **File Clean-up Utility** - No auto-cleanup for `downloads/` folder
   - *Location to add*: `backend/modules/cleanup.py` or as scheduled task

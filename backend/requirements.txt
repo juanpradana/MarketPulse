@@ -31,3 +31,4 @@ trafilatura
 pytz
 curl-cffi
 httpx
+apscheduler

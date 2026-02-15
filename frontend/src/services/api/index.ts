@@ -12,6 +12,8 @@ export * from './neobdm';
 export * from './brokerFive';
 export * from './doneDetail';
 export * from './brokerStalker';
+export * from './bandarmology';
+export * from './scheduler';
 
 // Re-export for convenience
 import { dashboardApi } from './dashboard';
@@ -22,6 +24,8 @@ import { scrapersApi } from './scrapers';
 import { brokerFiveApi } from './brokerFive';
 import { doneDetailApi } from './doneDetail';
 import { brokerStalkerApi } from './brokerStalker';
+import { bandarmologyApi } from './bandarmology';
+import { schedulerApi } from './scheduler';
 
 const api = {
     ...dashboardApi,
@@ -31,7 +35,9 @@ const api = {
     ...scrapersApi,
     ...brokerFiveApi,
     ...doneDetailApi,
-    ...brokerStalkerApi
+    ...brokerStalkerApi,
+    ...bandarmologyApi,
+    ...schedulerApi
 };
 
 export {
@@ -43,5 +49,7 @@ export {
     brokerFiveApi,
     doneDetailApi,
     brokerStalkerApi,
+    bandarmologyApi,
+    schedulerApi,
     api
 };

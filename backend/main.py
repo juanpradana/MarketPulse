@@ -49,6 +49,7 @@ from routes.price_volume import router as price_volume_router
 from routes.alpha_hunter import router as alpha_hunter_router
 from routes.broker_stalker import router as broker_stalker_router
 from routes.bandarmology import router as bandarmology_router
+from routes.scheduler import router as scheduler_router
 
 # Create FastAPI app
 app = FastAPI(
@@ -109,6 +110,14 @@ async def startup_event():
         except Exception as warmup_err:
             logger.warning(f"Sentiment Engine warm-up skipped: {warmup_err}")
 
+        # Start Background Scheduler
+        try:
+            from modules.scheduler import start_scheduler
+            start_scheduler()
+            logger.info("Background Task Scheduler started successfully.")
+        except Exception as scheduler_err:
+            logger.warning(f"Background Scheduler failed to start: {scheduler_err}")
+
     except Exception as e:
         logging.error(f"Startup sync failed: {e}")
 
@@ -127,7 +136,8 @@ async def health_check():
             "neobdm": "Market maker and fund flow analysis",
             "done_detail": "Done detail visualization and broker flow",
             "broker_stalker": "Broker activity tracking and analysis",
-            "scrapers": "Automated data collection"
+            "scrapers": "Automated data collection",
+            "scheduler": "Background task scheduler"
         }
     }
 
@@ -145,6 +155,7 @@ app.include_router(price_volume_router)
 app.include_router(alpha_hunter_router)
 app.include_router(broker_stalker_router)
 app.include_router(bandarmology_router)
+app.include_router(scheduler_router)
 
 
 if __name__ == "__main__":
