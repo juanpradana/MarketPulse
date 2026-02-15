@@ -333,9 +333,9 @@ class InvestorScraper:
         target_end = end_date.date() if isinstance(end_date, datetime) else (end_date or datetime.now().date())
         
         print("\n" + "="*60)
-        print("📈 INVESTOR.ID SCRAPER")
+        print("INVESTOR.ID SCRAPER")
         print("="*60)
-        print(f"   Target Range: {target_start} → {target_end}")
+        print(f"   Target Range: {target_start} -> {target_end}")
         print(f"   Max Pages per Category: {pages}")
         
         # Load existing URLs

@@ -416,9 +416,9 @@ class BisnisScraper:
         target_end = end_date.date() if isinstance(end_date, datetime) else (end_date or datetime.now().date())
         
         print("\n" + "="*60)
-        print("📰 BISNIS.COM SCRAPER")
+        print("BISNIS.COM SCRAPER")
         print("="*60)
-        print(f"   Target Range: {target_start} → {target_end}")
+        print(f"   Target Range: {target_start} -> {target_end}")
         print(f"   Max Pages: {pages}")
         
         # Load existing URLs for incremental scraping
