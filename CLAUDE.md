@@ -698,7 +698,10 @@ Based on `docs/future_development.md` and `docs/optimization.md`, these features
   - *API*: `/api/scheduler/*` endpoints for monitoring and manual triggers
   - *Manual*: Frontend buttons still work via `/api/scheduler/manual/*`
 
-- [ ] **File Clean-up Utility** - No auto-cleanup for `downloads/` folder
+- [x] **File Clean-up Utility** - ✅ IMPLEMENTED
+  - *Location*: Integrated in `modules/scheduler.py` cleanup job
+  - *Cleans*: Done Detail records (>7 days), PDFs in downloads/ (>30 days), logs (>30 days)
+  - *Schedule*: Weekly on Sunday at 00:00 WIB
   - *Location to add*: `backend/modules/cleanup.py` or as scheduled task
   - *Purpose*: Remove old PDFs after ingestion to ChromaDB
 
@@ -767,7 +770,7 @@ Before marking this project as "complete", implement:
 - [ ] Asynchronous Scraping
 - [ ] Market Summary Newsletter
 - [ ] Knowledge Graph
-- [ ] File Clean-up Utility
+- [x] File Clean-up Utility
 
 See `docs/future_development.md` and `docs/optimization.md` for detailed specifications.
 

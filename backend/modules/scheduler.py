@@ -156,8 +156,17 @@ def cleanup_old_data():
         from db import DoneDetailRepository
         import os
         import glob
+        import time
 
-        results = {"deleted_records": 0, "deleted_files": 0}
+        results = {
+            "deleted_records": 0,
+            "deleted_pdfs": 0,
+            "deleted_logs": 0,
+            "space_freed_mb": 0
+        }
+
+        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        current_time = time.time()
 
         # 1. Delete old Done Detail raw data (>7 days)
         try:
@@ -168,18 +177,64 @@ def cleanup_old_data():
         except Exception as e:
             logger.warning(f"[Scheduler] Done Detail cleanup skipped: {e}")
 
-        # 2. Clean up old log files (>30 days)
+        # 2. Clean up old PDF files in downloads/ folder (>30 days)
         try:
-            backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            downloads_dir = os.path.join(backend_dir, "downloads")
+            if os.path.exists(downloads_dir):
+                pdf_files = glob.glob(os.path.join(downloads_dir, "*.pdf"))
+                deleted_count = 0
+                space_freed = 0
+
+                for pdf_path in pdf_files:
+                    try:
+                        # Check file modification time
+                        file_mtime = os.path.getmtime(pdf_path)
+                        file_age_days = (current_time - file_mtime) / (24 * 3600)
+
+                        if file_age_days > 30:
+                            file_size = os.path.getsize(pdf_path)
+                            os.remove(pdf_path)
+                            deleted_count += 1
+                            space_freed += file_size
+                            logger.debug(f"[Scheduler] Deleted old PDF: {os.path.basename(pdf_path)} ({file_age_days:.1f} days old)")
+                    except Exception as e:
+                        logger.warning(f"[Scheduler] Failed to delete PDF {pdf_path}: {e}")
+
+                results["deleted_pdfs"] = deleted_count
+                results["space_freed_mb"] += space_freed / (1024 * 1024)
+                logger.info(f"[Scheduler] Deleted {deleted_count} old PDFs, freed {space_freed / (1024 * 1024):.2f} MB")
+        except Exception as e:
+            logger.warning(f"[Scheduler] PDF cleanup skipped: {e}")
+
+        # 3. Clean up old log files (>30 days)
+        try:
             logs_dir = os.path.join(backend_dir, "logs")
             if os.path.exists(logs_dir):
-                old_logs = glob.glob(os.path.join(logs_dir, "*.log"))
-                # Add logic to delete old logs based on modification time
-                logger.info(f"[Scheduler] Checked {len(old_logs)} log files")
+                log_files = glob.glob(os.path.join(logs_dir, "*.log"))
+                deleted_count = 0
+                space_freed = 0
+
+                for log_path in log_files:
+                    try:
+                        file_mtime = os.path.getmtime(log_path)
+                        file_age_days = (current_time - file_mtime) / (24 * 3600)
+
+                        if file_age_days > 30:
+                            file_size = os.path.getsize(log_path)
+                            os.remove(log_path)
+                            deleted_count += 1
+                            space_freed += file_size
+                    except Exception as e:
+                        logger.warning(f"[Scheduler] Failed to delete log {log_path}: {e}")
+
+                results["deleted_logs"] = deleted_count
+                results["space_freed_mb"] += space_freed / (1024 * 1024)
+                logger.info(f"[Scheduler] Deleted {deleted_count} old log files, freed {space_freed / (1024 * 1024):.2f} MB")
         except Exception as e:
             logger.warning(f"[Scheduler] Log cleanup skipped: {e}")
 
-        logger.info("[Scheduler] Data cleanup completed")
+        total_freed = results["space_freed_mb"]
+        logger.info(f"[Scheduler] Data cleanup completed. Total space freed: {total_freed:.2f} MB")
         return results
 
     except Exception as e:
