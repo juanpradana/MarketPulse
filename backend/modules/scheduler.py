@@ -48,37 +48,80 @@ def job_listener(event):
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 
-def scrape_single_source(source_name: str, module_path: str) -> dict:
+def scrape_single_source(source_name: str, scraper_config: tuple) -> dict:
     """
     Scrape a single news source.
     Helper function for concurrent execution.
+
+    Args:
+        source_name: Display name of the source
+        scraper_config: (module_path, class_name, run_method) tuple
     """
+    import datetime
+    start_time = time.time()
+
     try:
         logger.info(f"[Scheduler] Starting {source_name}...")
-        start_time = time.time()
+        module_path, class_name, run_method = scraper_config
 
-        module = __import__(module_path, fromlist=['run_scraper'])
-        if hasattr(module, 'run_scraper'):
-            result = module.run_scraper()
+        # Import module and get class
+        module = __import__(module_path, fromlist=[class_name])
+        scraper_class = getattr(module, class_name)
+
+        # Instantiate scraper
+        scraper = scraper_class()
+
+        # Get current date range (last 24 hours)
+        end_dt = datetime.datetime.now()
+        start_dt = end_dt - datetime.timedelta(days=1)
+
+        # Run scraper
+        if run_method == "run":
+            result = scraper.run(start_date=start_dt, end_date=end_dt)
+        else:
+            result = getattr(scraper, run_method)(start_dt, end_dt)
+
+        # Process results if successful
+        if result:
+            # Analyze sentiment and save to DB
+            from modules.analyzer import get_engine
+            from modules.database import DatabaseManager
+            from modules.utils import extract_tickers
+
+            engine = get_engine()
+            analyzed_data = engine.process_and_save(result)
+
+            # Enrich with ticker extraction
+            for article in analyzed_data:
+                if 'ticker' not in article or not article['ticker']:
+                    article['ticker'] = extract_tickers(article.get('title', ''))
+
+            db_manager = DatabaseManager()
+            db_manager.save_news(analyzed_data)
+
             elapsed = time.time() - start_time
-            logger.info(f"[Scheduler] {source_name} completed in {elapsed:.1f}s")
+            logger.info(f"[Scheduler] {source_name} completed in {elapsed:.1f}s - {len(analyzed_data)} articles")
             return {
                 "source": source_name,
                 "status": "success",
-                "result": result,
+                "result": analyzed_data,
                 "elapsed_seconds": elapsed
             }
         else:
-            logger.warning(f"[Scheduler] {source_name} has no run_scraper function")
+            elapsed = time.time() - start_time
+            logger.info(f"[Scheduler] {source_name} completed in {elapsed:.1f}s - No new articles")
             return {
                 "source": source_name,
-                "status": "failed",
-                "error": "No run_scraper function",
-                "elapsed_seconds": 0
+                "status": "success",
+                "result": [],
+                "elapsed_seconds": elapsed
             }
+
     except Exception as e:
         elapsed = time.time() - start_time
         logger.error(f"[Scheduler] Failed to scrape {source_name}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return {
             "source": source_name,
             "status": "failed",
@@ -94,12 +137,14 @@ def scrape_all_news():
     Uses ThreadPoolExecutor to parallelize synchronous scrapers.
     """
     logger.info("[Scheduler] Starting CONCURRENT news scraping...")
+
+    # Scraper configurations: (module_path, class_name, run_method)
     sources = [
-        ("CNBC Indonesia", "modules.scraper_cnbc"),
-        ("EmitenNews", "modules.scraper_emiten"),
-        ("Bisnis.com", "modules.scraper_bisnis"),
-        ("Investor.id", "modules.scraper_investor"),
-        ("Bloomberg Technoz", "modules.scraper_bloomberg"),
+        ("CNBC Indonesia", ("modules.scraper_cnbc", "CNBCScraper", "run")),
+        ("EmitenNews", ("modules.scraper_emiten", "EmitenNewsScraper", "run")),
+        ("Bisnis.com", ("modules.scraper_bisnis", "BisnisScraper", "run")),
+        ("Investor.id", ("modules.scraper_investor", "InvestorScraper", "run")),
+        ("Bloomberg Technoz", ("modules.scraper_bloomberg", "BloombergTechnozScraper", "run")),
     ]
 
     results = []
@@ -110,8 +155,8 @@ def scrape_all_news():
     with ThreadPoolExecutor(max_workers=5) as executor:
         # Submit all scraping tasks
         future_to_source = {
-            executor.submit(scrape_single_source, name, path): (name, path)
-            for name, path in sources
+            executor.submit(scrape_single_source, name, config): (name, config)
+            for name, config in sources
         }
 
         # Collect results as they complete
