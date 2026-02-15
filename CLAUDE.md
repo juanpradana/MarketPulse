@@ -669,19 +669,105 @@ python server.py
 
 ---
 
-## 11. Future Development Roadmap
+## 11. Implementation Status & TODO
 
-### Immediate Priorities
-1. **Scraper Scheduler**: Automated data collection
-2. **My Watchlist**: Personalized ticker tracking
-3. **Sentiment Heatmap**: Visual sentiment overview
+### ✅ Completed Features
 
-### Long-term Goals
-1. **Multi-Document RAG**: Cross-document AI analysis
-2. **Knowledge Graph**: Emiten relationship visualization
-3. **Market Summary Newsletter**: Automated market reports
+| Feature | Location | Status |
+|---------|----------|--------|
+| Alpha Hunter | `app/alpha-hunter/` | ✅ Complete - 5-stage screening workflow |
+| Bandarmology | `app/bandarmology/` | ✅ Complete - Deep broker analysis |
+| NeoBDM Analysis | `app/neobdm-*` | ✅ Complete - Fund flow tracking |
+| Done Detail | `app/done-detail/` | ✅ Complete - Trade data analysis |
+| Dashboard | `app/dashboard/` | ✅ Complete - Market overview |
+| News Library | `app/news-library/` | ✅ Complete - News aggregation |
+| RAG Chat | `app/rag-chat/` | ✅ Complete - Single-document AI chat |
+| Broker Summary | `app/broker-summary/` | ✅ Complete - Broker activity summary |
+| Batch Scraping | `scripts/batch_scrape_neobdm.py` | ✅ Complete - Manual batch scraper |
+| SQL Optimization | `db/repositories` | ✅ Complete - SQL-level filtering |
 
-See `docs/future_development.md` for detailed roadmap.
+### 🔴 NOT IMPLEMENTED (High Priority TODO)
+
+Based on `docs/future_development.md` and `docs/optimization.md`, these features are **NOT YET IMPLEMENTED**:
+
+#### Automation & Infrastructure
+- [ ] **Scraper Scheduler (APScheduler)** - No automated scheduling exists; all scraping is manual
+  - *Location to add*: `backend/modules/scheduler.py`
+  - *Dependency*: `APScheduler` library
+  - *Note*: Currently users must manually trigger scrapers via Dashboard button
+
+- [ ] **File Clean-up Utility** - No auto-cleanup for `downloads/` folder
+  - *Location to add*: `backend/modules/cleanup.py` or as scheduled task
+  - *Purpose*: Remove old PDFs after ingestion to ChromaDB
+
+#### User Features
+- [ ] **My Watchlist** - No personalized watchlist per user
+  - *Evidence*: Not in sidebar.tsx, only global FilterContext exists
+  - *Location to add*: New `app/watchlist/` page + `db/watchlist_repository.py`
+  - *Features needed*: Add/remove tickers, daily performance summary
+
+- [ ] **Sentiment-Heatmap Ticker Cloud** - WordCloud exists but not sentiment-colored
+  - *Current*: `components/dashboard/ticker-cloud.tsx` (basic word cloud)
+  - *Needed*: Color mapping based on sentiment scores (green=positive, red=negative)
+
+- [ ] **Multi-Document RAG** - RAG only works on single document currently
+  - *Current*: `rag_client.py` queries per document
+  - *Needed*: Cross-document querying with ChromaDB metadata filtering
+
+- [ ] **Market Summary Newsletter** - No automated report generation
+  - *Location to add*: `backend/modules/newsletter.py`
+  - *Features*: Daily/weekly email or dashboard report with top news, predictions
+
+- [ ] **Knowledge Graph** - No visualization of emiten relationships
+  - *Location to add*: `app/knowledge-graph/` page
+  - *Dependency*: `react-force-graph` or `D3.js`
+  - *Features*: Supplier-customer relationships, partnership networks
+
+#### Frontend Optimizations (from optimization.md)
+- [ ] **Skeleton Loading** - Still using basic Loading.tsx component
+  - *Current*: `components/shared/Loading.tsx` (spinner only)
+  - *Needed*: Skeleton placeholders matching content layout
+
+- [ ] **Synced Charts** - Charts operate independently
+  - *Current*: Dashboard charts are separate
+  - *Needed*: Hover/selection sync between price and sentiment charts
+
+- [ ] **Optimized React Re-renders** - Limited useMemo/useCallback usage
+  - *Evidence*: Only 9 files use optimization hooks out of 104 TSX files
+  - *Needed*: Profile and optimize heavy re-render components
+
+#### Backend Optimizations
+- [ ] **Asynchronous Scraping** - Most scrapers are synchronous
+  - *Current*: Only `scraper_neobdm.py` uses async
+  - *Others*: `scraper_cnbc.py`, `scraper_emiten.py`, etc. are synchronous
+  - *Impact*: Parallel scraping could reduce time by 70%
+
+### 🟡 Partially Implemented
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Broker Stalker | ⚠️ Backend only | API exists but no frontend page |
+| API Pagination | ⚠️ Partial | Only on `/api/news`, not all endpoints |
+| useMemo/useCallback | ⚠️ Minimal | Only 9/104 files use optimization |
+
+### 📋 Implementation Checklist
+
+Before marking this project as "complete", implement:
+
+**Must Have:**
+- [ ] Scraper Scheduler (APScheduler) - Critical for data freshness
+- [ ] My Watchlist - Core user personalization feature
+- [ ] Skeleton Loading - Better UX
+
+**Nice to Have:**
+- [ ] Sentiment-Heatmap Cloud
+- [ ] Multi-Document RAG
+- [ ] Asynchronous Scraping
+- [ ] Market Summary Newsletter
+- [ ] Knowledge Graph
+- [ ] File Clean-up Utility
+
+See `docs/future_development.md` and `docs/optimization.md` for detailed specifications.
 
 ---
 
@@ -702,11 +788,43 @@ See `docs/future_development.md` for detailed roadmap.
 
 - **Documentation**: All docs in `/docs` directory
 - **API Reference**: Auto-generated at `/docs` endpoint when running
-- **Project Report**: See `docs/PROJECT_REPORT.md`
+- **Architecture Guide**: This file (CLAUDE.md)
 
 ---
 
-*Last Updated: 2025-02-15*
+*Last Updated: 2026-02-15*
 *Version: 2.1.0*
+
+---
+
+## 14. Important Notes for Future Development
+
+### Why This Architecture?
+
+| Decision | Rationale |
+|----------|-----------|
+| **Modular API Services** | Domain isolation enables parallel development and testing |
+| **Repository Pattern** | Database logic is decoupled from business logic |
+| **Filter Context** | Centralized filter state prevents prop drilling and ensures consistency |
+| **useApi Hook** | Standardized loading/error handling across all data fetching |
+| **TypeScript Interfaces** | Compile-time verification of API contracts |
+| **SQLite + ChromaDB** | Simple, file-based storage with no external dependencies |
+| **Ollama (Local LLM)** | Privacy, no API costs, works offline |
+
+### NEVER BREAK THESE PATTERNS
+
+1. **API Service Layer**: Always use the `services/api/` layer. Never call `fetch` directly from components.
+
+2. **Type Safety**: Always define TypeScript interfaces that match backend responses. Use `any` sparingly.
+
+3. **Filter Context**: All ticker/date filtering must use the global FilterContext. No local filter state for these.
+
+4. **Repository Pattern**: All database access must go through repository classes. No raw SQL in routes.
+
+5. **Error Handling**: Use the standardized error handling patterns (handleResponse, ErrorDisplay component).
+
+6. **Responsive Design**: All UI must work on mobile (use `lg:`, `md:`, `sm:` breakpoints).
+
+---
 
 > **Remember**: This architecture was designed for maintainability, type safety, and developer productivity. Preserve these patterns for all future development.
