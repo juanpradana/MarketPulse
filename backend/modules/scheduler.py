@@ -45,12 +45,55 @@ def job_listener(event):
 # SCHEDULED TASKS
 # =============================================================================
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+
+def scrape_single_source(source_name: str, module_path: str) -> dict:
+    """
+    Scrape a single news source.
+    Helper function for concurrent execution.
+    """
+    try:
+        logger.info(f"[Scheduler] Starting {source_name}...")
+        start_time = time.time()
+
+        module = __import__(module_path, fromlist=['run_scraper'])
+        if hasattr(module, 'run_scraper'):
+            result = module.run_scraper()
+            elapsed = time.time() - start_time
+            logger.info(f"[Scheduler] {source_name} completed in {elapsed:.1f}s")
+            return {
+                "source": source_name,
+                "status": "success",
+                "result": result,
+                "elapsed_seconds": elapsed
+            }
+        else:
+            logger.warning(f"[Scheduler] {source_name} has no run_scraper function")
+            return {
+                "source": source_name,
+                "status": "failed",
+                "error": "No run_scraper function",
+                "elapsed_seconds": 0
+            }
+    except Exception as e:
+        elapsed = time.time() - start_time
+        logger.error(f"[Scheduler] Failed to scrape {source_name}: {e}")
+        return {
+            "source": source_name,
+            "status": "failed",
+            "error": str(e),
+            "elapsed_seconds": elapsed
+        }
+
+
 def scrape_all_news():
     """
-    Scrape news from all configured sources.
+    Scrape news from all configured sources CONCURRENTLY.
     Runs every 1 hour.
+    Uses ThreadPoolExecutor to parallelize synchronous scrapers.
     """
-    logger.info("[Scheduler] Starting news scraping...")
+    logger.info("[Scheduler] Starting CONCURRENT news scraping...")
     sources = [
         ("CNBC Indonesia", "modules.scraper_cnbc"),
         ("EmitenNews", "modules.scraper_emiten"),
@@ -60,21 +103,43 @@ def scrape_all_news():
     ]
 
     results = []
-    for source_name, module_path in sources:
-        try:
-            logger.info(f"[Scheduler] Scraping {source_name}...")
-            module = __import__(module_path, fromlist=['run_scraper'])
-            if hasattr(module, 'run_scraper'):
-                result = module.run_scraper()
-                results.append({"source": source_name, "status": "success", "result": result})
-                logger.info(f"[Scheduler] {source_name} scraped successfully")
-            else:
-                logger.warning(f"[Scheduler] {source_name} has no run_scraper function")
-        except Exception as e:
-            logger.error(f"[Scheduler] Failed to scrape {source_name}: {e}")
-            results.append({"source": source_name, "status": "failed", "error": str(e)})
+    total_start = time.time()
 
-    logger.info(f"[Scheduler] News scraping completed. {len([r for r in results if r['status'] == 'success'])} sources succeeded")
+    # Use ThreadPoolExecutor for concurrent scraping
+    # max_workers=5 allows all scrapers to run simultaneously
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        # Submit all scraping tasks
+        future_to_source = {
+            executor.submit(scrape_single_source, name, path): (name, path)
+            for name, path in sources
+        }
+
+        # Collect results as they complete
+        for future in as_completed(future_to_source):
+            source_name, _ = future_to_source[future]
+            try:
+                result = future.result()
+                results.append(result)
+            except Exception as e:
+                logger.error(f"[Scheduler] Unexpected error for {source_name}: {e}")
+                results.append({
+                    "source": source_name,
+                    "status": "failed",
+                    "error": str(e)
+                })
+
+    total_elapsed = time.time() - total_start
+    success_count = len([r for r in results if r['status'] == 'success'])
+
+    logger.info(f"[Scheduler] News scraping completed in {total_elapsed:.1f}s")
+    logger.info(f"[Scheduler] {success_count}/{len(sources)} sources succeeded")
+
+    # Log individual timings
+    for r in results:
+        status = "✓" if r['status'] == 'success' else "✗"
+        elapsed = r.get('elapsed_seconds', 0)
+        logger.info(f"[Scheduler] {status} {r['source']}: {elapsed:.1f}s")
+
     return results
 
 
