@@ -730,9 +730,10 @@ Based on `docs/future_development.md` and `docs/optimization.md`, these features
   - *Features*: Supplier-customer relationships, partnership networks
 
 #### Frontend Optimizations (from optimization.md)
-- [ ] **Skeleton Loading** - Still using basic Loading.tsx component
-  - *Current*: `components/shared/Loading.tsx` (spinner only)
-  - *Needed*: Skeleton placeholders matching content layout
+- [x] **Skeleton Loading** - ✅ IMPLEMENTED
+  - *Location*: `components/shared/Skeleton.tsx`
+  - *Components*: Card, StatsCard, Table, Chart, NewsFeed, Watchlist skeletons
+  - *Pages*: Dashboard, Watchlist, News Library using skeleton loading
 
 - [ ] **Synced Charts** - Charts operate independently
   - *Current*: Dashboard charts are separate
@@ -765,7 +766,7 @@ Before marking this project as "complete", implement:
 **Must Have:**
 - [ ] Scraper Scheduler (APScheduler) - Critical for data freshness
 - [x] My Watchlist - Core user personalization feature
-- [ ] Skeleton Loading - Better UX
+- [x] Skeleton Loading - Better UX
 
 **Nice to Have:**
 - [ ] Sentiment-Heatmap Cloud
