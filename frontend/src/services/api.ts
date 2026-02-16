@@ -29,7 +29,6 @@ import { watchlistApi, type WatchlistItem, type WatchlistStats, type WatchlistTo
 
 // Re-export types for backward compatibility
 export type { NewsItem, Disclosure, WatchlistItem, WatchlistStats, WatchlistToggleResponse };
-export type { NewsItem, Disclosure };
 
 /**
  * Legacy API object - delegates to new modular clients
