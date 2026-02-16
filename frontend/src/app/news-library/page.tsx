@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { api, NewsItem } from '@/services/api';
 import { NewsFeed } from '@/components/news-library/news-feed';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { NewsFeedSkeleton, PageHeaderSkeleton, FilterBarSkeleton } from '@/components/shared';
 
 import { useFilter } from '@/context/filter-context';
 
@@ -79,10 +80,18 @@ export default function NewsLibraryPage() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6">
-                {/* News Feed Section */}
-                <NewsFeed news={news} loading={loading} />
-            </div>
+            {loading ? (
+                <div className="space-y-6">
+                    <PageHeaderSkeleton />
+                    <FilterBarSkeleton />
+                    <NewsFeedSkeleton count={8} />
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 gap-6">
+                    {/* News Feed Section */}
+                    <NewsFeed news={news} loading={loading} />
+                </div>
+            )}
         </div>
     );
 }

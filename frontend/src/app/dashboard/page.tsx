@@ -8,6 +8,7 @@ import { TrendingUp, Users, Newspaper, Zap, Calendar as CalendarIcon, Search, He
 import { api } from '@/services/api';
 import { useFilter } from '@/context/filter-context';
 import { Line, LineChart, ResponsiveContainer } from 'recharts';
+import { DashboardStatsSkeleton, ChartSkeleton, PageSkeleton } from '@/components/shared';
 
 export default function DashboardPage() {
     const { ticker: globalTicker, dateRange } = useFilter();
@@ -32,8 +33,10 @@ export default function DashboardPage() {
         }
     });
     const [hasData, setHasData] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
     const fetchMetrics = async () => {
+        setIsLoading(true);
         try {
             const stats = await api.getDashboardStats(ticker, dateRange.start, dateRange.end);
             // Check if we have meaningful data
@@ -59,6 +62,8 @@ export default function DashboardPage() {
         } catch (error) {
             console.error("Failed to fetch metrics:", error);
             setHasData(false);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -107,6 +112,29 @@ export default function DashboardPage() {
             setRefreshing(false);
         }
     };
+
+    if (isLoading) {
+        return (
+            <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                    <div className="flex flex-col space-y-2">
+                        <div className="h-8 w-64 bg-zinc-800 rounded animate-pulse" />
+                        <div className="h-4 w-96 bg-zinc-800 rounded animate-pulse" />
+                    </div>
+                    <div className="h-10 w-40 bg-zinc-800 rounded animate-pulse" />
+                </div>
+                <DashboardStatsSkeleton />
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:gap-6">
+                    <div className="xl:col-span-2">
+                        <ChartSkeleton height="400px" />
+                    </div>
+                    <div className="xl:col-span-1">
+                        <ChartSkeleton height="400px" showLegend={false} />
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col gap-6 lg:gap-8">

@@ -5,8 +5,12 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Loading } from '@/components/shared';
-import { ErrorDisplay } from '@/components/shared';
+import {
+    ErrorDisplay,
+    PageHeaderSkeleton,
+    WatchlistGridSkeleton,
+    CardSkeleton
+} from '@/components/shared';
 import { watchlistApi, type WatchlistItem } from '@/services/api';
 import { useFilter } from '@/context/filter-context';
 import {
@@ -75,19 +79,17 @@ export default function WatchlistPage() {
 
     if (loading) {
         return (
-            <div className="p-6">
-                <div className="flex items-center gap-2 mb-6">
-                    <Star className="w-6 h-6 text-yellow-500" />
-                    <h1 className="text-2xl font-bold">My Watchlist</h1>
-                </div>
-                <Loading text="Loading watchlist..." />
+            <div className="p-6 space-y-6">
+                <PageHeaderSkeleton />
+                <CardSkeleton />
+                <WatchlistGridSkeleton count={6} />
             </div>
         );
     }
 
     if (error) {
         return (
-            <div className="p-6">
+            <div className="p-6 space-y-6">
                 <div className="flex items-center gap-2 mb-6">
                     <Star className="w-6 h-6 text-yellow-500" />
                     <h1 className="text-2xl font-bold">My Watchlist</h1>
