@@ -3,8 +3,9 @@
 import React from 'react';
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface MetricSparklineProps {
-    data: Record<string, unknown>[];
+    data: any[];
     dataKey: string;
     color?: string; // Hex color
     height?: number;

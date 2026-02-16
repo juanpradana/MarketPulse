@@ -244,39 +244,39 @@ export default function NeoBDMTrackerPage() {
 
             return (
                 <div className="bg-[#181a1f] border border-zinc-700 p-3 rounded-md shadow-xl font-mono text-[10px] min-w-[200px] z-50">
-                    <p className="text-zinc-400 mb-1 border-b border-zinc-800 pb-1">{item.fullDate}</p>
+                    <p className="text-zinc-400 mb-1 border-b border-zinc-800 pb-1">{item.fullDate as string}</p>
                     <div className="space-y-1 mt-2">
                         <div className="flex justify-between gap-4">
                             <span className="text-zinc-500">Price:</span>
-                            <span className="text-blue-400 font-bold">{item.price?.toLocaleString()}</span>
+                            <span className="text-blue-400 font-bold">{(item.price as number | undefined)?.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between gap-4">
                             <span className="text-zinc-500">{getMetricLabel(flowMetric)}:</span>
-                            <span className={cn("font-bold", item.activeFlow >= 0 ? "text-emerald-400" : "text-red-400")}>
-                                {item.activeFlow?.toLocaleString()} <span className="text-[8px] text-zinc-500">B</span>
+                            <span className={cn("font-bold", (item.activeFlow as number | undefined) ?? 0 >= 0 ? "text-emerald-400" : "text-red-400")}>
+                                {(item.activeFlow as number | undefined)?.toLocaleString()} <span className="text-[8px] text-zinc-500">B</span>
                             </span>
                         </div>
                         <div className="flex justify-between gap-4">
                             <span className="text-zinc-500">Chg%:</span>
-                            <span className={cn("font-bold", item.pct_change >= 0 ? "text-emerald-400" : "text-red-400")}>
-                                {item.pct_change?.toFixed(2)}%
+                            <span className={cn("font-bold", (item.pct_change as number | undefined) ?? 0 >= 0 ? "text-emerald-400" : "text-red-400")}>
+                                {(item.pct_change as number | undefined)?.toFixed(2)}%
                             </span>
                         </div>
-                        {(item.isCrossing || item.isUnusual || item.isPinky) && (
+                        {((item.isCrossing as boolean | undefined) || (item.isUnusual as boolean | undefined) || (item.isPinky as boolean | undefined)) && (
                             <div className="mt-2 pt-2 border-t border-zinc-800 flex flex-col gap-1">
-                                {item.isCrossing && (
+                                {(item.isCrossing as boolean | undefined) && (
                                     <div className="flex justify-between items-center bg-pink-500/10 p-1 rounded-sm">
                                         <span className="bg-pink-500/20 text-pink-400 px-1 rounded-sm text-[8px] font-bold">CROSSING</span>
                                         {crossingMeta && <span className="text-pink-300 font-bold">{crossingMeta}</span>}
                                     </div>
                                 )}
-                                {item.isUnusual && (
+                                {(item.isUnusual as boolean | undefined) && (
                                     <div className="flex justify-between items-center bg-orange-500/10 p-1 rounded-sm">
                                         <span className="bg-orange-500/20 text-orange-400 px-1 rounded-sm text-[8px] font-bold">UNUSUAL</span>
                                         {unusualMeta && <span className="text-orange-300 font-bold">{unusualMeta}</span>}
                                     </div>
                                 )}
-                                {item.isPinky && (
+                                {(item.isPinky as boolean | undefined) && (
                                     <div className="flex justify-between items-center bg-red-500/10 p-1 rounded-sm border border-red-500/20">
                                         <div className="flex items-center gap-1">
                                             <span className="bg-red-500/20 text-red-500 px-1 rounded-sm text-[8px] font-bold underline decoration-red-500/50">REPO RISK</span>

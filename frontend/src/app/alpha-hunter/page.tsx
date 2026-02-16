@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback } from "react";
 import { AlphaHunterProvider, useAlphaHunter } from "@/components/alpha-hunter/AlphaHunterContext";
-import { SignalItem } from "@/services/api/neobdm";
+import { Stage1Data, Pattern, FlowSignal } from "@/components/alpha-hunter/types";
 import WatchlistSidebar from "@/components/alpha-hunter/WatchlistSidebar";
 import InvestigationHeader from "@/components/alpha-hunter/InvestigationHeader";
 import AnomalyScanTable from "@/components/alpha-hunter/AnomalyScanTable";
@@ -24,17 +24,17 @@ function AlphaHunterContent() {
         setRefreshKey(prev => prev + 1);
     }, []);
 
-    const handleAddToInvestigation = useCallback((signal: SignalItem) => {
+    const handleAddToInvestigation = useCallback((signal: FlowSignal) => {
         // Map the signal data to Stage1Data
-        const stage1Data = {
+        const stage1Data: Stage1Data = {
             signal_score: signal.signal_score,
             signal_strength: signal.signal_strength,
-            conviction: signal.conviction,
-            patterns: signal.patterns || [],
+            conviction: String(signal.conviction || ''),
+            patterns: (signal.patterns as Pattern[]) || [],
             flow: signal.flow,
             change: signal.change,
             price: signal.price,
-            entry_zone: signal.entry_zone,
+            entry_zone: String(signal.entry_zone || ''),
             detected_at: new Date().toISOString()
         };
 

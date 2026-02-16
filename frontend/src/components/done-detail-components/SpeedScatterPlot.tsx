@@ -35,7 +35,8 @@ const formatRupiah = (value: number): string => {
     return `${value.toFixed(0)}`;
 };
 
-const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: Record<string, unknown> }> }) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: any }> }) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
         return (

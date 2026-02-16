@@ -38,16 +38,16 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
         const data = payload[0].payload;
         return (
             <div className="bg-slate-900 border border-slate-700 p-3 rounded shadow-xl text-xs z-50">
-                <p className="font-bold text-white mb-1">{data.broker} - {data.name}</p>
+                <p className="font-bold text-white mb-1">{data.broker as string} - {data.name as string}</p>
                 <div className="space-y-1">
-                    <p className="text-green-400">Buy: {formatRupiah(data.buy_value || 0)}</p>
-                    <p className="text-red-400">Sell: {formatRupiah(data.sell_value || 0)}</p>
+                    <p className="text-green-400">Buy: {formatRupiah((data.buy_value as number | undefined) || 0)}</p>
+                    <p className="text-red-400">Sell: {formatRupiah((data.sell_value as number | undefined) || 0)}</p>
                     <div className="border-t border-slate-700 my-1 pt-1">
-                        <p className={`font-bold ${data.net_value >= 0 ? 'text-teal-400' : 'text-red-400'}`}>
-                            Net: {formatRupiah(data.net_value)}
+                        <p className={`font-bold ${(data.net_value as number | undefined) ?? 0 >= 0 ? 'text-teal-400' : 'text-red-400'}`}>
+                            Net: {formatRupiah((data.net_value as number | undefined) ?? 0)}
                         </p>
                     </div>
-                    <p className="text-slate-500">Total: {formatRupiah(data.total_value)}</p>
+                    <p className="text-slate-500">Total: {formatRupiah((data.total_value as number | undefined) ?? 0)}</p>
                 </div>
             </div>
         );
@@ -91,7 +91,8 @@ export const BrokerDivergingBars: React.FC<BrokerDivergingBarsProps> = ({
                         radius={[2, 2, 2, 2]}
                         cursor="pointer"
                         className="transition-opacity hover:opacity-80"
-                        onClick={(data: { broker?: string }) => onBrokerClick && data?.broker && onBrokerClick(data.broker)}
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+onClick={(data: any) => onBrokerClick && data?.broker && onBrokerClick(data.broker)}
                     >
                         {sortedData.map((entry, index) => (
                             <Cell

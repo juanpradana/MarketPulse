@@ -26,7 +26,8 @@ const formatRupiah = (value: number): string => {
     return `${value.toFixed(0)}`;
 };
 
-const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: Record<string, unknown> }> }) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: any }> }) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
         return (
@@ -55,16 +56,17 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
     return null;
 };
 
-const CustomizeContent = (props: Record<string, unknown>) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CustomizeContent = (props: any) => {
     const { depth, x, y, width, height, name, tps } = props;
 
     // Determine color based on TPS
     let fillColor = '#334155'; // Default Slate (Low Speed)
     let textColor = '#fff';
 
-    if (tps >= 15) {
+    if (tps && tps >= 15) {
         fillColor = '#dc2626'; // Red-600 (High Speed)
-    } else if (tps >= 5) {
+    } else if (tps && tps >= 5) {
         fillColor = '#ca8a04'; // Yellow-600 (Med Speed)
     } else {
         fillColor = '#0f172a'; // Slate-900 (Low Speed)

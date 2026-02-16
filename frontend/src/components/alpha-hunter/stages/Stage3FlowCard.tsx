@@ -156,7 +156,7 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
                     error: error instanceof Error ? error.message : String(error)
                 };
                 setTradingDates([...updatedDates]);
-                setScrapeLog(prev => [...prev, `  ✗ ${dateInfo.date}: ${error.message || error}`]);
+                setScrapeLog(prev => [...prev, `  ✗ ${dateInfo.date}: ${error instanceof Error ? error.message : String(error)}`]);
             }
         }
 

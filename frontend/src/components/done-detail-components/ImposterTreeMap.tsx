@@ -19,12 +19,13 @@ interface ImposterTreeMapProps {
 }
 
 // Custom Content for TreeMap Node
-const CustomizeContent = (props: Record<string, unknown>) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CustomizeContent = (props: any) => {
     const { root, depth, x, y, width, height, index, payload, colors, rank, name, value, net_value } = props;
 
     // Determine color based on net_value
     let fillColor = '#334155'; // Default slate
-    if (net_value !== undefined) {
+    if (net_value !== undefined && net_value !== null) {
         if (net_value >= 0) fillColor = '#0d9488'; // Teal-600 for Buy
         else fillColor = '#dc2626'; // Red-600 for Sell
     }
@@ -32,7 +33,7 @@ const CustomizeContent = (props: Record<string, unknown>) => {
     // Override with payload fill if provided (for categories)
     if (payload && payload.fill) fillColor = payload.fill;
 
-    // Adjust opacity or shade based on value could be added here, 
+    // Adjust opacity or shade based on value could be added here,
     // but for now keeping it simple: Categories have dark fill, Leaves have specific fill.
 
     // Check if it's a leaf node (broker)
@@ -84,7 +85,8 @@ const CustomizeContent = (props: Record<string, unknown>) => {
     );
 };
 
-const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: Record<string, unknown> }> }) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: any }> }) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
         // Skip tooltip for category nodes if they don't have detailed stats

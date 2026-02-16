@@ -45,7 +45,8 @@ const CustomTooltip = ({ active, payload, label }: TooltipProps) => {
         const data = payload[0].payload;
 
         // Don't show tooltip for padded/future points (undefined data)
-        if (!data.close || data.close === undefined) {
+        const close = data.close as number | undefined;
+        if (!close || close === undefined) {
             return null;
         }
 
@@ -55,16 +56,16 @@ const CustomTooltip = ({ active, payload, label }: TooltipProps) => {
                 <div className="space-y-1 font-mono text-sm">
                     <p className="flex justify-between gap-6 items-center">
                         <span className="text-zinc-400 text-xs">Close</span>
-                        <span className="text-white font-bold">{data.close?.toLocaleString() || 'N/A'}</span>
+                        <span className="text-white font-bold">{close?.toLocaleString() || 'N/A'}</span>
                     </p>
                     <p className="flex justify-between gap-6 items-center">
                         <span className="text-zinc-400 text-xs">Vol</span>
-                        <span className="text-blue-400">{data.volume?.toLocaleString() || '0'}</span>
+                        <span className="text-blue-400">{(data.volume as number | undefined)?.toLocaleString() || '0'}</span>
                     </p>
                     <div className="h-px bg-zinc-800 my-2" />
                     <p className="flex justify-between gap-6 text-xs text-zinc-500">
-                        <span>H: {data.high || 'N/A'}</span>
-                        <span>L: {data.low || 'N/A'}</span>
+                        <span>H: {(data.high as number | undefined) || 'N/A'}</span>
+                        <span>L: {(data.low as number | undefined) || 'N/A'}</span>
                     </p>
                 </div>
             </div>

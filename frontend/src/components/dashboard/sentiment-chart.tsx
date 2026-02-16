@@ -68,7 +68,8 @@ export const SentimentChart = ({ ticker, startDate, endDate }: SentimentChartPro
         };
     }, [isDragging, startY]);
 
-    const handleMouseDown = (e: { chartY?: number; clientY?: number; shiftKey?: boolean }) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handleMouseDown = (e: any) => {
         // Support both direct mouse events and Recharts internal events
         const clientY = e.chartY !== undefined ? e.chartY : (e.clientY || 0);
 
@@ -177,12 +178,12 @@ export const SentimentChart = ({ ticker, startDate, endDate }: SentimentChartPro
                                     <span className="text-zinc-400 font-bold uppercase tracking-wider text-[9px]">Market Performance</span>
                                 </div>
                                 <div className="grid grid-cols-2 gap-y-1 gap-x-4 pl-1">
-                                    <p className="flex justify-between"><span className="text-zinc-500">O:</span><span className="text-zinc-300 font-mono">{data.open.toFixed(2)}</span></p>
-                                    <p className="flex justify-between"><span className="text-zinc-500">H:</span><span className="text-zinc-300 font-mono">{data.high.toFixed(2)}</span></p>
-                                    <p className="flex justify-between"><span className="text-zinc-500">L:</span><span className="text-zinc-300 font-mono">{data.low.toFixed(2)}</span></p>
+                                    <p className="flex justify-between"><span className="text-zinc-500">O:</span><span className="text-zinc-300 font-mono">{(data.open as number).toFixed(2)}</span></p>
+                                    <p className="flex justify-between"><span className="text-zinc-500">H:</span><span className="text-zinc-300 font-mono">{(data.high as number).toFixed(2)}</span></p>
+                                    <p className="flex justify-between"><span className="text-zinc-500">L:</span><span className="text-zinc-300 font-mono">{(data.low as number).toFixed(2)}</span></p>
                                     <p className="flex justify-between font-bold border-l-2 border-blue-500/30 pl-2">
                                         <span className="text-zinc-400">C:</span>
-                                        <span className={data.isUp ? "text-emerald-400" : "text-rose-400"}>{data.close.toFixed(2)}</span>
+                                        <span className={data.isUp ? "text-emerald-400" : "text-rose-400"}>{(data.close as number).toFixed(2)}</span>
                                     </p>
                                 </div>
                             </div>
@@ -205,22 +206,22 @@ export const SentimentChart = ({ ticker, startDate, endDate }: SentimentChartPro
                                 <div className="space-y-1 pl-1">
                                     <p className="flex justify-between">
                                         <span className="text-zinc-500">Score:</span>
-                                        <span className={data.score >= 0 ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>
-                                            {(data.score >= 0 ? '+' : '') + data.score.toFixed(3)}
+                                        <span className={(data.score as number | undefined) ?? 0 >= 0 ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>
+                                            {((data.score as number | undefined) ?? 0 >= 0 ? '+' : '') + ((data.score as number | undefined) ?? 0).toFixed(3)}
                                         </span>
                                     </p>
                                     <p className="flex justify-between">
                                         <span className="text-zinc-500">SMA (5):</span>
-                                        <span className="text-amber-400 font-mono">{data.sma?.toFixed(3) ?? '0.000'}</span>
+                                        <span className="text-amber-400 font-mono">{((data.sma as number | undefined) ?? 0).toFixed(3)}</span>
                                     </p>
                                     <p className="text-zinc-600 italic text-[9px] pt-1">
-                                        <span className="text-zinc-600 italic">Analyzed {data.count} sources</span>
+                                        <span className="text-zinc-600 italic">Analyzed {data.count as number | undefined ?? 0} sources</span>
                                     </p>
                                 </div>
                             </div>
                         )}
 
-                        {data.isHighImpact && (
+                        {(data.isHighImpact as boolean | undefined) && (
                             <div className="pt-2 border-t border-zinc-900/50">
                                 <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-500/10 border border-blue-500/20 rounded-md">
                                     <MessageSquare className="w-3 h-3 text-blue-400" />

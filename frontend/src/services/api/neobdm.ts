@@ -28,7 +28,7 @@ export interface SignalItem {
     flow: number;
     price: number;
     change: number;
-    [key: string]: unknown;
+    [key: string]: any;
 }
 
 export interface HotSignal {
