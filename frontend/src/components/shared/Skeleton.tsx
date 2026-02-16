@@ -16,7 +16,7 @@ export function Skeleton({
     className?: string;
     variant?: 'default' | 'circle' | 'card';
 }) {
-    const baseClasses = 'animate-pulse bg-gray-200 dark:bg-gray-700';
+    const baseClasses = 'animate-pulse bg-gray-300';
 
     const variantClasses = {
         default: 'rounded',
@@ -42,7 +42,7 @@ export function TextSkeleton({
     className?: string;
 }) {
     return (
-        <div className={`animate-pulse bg-gray-200 dark:bg-gray-700 rounded ${height} ${className}`} style={{ width }} />
+        <div className={`animate-pulse bg-gray-300 rounded ${height} ${className}`} style={{ width }} />
     );
 }
 
@@ -60,7 +60,7 @@ export function CardSkeleton({
 }) {
     return (
         <div className={cn(
-            "p-4 border rounded-lg space-y-4 bg-white dark:bg-gray-800",
+            "p-4 border rounded-lg space-y-4 bg-white",
             className
         )}>
             {hasImage && (
@@ -97,7 +97,7 @@ export function CardSkeleton({
  */
 export function StatsCardSkeleton() {
     return (
-        <div className="p-4 border rounded-lg bg-white dark:bg-gray-800">
+        <div className="p-4 border rounded-lg bg-white">
             <div className="flex items-center justify-between mb-2">
                 <Skeleton className="h-4 w-24" />
                 <Skeleton className="h-8 w-8 rounded-full" />
@@ -366,7 +366,7 @@ export function SkeletonOverlay({
             <div className="opacity-50 pointer-events-none">
                 {children}
             </div>
-            <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 flex items-center justify-center z-10">
+            <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10">
                 {skeleton}
             </div>
         </div>
