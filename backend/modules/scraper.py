@@ -107,8 +107,8 @@ class NewsScraper:
                         pass # ISO format is fine
                     elif timestamp:
                         # Try to ensure YYYY-MM-DD
-                        pass 
-                except:
+                        pass
+                except Exception:
                     pass
 
                 # Clean text
@@ -195,9 +195,9 @@ class NewsScraper:
                             art_date = datetime.fromisoformat(art_date_str).date()
                         else:
                             art_date = datetime.strptime(art_date_str, "%Y-%m-%d").date()
-                    except:
+                    except Exception:
                         # If date parse fails, keep it or skip? Let's keep, assume recent.
-                         art_date = date.today()
+                        art_date = date.today()
 
                     if art_date > end_date:
                         continue # Skip future/out of range

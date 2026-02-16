@@ -161,7 +161,7 @@ class NeoBDMScraper:
             await self.page.wait_for_selector('.dash-spreadsheet-inner.dash-loading', timeout=2000)
             print("  [LOADING] Primary spinner detected, waiting for it to hide...")
             await self.page.wait_for_selector('.dash-spreadsheet-inner.dash-loading', state='hidden', timeout=30000)
-        except:
+        except Exception:
             pass
         
         # 2. Wait for global Dash loading overlay (sometimes appears for heavy calculations)
@@ -169,7 +169,7 @@ class NeoBDMScraper:
             await self.page.wait_for_selector('._dash-loading-callback', timeout=2000)
             print("  [LOADING] Global Dash callback spinner detected, waiting...")
             await self.page.wait_for_selector('._dash-loading-callback', state='hidden', timeout=30000)
-        except:
+        except Exception:
             pass
         
         # 3. Additional hard wait to let pagination info update (CRITICAL for cumulative)
@@ -224,7 +224,7 @@ class NeoBDMScraper:
                 # by waiting for any loading indicators to finish
                 try:
                     await self.page.wait_for_selector('.dash-loading', state='hidden', timeout=2000)
-                except:
+                except Exception:
                     pass  # No loading indicator found, which is fine
                 
                 total_pages_text = await self.page.inner_text('.page-number .last-page')
@@ -1191,7 +1191,7 @@ class NeoBDMScraper:
                 if await period_label.count() > 0:
                     await period_label.click()
                     await asyncio.sleep(0.5)
-            except:
+            except Exception:
                 pass
             
             # Select ticker

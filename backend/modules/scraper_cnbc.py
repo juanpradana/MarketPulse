@@ -76,14 +76,14 @@ def parse_relative_time(date_str):
         try:
              # Try YYYY/MM/DD if meta-like, but usually UI text is Day Month Year
              return datetime.strptime(clean_date, "%d %m %Y").replace(hour=0, minute=0, second=0, microsecond=0).astimezone(JAKARTA_TZ)
-        except:
+        except Exception:
              pass
              
         # Catch-all
         try:
              dt = datetime.strptime(clean_date, "%d %B %Y")
              return dt.astimezone(JAKARTA_TZ)
-        except:
+        except Exception:
              pass
              
         # If all fails, assume NOW (safest execution, let detail page correct it)

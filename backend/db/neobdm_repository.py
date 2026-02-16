@@ -878,7 +878,7 @@ class NeoBDMRepository(BaseRepository):
         
         try:
             base = datetime.strptime(base_date_str, '%Y-%m-%d')
-        except:
+        except Exception:
             base = datetime.now()
         
         target = base - timedelta(days=days_back)
@@ -1617,7 +1617,7 @@ class NeoBDMRepository(BaseRepository):
         try:
             flow_str = str(record.get('d_0', '0')).replace(',', '').replace('B', '').strip()
             flow = float(flow_str) if flow_str else 0
-        except:
+        except Exception:
             flow = 0
         
         if flow > 0:  # Inflow
@@ -1651,7 +1651,7 @@ class NeoBDMRepository(BaseRepository):
         # 3. Price Momentum Score
         try:
             pct_change = float(record.get('pct_1d', 0))
-        except:
+        except Exception:
             pct_change = 0
         
         if pct_change > 5:

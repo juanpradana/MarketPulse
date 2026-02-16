@@ -256,7 +256,7 @@ class InvestorScraper:
                         dt = datetime.fromisoformat(iso_date.replace('Z', '+00:00'))
                         article_date = dt.astimezone(JAKARTA_TZ)
                         date_text = article_date.strftime('%d %b %Y | %H:%M WIB')
-                    except:
+                    except Exception:
                         pass
             
             article_date = parse_investor_date(date_text)

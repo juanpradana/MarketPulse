@@ -247,7 +247,7 @@ class BloombergTechnozScraper:
                         iso_date = meta_date['content']
                         dt = datetime.fromisoformat(iso_date.replace('Z', '+00:00'))
                         article_date = dt.astimezone(JAKARTA_TZ)
-                    except:
+                    except Exception:
                         pass
             
             # Strategy 3: Try <time> tags
@@ -259,7 +259,7 @@ class BloombergTechnozScraper:
                         try:
                             dt = datetime.fromisoformat(dt_attr.replace('Z', '+00:00'))
                             article_date = dt.astimezone(JAKARTA_TZ)
-                        except:
+                        except Exception:
                             pass
                     if not article_date:
                         article_date = parse_bloomberg_date(time_tag.get_text(strip=True))

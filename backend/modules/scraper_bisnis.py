@@ -232,7 +232,7 @@ class BisnisScraper:
                         try:
                             dt = datetime.strptime(date_str, '%Y%m%d')
                             date_text = dt.strftime('%d %b %Y')
-                        except:
+                        except Exception:
                             pass
                 
                 estimated_date = parse_relative_time(date_text)
@@ -262,7 +262,7 @@ class BisnisScraper:
                             estimated_date = JAKARTA_TZ.localize(
                                 datetime.strptime(date_str, '%Y%m%d')
                             )
-                        except:
+                        except Exception:
                             estimated_date = datetime.now(JAKARTA_TZ)
                     else:
                         estimated_date = datetime.now(JAKARTA_TZ)
@@ -317,7 +317,7 @@ class BisnisScraper:
                         dt = datetime.fromisoformat(iso_date.replace('Z', '+00:00'))
                         date_obj = dt.astimezone(JAKARTA_TZ)
                         date_text = date_obj.strftime('%A, %d %B %Y | %H:%M')
-                    except:
+                    except Exception:
                         pass
             
             # Pattern 3: Look in time tags
@@ -339,7 +339,7 @@ class BisnisScraper:
                         article_date = JAKARTA_TZ.localize(
                             datetime.strptime(date_str, '%Y%m%d')
                         )
-                    except:
+                    except Exception:
                         article_date = estimated_date or datetime.now(JAKARTA_TZ)
                 else:
                     article_date = estimated_date or datetime.now(JAKARTA_TZ)

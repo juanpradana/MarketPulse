@@ -81,7 +81,7 @@ class MarketData:
                 try:
                     with open(r"C:\Data\AI Playground\project-searcher\debug_error.log", "a") as f:
                         f.write(f"{datetime.now()} - {error_msg}\n")
-                except:
+                except Exception:
                     pass
                 # Fallback to whatever local data we have
         
