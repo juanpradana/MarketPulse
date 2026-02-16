@@ -2064,7 +2064,7 @@ class NeoBDMRepository(BaseRepository):
             # Get latest signals for this ticker from neobdm_records
             cursor.execute(
                 """SELECT symbol, d_0, d_2, d_3, w_1, c_3, crossing, unusual, pinky,
-                          price, change_pct, scraped_at
+                          price, pct_1d, scraped_at
                    FROM neobdm_records
                    WHERE symbol = ? AND method = 'm'
                    ORDER BY scraped_at DESC
@@ -2077,7 +2077,11 @@ class NeoBDMRepository(BaseRepository):
                 return {}
 
             # Parse the data
-            symbol, d_0, d_2, d_3, w_1, c_3, crossing, unusual, pinky, price, change_pct, scraped_at = row
+            symbol, d_0, d_2, d_3, w_1, c_3, crossing, unusual, pinky, price, pct_1d, scraped_at = row
+
+            # Parse numeric values
+            price = self._parse_numeric(price)
+            pct_1d = self._parse_numeric(pct_1d)
 
             # Calculate signal score
             signal_score = 0
@@ -2157,7 +2161,7 @@ class NeoBDMRepository(BaseRepository):
                 "patterns": patterns,
                 "flow": flow if 'flow' in locals() else 0,
                 "price": price,
-                "change": change_pct,
+                "change": pct_1d,
                 "entry_zone": f"Rp{int(price * 0.98):,}-Rp{int(price * 1.02):,}" if price else None,
                 "momentum_status": momentum_status,
                 "warning_status": ", ".join(warnings) if warnings else "NONE",

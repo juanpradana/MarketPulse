@@ -178,5 +178,43 @@ export const watchlistApi = {
             throw new Error('Failed to fetch stats');
         }
         return await response.json();
+    },
+
+    /**
+     * Trigger deep analysis for missing tickers
+     */
+    analyzeMissing: async (tickers: string[]): Promise<{
+        status: string;
+        message: string;
+        tickers: string[];
+        status_endpoint: string;
+    }> => {
+        const response = await fetch(`${API_BASE_URL}/api/watchlist/analyze-missing?tickers=${tickers.join(',')}`, {
+            method: 'POST'
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to start analysis');
+        }
+        return await response.json();
+    },
+
+    /**
+     * Get analysis status
+     */
+    getAnalysisStatus: async (): Promise<{
+        running: boolean;
+        progress: number;
+        total: number;
+        current_ticker: string;
+        completed_tickers: string[];
+        errors: Array<{ ticker: string; stage: string; error: string }>;
+        stage: string;
+    }> => {
+        const response = await fetch(`${API_BASE_URL}/api/watchlist/analyze-status`);
+        if (!response.ok) {
+            throw new Error('Failed to fetch analysis status');
+        }
+        return await response.json();
     }
 };

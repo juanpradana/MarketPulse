@@ -1,6 +1,7 @@
 """Repository for Bandarmology deep analysis data (inventory, transaction chart, cache)."""
 import json
 import logging
+import sqlite3
 from typing import Optional, List, Dict
 from datetime import datetime
 from .connection import BaseRepository
@@ -528,41 +529,45 @@ class BandarmologyRepository(BaseRepository):
                     "deep_signals": data.get('deep_signals', {})
                 }
 
-            # Fallback: try to get from screening cache
-            cursor.execute(
-                """SELECT * FROM bandarmology_screening_cache
-                   WHERE UPPER(ticker) = UPPER(?)
-                   ORDER BY date DESC
-                   LIMIT 1""",
-                (ticker,)
-            )
+            # Fallback: try to get from screening cache (if table exists)
+            try:
+                cursor.execute(
+                    """SELECT * FROM bandarmology_screening_cache
+                       WHERE UPPER(ticker) = UPPER(?)
+                       ORDER BY date DESC
+                       LIMIT 1""",
+                    (ticker,)
+                )
 
-            row = cursor.fetchone()
-            if row:
-                columns = [desc[0] for desc in cursor.description]
-                data = dict(zip(columns, row))
+                row = cursor.fetchone()
+                if row:
+                    columns = [desc[0] for desc in cursor.description]
+                    data = dict(zip(columns, row))
 
-                return {
-                    "ticker": data.get('ticker'),
-                    "total_score": data.get('total_score'),
-                    "deep_score": None,
-                    "combined_score": None,
-                    "max_combined_score": None,
-                    "trade_type": data.get('trade_type'),
-                    "deep_trade_type": None,
-                    "accum_phase": None,
-                    "bandar_avg_cost": None,
-                    "price_vs_cost_pct": None,
-                    "breakout_signal": None,
-                    "distribution_alert": None,
-                    "pinky": data.get('pinky', False),
-                    "crossing": data.get('crossing', False),
-                    "unusual": data.get('unusual', False),
-                    "breakout_probability": None,
-                    "phase_confidence": None,
-                    "coordination_score": None,
-                    "deep_signals": {}
-                }
+                    return {
+                        "ticker": data.get('ticker'),
+                        "total_score": data.get('total_score'),
+                        "deep_score": None,
+                        "combined_score": None,
+                        "max_combined_score": None,
+                        "trade_type": data.get('trade_type'),
+                        "deep_trade_type": None,
+                        "accum_phase": None,
+                        "bandar_avg_cost": None,
+                        "price_vs_cost_pct": None,
+                        "breakout_signal": None,
+                        "distribution_alert": None,
+                        "pinky": data.get('pinky', False),
+                        "crossing": data.get('crossing', False),
+                        "unusual": data.get('unusual', False),
+                        "breakout_probability": None,
+                        "phase_confidence": None,
+                        "coordination_score": None,
+                        "deep_signals": {}
+                    }
+            except sqlite3.OperationalError:
+                # Table doesn't exist, return empty
+                pass
 
             return {}
 

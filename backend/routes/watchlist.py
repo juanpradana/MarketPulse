@@ -4,10 +4,14 @@ Watchlist API Routes
 Endpoints for managing user's personalized ticker watchlist.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+import asyncio
+import subprocess
+import sys
+import os
 
 router = APIRouter(prefix="/api/watchlist", tags=["Watchlist"])
 
@@ -436,3 +440,165 @@ def _generate_recommendation(alpha: AlphaHunterAnalysis, bandar: BandarmologyAna
         return "MIXED_SIGNALS"
     else:
         return "NEUTRAL"
+
+
+# Global status for deep analysis
+_deep_analysis_status = {
+    "running": False,
+    "progress": 0,
+    "total": 0,
+    "current_ticker": "",
+    "completed_tickers": [],
+    "errors": [],
+    "stage": ""  # 'neobdm', 'bandarmology'
+}
+
+
+@router.post("/analyze-missing")
+async def analyze_missing_tickers(
+    background_tasks: BackgroundTasks,
+    tickers: str = Query(..., description="Comma-separated ticker symbols to analyze")
+):
+    """
+    Trigger deep analysis for specific watchlist tickers missing data.
+    Runs both NeoBDM (Alpha Hunter) and Bandarmology analysis.
+    """
+    global _deep_analysis_status
+
+    if _deep_analysis_status["running"]:
+        return {
+            "status": "already_running",
+            "message": "Analysis already in progress",
+            "current_status": _deep_analysis_status
+        }
+
+    # Parse tickers
+    ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    if not ticker_list:
+        raise HTTPException(status_code=400, detail="No valid tickers provided")
+
+    # Reset status
+    _deep_analysis_status = {
+        "running": True,
+        "progress": 0,
+        "total": len(ticker_list) * 2,  # NeoBDM + Bandarmology for each
+        "current_ticker": "",
+        "completed_tickers": [],
+        "errors": [],
+        "stage": "starting"
+    }
+
+    # Launch background task
+    background_tasks.add_task(_run_missing_analysis, ticker_list)
+
+    return {
+        "status": "started",
+        "message": f"Deep analysis started for {len(ticker_list)} ticker(s)",
+        "tickers": ticker_list,
+        "status_endpoint": "/api/watchlist/analyze-status"
+    }
+
+
+@router.get("/analyze-status")
+async def get_analysis_status():
+    """Get the status of the running deep analysis."""
+    return _deep_analysis_status
+
+
+async def _run_missing_analysis(tickers: List[str]):
+    """Background task: Run NeoBDM and Bandarmology analysis for tickers."""
+    global _deep_analysis_status
+
+    try:
+        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        completed = 0
+        total_tickers = len(tickers)
+
+        # Stage 1: NeoBDM (Alpha Hunter) Analysis - Single batch for all
+        _deep_analysis_status["stage"] = "neobdm"
+        _deep_analysis_status["current_ticker"] = "Batch Scraping (All Tickers)"
+        try:
+            script_path = os.path.join(backend_dir, "scripts", "batch_scrape_neobdm.py")
+
+            # Run full batch scrape (gets ALL market data including requested tickers)
+            result = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: subprocess.run(
+                    [sys.executable, script_path],
+                    cwd=backend_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=600  # 10 minute timeout for full scrape
+                )
+            )
+
+            if result.returncode == 0:
+                _deep_analysis_status["completed_tickers"].append("all_neobdm")
+            else:
+                _deep_analysis_status["errors"].append({
+                    "ticker": "all",
+                    "stage": "neobdm",
+                    "error": result.stderr or "Unknown error"
+                })
+        except Exception as e:
+            _deep_analysis_status["errors"].append({
+                "ticker": "all",
+                "stage": "neobdm",
+                "error": str(e)
+            })
+
+        completed += total_tickers  # Count NeoBDM as completing all tickers
+        _deep_analysis_status["progress"] = completed
+
+        # Stage 2: Bandarmology Deep Analysis - Individual for each ticker
+        _deep_analysis_status["stage"] = "bandarmology"
+        try:
+            from modules.bandarmology_analyzer import BandarmologyAnalyzer
+
+            analyzer = BandarmologyAnalyzer()
+            actual_date = analyzer._resolve_date(None)
+            base_results = analyzer.analyze(target_date=actual_date)
+
+            # Run deep analysis for tickers
+            for ticker in tickers:
+                _deep_analysis_status["current_ticker"] = ticker
+                try:
+                    # Check if ticker qualifies based on base score
+                    ticker_data = next((r for r in base_results if r['symbol'] == ticker), None)
+
+                    if ticker_data and ticker_data['total_score'] >= 20:
+                        # Run deep analysis
+                        result = analyzer.run_deep_analysis(ticker, actual_date, ticker_data)
+                        if result:
+                            _deep_analysis_status["completed_tickers"].append(f"{ticker}_bandarmology")
+                        else:
+                            _deep_analysis_status["errors"].append({
+                                "ticker": ticker,
+                                "stage": "bandarmology",
+                                "error": "Deep analysis returned no result"
+                            })
+                    else:
+                        # Ticker doesn't qualify, skip but mark as completed
+                        _deep_analysis_status["completed_tickers"].append(f"{ticker}_bandarmology_skipped")
+
+                except Exception as e:
+                    _deep_analysis_status["errors"].append({
+                        "ticker": ticker,
+                        "stage": "bandarmology",
+                        "error": str(e)
+                    })
+
+                completed += 1
+                _deep_analysis_status["progress"] = completed
+
+        except Exception as e:
+            _deep_analysis_status["errors"].append({
+                "ticker": "all",
+                "stage": "bandarmology_init",
+                "error": str(e)
+            })
+
+    finally:
+        _deep_analysis_status["running"] = False
+        _deep_analysis_status["stage"] = "completed"
+        _deep_analysis_status["current_ticker"] = ""
