@@ -25,8 +25,10 @@ import { brokerFiveApi } from './api/brokerFive';
 import { doneDetailApi } from './api/doneDetail';
 import { priceVolumeApi } from './api/priceVolume';
 import { bandarmologyApi } from './api/bandarmology';
+import { watchlistApi, type WatchlistItem, type WatchlistStats, type WatchlistToggleResponse } from './api/watchlist';
 
 // Re-export types for backward compatibility
+export type { NewsItem, Disclosure, WatchlistItem, WatchlistStats, WatchlistToggleResponse };
 export type { NewsItem, Disclosure };
 
 /**
@@ -76,6 +78,15 @@ export const api = {
     // Bandarmology APIs
     getBandarmologyScreening: bandarmologyApi.getScreening,
     getBandarmologyDates: bandarmologyApi.getDates,
+
+    // Watchlist APIs
+    getWatchlist: watchlistApi.getWatchlist,
+    getWatchlistTickers: watchlistApi.getTickers,
+    addTickerToWatchlist: watchlistApi.addTicker,
+    removeTickerFromWatchlist: watchlistApi.removeTicker,
+    toggleWatchlistTicker: watchlistApi.toggleTicker,
+    checkWatchlist: watchlistApi.checkWatchlist,
+    getWatchlistStats: watchlistApi.getStats,
 };
 
 /**
@@ -90,5 +101,6 @@ export {
     brokerFiveApi,
     doneDetailApi,
     priceVolumeApi,
-    bandarmologyApi
+    bandarmologyApi,
+    watchlistApi
 };
