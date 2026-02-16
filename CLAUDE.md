@@ -706,10 +706,11 @@ Based on `docs/future_development.md` and `docs/optimization.md`, these features
   - *Purpose*: Remove old PDFs after ingestion to ChromaDB
 
 #### User Features
-- [ ] **My Watchlist** - No personalized watchlist per user
-  - *Evidence*: Not in sidebar.tsx, only global FilterContext exists
-  - *Location to add*: New `app/watchlist/` page + `db/watchlist_repository.py`
-  - *Features needed*: Add/remove tickers, daily performance summary
+- [x] **My Watchlist** - ✅ IMPLEMENTED
+  - *Location*: `app/watchlist/`, `db/watchlist_repository.py`, `routes/watchlist.py`
+  - *Features*: Add/remove tickers, view with latest prices, quick links to analysis
+  - *API*: `/api/watchlist/*` endpoints with full CRUD
+  - *Navigation*: Added to sidebar under "Personal" section
 
 - [ ] **Sentiment-Heatmap Ticker Cloud** - WordCloud exists but not sentiment-colored
   - *Current*: `components/dashboard/ticker-cloud.tsx` (basic word cloud)
@@ -763,7 +764,7 @@ Before marking this project as "complete", implement:
 
 **Must Have:**
 - [ ] Scraper Scheduler (APScheduler) - Critical for data freshness
-- [ ] My Watchlist - Core user personalization feature
+- [x] My Watchlist - Core user personalization feature
 - [ ] Skeleton Loading - Better UX
 
 **Nice to Have:**
