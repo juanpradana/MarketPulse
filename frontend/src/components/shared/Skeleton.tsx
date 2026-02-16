@@ -180,7 +180,7 @@ export function ChartSkeleton({
                 {/* Chart lines simulation */}
                 <div className="absolute inset-0 p-4">
                     <svg className="w-full h-full" preserveAspectRatio="none">
-                        <Skeleton className="w-full h-full" />
+                        <rect className="animate-pulse fill-gray-300" width="100%" height="100%" />
                     </svg>
                 </div>
             </div>
