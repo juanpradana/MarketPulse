@@ -473,3 +473,101 @@ class BandarmologyRepository(BaseRepository):
             return result
         finally:
             conn.close()
+
+    def get_stock_summary(self, ticker: str) -> dict:
+        """
+        Get summary analysis for a specific ticker from bandarmology data.
+
+        Args:
+            ticker: Stock ticker symbol
+
+        Returns:
+            Dictionary with bandarmology summary data
+        """
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+
+            # First try to get from deep cache (most detailed)
+            cursor.execute(
+                """SELECT * FROM bandarmology_deep_cache
+                   WHERE UPPER(ticker) = UPPER(?)
+                   ORDER BY analysis_date DESC
+                   LIMIT 1""",
+                (ticker,)
+            )
+
+            row = cursor.fetchone()
+            if row:
+                columns = [desc[0] for desc in cursor.description]
+                data = dict(zip(columns, row))
+
+                # Parse JSON fields
+                data['deep_signals'] = json.loads(data.get('deep_signals_json') or '{}')
+                data['breakout_factors'] = json.loads(data.get('breakout_factors_json') or '{}')
+
+                return {
+                    "ticker": data.get('ticker'),
+                    "total_score": data.get('base_score'),
+                    "deep_score": data.get('deep_score'),
+                    "combined_score": data.get('combined_score'),
+                    "max_combined_score": data.get('max_combined_score'),
+                    "trade_type": data.get('trade_type'),
+                    "deep_trade_type": data.get('deep_trade_type'),
+                    "accum_phase": data.get('accum_phase'),
+                    "bandar_avg_cost": data.get('bandar_avg_cost'),
+                    "price_vs_cost_pct": data.get('price_vs_cost_pct'),
+                    "breakout_signal": data.get('breakout_signal'),
+                    "distribution_alert": data.get('distribution_alert'),
+                    "pinky": data.get('pinky', False),
+                    "crossing": data.get('crossing', False),
+                    "unusual": data.get('unusual', False),
+                    "breakout_probability": data.get('breakout_probability'),
+                    "phase_confidence": data.get('phase_confidence'),
+                    "coordination_score": data.get('coordination_score'),
+                    "deep_signals": data.get('deep_signals', {})
+                }
+
+            # Fallback: try to get from screening cache
+            cursor.execute(
+                """SELECT * FROM bandarmology_screening_cache
+                   WHERE UPPER(ticker) = UPPER(?)
+                   ORDER BY date DESC
+                   LIMIT 1""",
+                (ticker,)
+            )
+
+            row = cursor.fetchone()
+            if row:
+                columns = [desc[0] for desc in cursor.description]
+                data = dict(zip(columns, row))
+
+                return {
+                    "ticker": data.get('ticker'),
+                    "total_score": data.get('total_score'),
+                    "deep_score": None,
+                    "combined_score": None,
+                    "max_combined_score": None,
+                    "trade_type": data.get('trade_type'),
+                    "deep_trade_type": None,
+                    "accum_phase": None,
+                    "bandar_avg_cost": None,
+                    "price_vs_cost_pct": None,
+                    "breakout_signal": None,
+                    "distribution_alert": None,
+                    "pinky": data.get('pinky', False),
+                    "crossing": data.get('crossing', False),
+                    "unusual": data.get('unusual', False),
+                    "breakout_probability": None,
+                    "phase_confidence": None,
+                    "coordination_score": None,
+                    "deep_signals": {}
+                }
+
+            return {}
+
+        except Exception as e:
+            logger.error(f"Error getting stock summary for {ticker}: {e}")
+            return {}
+        finally:
+            conn.close()

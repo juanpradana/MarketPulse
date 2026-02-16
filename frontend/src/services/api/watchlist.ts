@@ -18,6 +18,51 @@ export interface WatchlistItem {
     };
 }
 
+export interface AlphaHunterAnalysis {
+    signal_score?: number;
+    signal_strength?: string;
+    conviction?: string;
+    patterns: string[];
+    flow?: number;
+    entry_zone?: string;
+    momentum_status?: string;
+    warning_status?: string;
+    has_signal: boolean;
+}
+
+export interface BandarmologyAnalysis {
+    total_score?: number;
+    deep_score?: number;
+    combined_score?: number;
+    trade_type?: string;
+    deep_trade_type?: string;
+    phase?: string;
+    bandar_avg_cost?: number;
+    price_vs_cost_pct?: number;
+    breakout_signal?: string;
+    distribution_alert?: string;
+    pinky: boolean;
+    crossing: boolean;
+    unusual: boolean;
+    has_analysis: boolean;
+}
+
+export interface WatchlistItemWithAnalysis {
+    ticker: string;
+    added_at: string;
+    company_name?: string;
+    latest_price?: {
+        price: number;
+        change_percent: number;
+        volume: number;
+        date: string;
+    };
+    alpha_hunter: AlphaHunterAnalysis;
+    bandarmology: BandarmologyAnalysis;
+    combined_rating?: string;
+    recommendation?: string;
+}
+
 export interface WatchlistStats {
     count: number;
     tickers: string[];
@@ -38,6 +83,17 @@ export const watchlistApi = {
         const response = await fetch(`${API_BASE_URL}/api/watchlist`);
         if (!response.ok) {
             throw new Error('Failed to fetch watchlist');
+        }
+        return await response.json();
+    },
+
+    /**
+     * Get watchlist with Alpha Hunter and Bandarmology analysis
+     */
+    getWatchlistWithAnalysis: async (): Promise<WatchlistItemWithAnalysis[]> => {
+        const response = await fetch(`${API_BASE_URL}/api/watchlist/with-analysis`);
+        if (!response.ok) {
+            throw new Error('Failed to fetch watchlist with analysis');
         }
         return await response.json();
     },

@@ -2046,3 +2046,126 @@ class NeoBDMRepository(BaseRepository):
             "source": source,
             "records_added": records_added
         }
+
+    def get_signals_for_ticker(self, ticker: str) -> dict:
+        """
+        Get latest Alpha Hunter signals for a specific ticker.
+
+        Args:
+            ticker: Stock ticker symbol
+
+        Returns:
+            Dictionary with signal data
+        """
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+
+            # Get latest signals for this ticker from neobdm_records
+            cursor.execute(
+                """SELECT symbol, d_0, d_2, d_3, w_1, c_3, crossing, unusual, pinky,
+                          price, change_pct, scraped_at
+                   FROM neobdm_records
+                   WHERE symbol = ? AND method = 'm'
+                   ORDER BY scraped_at DESC
+                   LIMIT 1""",
+                (ticker.upper(),)
+            )
+
+            row = cursor.fetchone()
+            if not row:
+                return {}
+
+            # Parse the data
+            symbol, d_0, d_2, d_3, w_1, c_3, crossing, unusual, pinky, price, change_pct, scraped_at = row
+
+            # Calculate signal score
+            signal_score = 0
+            try:
+                flow = self._parse_numeric(d_0)
+                if flow > 0:
+                    if flow > 200: signal_score = 95
+                    elif flow > 100: signal_score = 85
+                    elif flow > 50: signal_score = 75
+                    elif flow > 20: signal_score = 65
+                    elif flow > 5: signal_score = 55
+                    else: signal_score = 45
+                else:
+                    abs_flow = abs(flow)
+                    if abs_flow > 200: signal_score = 10
+                    elif abs_flow > 100: signal_score = 20
+                    elif abs_flow > 50: signal_score = 30
+                    elif abs_flow > 20: signal_score = 35
+                    else: signal_score = 40
+            except Exception:
+                signal_score = 50
+
+            # Determine signal strength
+            if signal_score >= 80: signal_strength = "VERY_STRONG"
+            elif signal_score >= 65: signal_strength = "STRONG"
+            elif signal_score >= 50: signal_strength = "MODERATE"
+            elif signal_score >= 35: signal_strength = "WEAK"
+            else: signal_strength = "AVOID"
+
+            # Determine conviction based on confluence
+            try:
+                d2_val = self._parse_numeric(d_2)
+                d3_val = self._parse_numeric(d_3)
+                w1_val = self._parse_numeric(w_1)
+
+                positive_count = sum(1 for v in [flow, d2_val, d3_val, w1_val] if v > 0)
+
+                if positive_count >= 4: conviction = "VERY_HIGH"
+                elif positive_count >= 3: conviction = "HIGH"
+                elif positive_count >= 2: conviction = "MEDIUM"
+                else: conviction = "LOW"
+            except Exception:
+                conviction = "MEDIUM"
+
+            # Build patterns list
+            patterns = []
+            if crossing and str(crossing).lower() == 'v':
+                patterns.append("CROSSING_DISTRIBUTION")
+            if unusual and str(unusual).lower() == 'v':
+                patterns.append("UNUSUAL_ACTIVITY")
+            if pinky and str(pinky).lower() == 'v':
+                patterns.append("REPO_RISK")
+
+            # Calculate momentum status
+            try:
+                c3_val = self._parse_numeric(c_3)
+                if c3_val > 500: momentum_status = "STRONG_UP"
+                elif c3_val > 200: momentum_status = "UP"
+                elif c3_val > 0: momentum_status = "WEAK_UP"
+                elif c3_val > -200: momentum_status = "WEAK_DOWN"
+                else: momentum_status = "DOWN"
+            except Exception:
+                momentum_status = "NEUTRAL"
+
+            # Warning status
+            warnings = []
+            if pinky and str(pinky).lower() == 'v':
+                warnings.append("REPO_RISK")
+            if crossing and str(crossing).lower() == 'v':
+                warnings.append("DISTRIBUTION_PRESSURE")
+
+            return {
+                "ticker": symbol,
+                "signal_score": signal_score,
+                "signal_strength": signal_strength,
+                "conviction": conviction,
+                "patterns": patterns,
+                "flow": flow if 'flow' in locals() else 0,
+                "price": price,
+                "change": change_pct,
+                "entry_zone": f"Rp{int(price * 0.98):,}-Rp{int(price * 1.02):,}" if price else None,
+                "momentum_status": momentum_status,
+                "warning_status": ", ".join(warnings) if warnings else "NONE",
+                "scraped_at": scraped_at
+            }
+
+        except Exception as e:
+            print(f"[*] Error getting signals for {ticker}: {e}")
+            return {}
+        finally:
+            conn.close()

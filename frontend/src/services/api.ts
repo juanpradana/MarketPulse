@@ -25,10 +25,28 @@ import { brokerFiveApi } from './api/brokerFive';
 import { doneDetailApi } from './api/doneDetail';
 import { priceVolumeApi } from './api/priceVolume';
 import { bandarmologyApi } from './api/bandarmology';
-import { watchlistApi, type WatchlistItem, type WatchlistStats, type WatchlistToggleResponse } from './api/watchlist';
+import {
+    watchlistApi,
+    type WatchlistItem,
+    type WatchlistItemWithAnalysis,
+    type WatchlistStats,
+    type WatchlistToggleResponse,
+    type AlphaHunterAnalysis,
+    type BandarmologyAnalysis
+} from './api/watchlist';
 
 // Re-export types for backward compatibility
-export type { NewsItem, Disclosure, WatchlistItem, WatchlistStats, WatchlistToggleResponse, SignalItem };
+export type {
+    NewsItem,
+    Disclosure,
+    WatchlistItem,
+    WatchlistItemWithAnalysis,
+    WatchlistStats,
+    WatchlistToggleResponse,
+    AlphaHunterAnalysis,
+    BandarmologyAnalysis,
+    SignalItem
+};
 
 /**
  * Legacy API object - delegates to new modular clients
@@ -80,6 +98,7 @@ export const api = {
 
     // Watchlist APIs
     getWatchlist: watchlistApi.getWatchlist,
+    getWatchlistWithAnalysis: watchlistApi.getWatchlistWithAnalysis,
     getWatchlistTickers: watchlistApi.getTickers,
     addTickerToWatchlist: watchlistApi.addTicker,
     removeTickerFromWatchlist: watchlistApi.removeTicker,
