@@ -26,8 +26,8 @@ class WatchlistItem(BaseModel):
     """Watchlist item response."""
     ticker: str
     added_at: str
-    company_name: Optional[str]
-    latest_price: Optional[dict]
+    company_name: Optional[str] = None
+    latest_price: Optional[dict] = None
 
 
 @router.get("", response_model=List[WatchlistItem])

@@ -80,7 +80,7 @@ export default function WatchlistPage() {
                     <Star className="w-6 h-6 text-yellow-500" />
                     <h1 className="text-2xl font-bold">My Watchlist</h1>
                 </div>
-                <Loading message="Loading watchlist..." />
+                <Loading text="Loading watchlist..." />
             </div>
         );
     }
