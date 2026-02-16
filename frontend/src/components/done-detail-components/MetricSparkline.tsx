@@ -4,7 +4,7 @@ import React from 'react';
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts';
 
 interface MetricSparklineProps {
-    data: any[];
+    data: Record<string, unknown>[];
     dataKey: string;
     color?: string; // Hex color
     height?: number;

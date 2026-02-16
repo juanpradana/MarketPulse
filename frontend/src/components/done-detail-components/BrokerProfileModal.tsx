@@ -42,8 +42,8 @@ export const BrokerProfileModal: React.FC<BrokerProfileModalProps> = ({
         try {
             const data = await doneDetailApi.getBrokerProfile(ticker, brokerCode, startDate, endDate);
             setProfile(data);
-        } catch (err: any) {
-            setError(err.message || 'Failed to load profile');
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to load profile');
         } finally {
             setLoading(false);
         }

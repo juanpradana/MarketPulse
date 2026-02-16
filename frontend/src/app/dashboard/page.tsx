@@ -210,7 +210,7 @@ export default function DashboardPage() {
     );
 }
 
-function MetricCard({ title, value, delta, icon: Icon, trend, sparklineData, tooltip, hasData = true }: any) {
+function MetricCard({ title, value, delta, icon: Icon, trend, sparklineData, tooltip, hasData = true }: { title: string; value: string | number; delta?: string; icon: React.ElementType; trend?: 'up' | 'down' | 'neutral'; sparklineData?: number[]; tooltip?: string; hasData?: boolean }) {
     const chartData = (sparklineData || []).map((val: number, i: number) => ({ val, i }));
 
     return (

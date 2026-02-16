@@ -64,8 +64,8 @@ export default function NeoBDMSummaryPage() {
 
             setData(result.data);
             setScrapedAt(result.scraped_at);
-        } catch (err: any) {
-            setError(err.message || "Failed to load NeoBDM summary");
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : "Failed to load NeoBDM summary");
         } finally {
             setLoading(false);
         }
@@ -85,8 +85,8 @@ export default function NeoBDMSummaryPage() {
                 if (dateJson.dates) setAvailableDates(dateJson.dates);
                 loadData();
             }
-        } catch (err: any) {
-            setError(err.message || "Batch sync failed");
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : "Batch sync failed");
         } finally {
             setIsBatchLoading(false);
         }
@@ -138,7 +138,7 @@ export default function NeoBDMSummaryPage() {
 
     const allColumns = getColumns();
 
-    const evaluateFilter = (cellValue: any, filterExpr: string): boolean => {
+    const evaluateFilter = (cellValue: unknown, filterExpr: string): boolean => {
         if (!filterExpr) return true;
 
         const cellStr = String(cellValue || '').trim();

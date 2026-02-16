@@ -24,7 +24,7 @@ const formatValue = (value: number): string => {
     return value.toLocaleString();
 };
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ payload: BattleTimelineDay }>; label?: string }) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload as BattleTimelineDay;
         const topBrokers = Object.entries(data.broker_breakdown)

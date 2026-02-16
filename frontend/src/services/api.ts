@@ -19,7 +19,7 @@ import { StockData } from '@/types/market';
 import { dashboardApi } from './api/dashboard';
 import { newsApi, NewsItem } from './api/news';
 import { disclosuresApi, Disclosure } from './api/disclosures';
-import { neobdmApi } from './api/neobdm';
+import { neobdmApi, type SignalItem } from './api/neobdm';
 import { scrapersApi } from './api/scrapers';
 import { brokerFiveApi } from './api/brokerFive';
 import { doneDetailApi } from './api/doneDetail';
@@ -28,7 +28,7 @@ import { bandarmologyApi } from './api/bandarmology';
 import { watchlistApi, type WatchlistItem, type WatchlistStats, type WatchlistToggleResponse } from './api/watchlist';
 
 // Re-export types for backward compatibility
-export type { NewsItem, Disclosure, WatchlistItem, WatchlistStats, WatchlistToggleResponse };
+export type { NewsItem, Disclosure, WatchlistItem, WatchlistStats, WatchlistToggleResponse, SignalItem };
 
 /**
  * Legacy API object - delegates to new modular clients

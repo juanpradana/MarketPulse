@@ -19,7 +19,7 @@ interface ImposterTreeMapProps {
 }
 
 // Custom Content for TreeMap Node
-const CustomizeContent = (props: any) => {
+const CustomizeContent = (props: Record<string, unknown>) => {
     const { root, depth, x, y, width, height, index, payload, colors, rank, name, value, net_value } = props;
 
     // Determine color based on net_value
@@ -84,7 +84,7 @@ const CustomizeContent = (props: any) => {
     );
 };
 
-const CustomTooltip = ({ active, payload }: any) => {
+const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: Record<string, unknown> }> }) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
         // Skip tooltip for category nodes if they don't have detailed stats

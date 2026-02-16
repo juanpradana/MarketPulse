@@ -185,13 +185,13 @@ export default function BrokerSummaryPage() {
     const [loadingFloorPrice, setLoadingFloorPrice] = useState(false);
     const [floorPriceDays, setFloorPriceDays] = useState<number>(30); // 0 = all data
 
-    const toNumber = (value: any) => {
+    const toNumber = (value: unknown) => {
         if (value === null || value === undefined) return 0;
         const num = Number(String(value).replace(/,/g, ''));
         return Number.isFinite(num) ? num : 0;
     };
 
-    const formatNumber = (value: any, digits = 0) => {
+    const formatNumber = (value: unknown, digits = 0) => {
         const num = toNumber(value);
         return num.toLocaleString(undefined, {
             minimumFractionDigits: digits,
@@ -309,8 +309,8 @@ export default function BrokerSummaryPage() {
             if (forceScrape) {
                 setSuccess(data.source === 'scraper' ? "Sync completed successfully!" : "Data fetched from database.");
             }
-        } catch (err: any) {
-            setError(err.message || "Failed to load broker summary");
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : "Failed to load broker summary");
         } finally {
             setLoading(false);
             setSyncing(false);
@@ -340,8 +340,8 @@ export default function BrokerSummaryPage() {
             const tasks = tickers.map(t => ({ ticker: t, dates: batchDates }));
             const result = await api.runNeoBDMBrokerSummaryBatch(tasks);
             setSuccess(result.message);
-        } catch (err: any) {
-            setError(err.message || "Failed to start batch sync");
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : "Failed to start batch sync");
         } finally {
             setSyncing(false);
         }
@@ -358,8 +358,8 @@ export default function BrokerSummaryPage() {
         try {
             const data = await api.getBrokerFiveList(loadTicker);
             setBrokerFiveItems(sortBrokerFiveItems(data.items || []));
-        } catch (err: any) {
-            setBrokerFiveError(err.message || "Failed to load Broker 5% list");
+        } catch (err: unknown) {
+            setBrokerFiveError(err instanceof Error ? err.message : "Failed to load Broker 5% list");
         } finally {
             setBrokerFiveLoading(false);
         }
@@ -378,8 +378,8 @@ export default function BrokerSummaryPage() {
             const data = await api.createBrokerFive({ ticker: activeBrokerFiveTicker, broker_code: code });
             setBrokerFiveItems((prev) => sortBrokerFiveItems([...prev, data.item]));
             setNewBrokerFiveCode('');
-        } catch (err: any) {
-            setBrokerFiveError(err.message || "Failed to add broker code");
+        } catch (err: unknown) {
+            setBrokerFiveError(err instanceof Error ? err.message : "Failed to add broker code");
         } finally {
             setBrokerFiveSaving(false);
         }
@@ -411,8 +411,8 @@ export default function BrokerSummaryPage() {
                 sortBrokerFiveItems(prev.map((item) => (item.id === editingBrokerFiveId ? data.item : item)))
             );
             handleCancelEditBrokerFive();
-        } catch (err: any) {
-            setBrokerFiveError(err.message || "Failed to update broker code");
+        } catch (err: unknown) {
+            setBrokerFiveError(err instanceof Error ? err.message : "Failed to update broker code");
         } finally {
             setBrokerFiveSaving(false);
         }
@@ -431,8 +431,8 @@ export default function BrokerSummaryPage() {
             if (editingBrokerFiveId === id) {
                 handleCancelEditBrokerFive();
             }
-        } catch (err: any) {
-            setBrokerFiveError(err.message || "Failed to delete broker code");
+        } catch (err: unknown) {
+            setBrokerFiveError(err instanceof Error ? err.message : "Failed to delete broker code");
         } finally {
             setBrokerFiveSaving(false);
         }
@@ -532,7 +532,7 @@ export default function BrokerSummaryPage() {
                 journeyEndDate
             );
             setJourneyData(data);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Failed to load journey data:', err);
             setJourneyData(null);
         } finally {

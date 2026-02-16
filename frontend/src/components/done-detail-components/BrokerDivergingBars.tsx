@@ -33,7 +33,7 @@ const formatRupiah = (value: number): string => {
     return `Rp ${value.toFixed(0)}`;
 };
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ payload: Record<string, unknown> }>; label?: string }) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
         return (

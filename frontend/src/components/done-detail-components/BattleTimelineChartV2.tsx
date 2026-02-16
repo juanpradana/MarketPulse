@@ -97,7 +97,7 @@ const detectPattern = (data: number[]): { pattern: string; direction: 'UP' | 'DO
 };
 
 // ===== CUSTOM TOOLTIP =====
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ payload: ChartDataPoint }>; label?: string }) => {
     if (!active || !payload || !payload.length) return null;
 
     const data = payload[0]?.payload as ChartDataPoint;

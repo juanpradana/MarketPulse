@@ -122,8 +122,8 @@ export default function BandarmologyPage() {
             if (result.deep_analysis_running) {
                 startDeepPolling();
             }
-        } catch (err: any) {
-            setError(err.message || "Failed to load bandarmology data");
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : "Failed to load bandarmology data");
         } finally {
             setLoading(false);
         }
@@ -192,8 +192,8 @@ export default function BandarmologyPage() {
             startDeepPolling();
             const status = await bandarmologyApi.getDeepStatus();
             setDeepStatus(status);
-        } catch (err: any) {
-            setError(err.message || 'Failed to trigger manual deep analysis');
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to trigger manual deep analysis');
         } finally {
             setManualDeepLoading(false);
         }
@@ -210,8 +210,8 @@ export default function BandarmologyPage() {
             startDeepPolling();
             const status = await bandarmologyApi.getDeepStatus();
             setDeepStatus(status);
-        } catch (err: any) {
-            setError(err.message || 'Failed to trigger deep analysis');
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to trigger deep analysis');
         } finally {
             setDeepLoading(false);
         }

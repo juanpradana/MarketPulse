@@ -632,8 +632,8 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
             try {
                 const result = await bandarmologyApi.getStockDetail(ticker, date);
                 setData(result);
-            } catch (err: any) {
-                setError(err.message || 'Failed to load stock detail');
+            } catch (err: unknown) {
+                setError(err instanceof Error ? err.message : 'Failed to load stock detail');
             } finally {
                 setLoading(false);
             }

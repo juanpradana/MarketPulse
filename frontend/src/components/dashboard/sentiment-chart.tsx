@@ -68,7 +68,7 @@ export const SentimentChart = ({ ticker, startDate, endDate }: SentimentChartPro
         };
     }, [isDragging, startY]);
 
-    const handleMouseDown = (e: any) => {
+    const handleMouseDown = (e: { chartY?: number; clientY?: number; shiftKey?: boolean }) => {
         // Support both direct mouse events and Recharts internal events
         const clientY = e.chartY !== undefined ? e.chartY : (e.clientY || 0);
 
@@ -157,7 +157,12 @@ export const SentimentChart = ({ ticker, startDate, endDate }: SentimentChartPro
         return [min - padding, max + padding];
     }, [marketData, zoomLevel]);
 
-    const CustomTooltip = ({ active, payload, label }: any) => {
+    interface TooltipProps {
+        active?: boolean;
+        payload?: Array<{ payload: Record<string, unknown> }>;
+        label?: string;
+    }
+    const CustomTooltip = ({ active, payload, label }: TooltipProps) => {
         if (active && payload && payload.length) {
             const data = payload[0].payload;
 

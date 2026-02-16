@@ -89,7 +89,7 @@ export const schedulerApi = {
      * Manually trigger news scraping
      * Called by Dashboard "Refresh Intelligence" button
      */
-    manualNewsScrape: async (): Promise<{ status: string; message: string; details: any[] }> => {
+    manualNewsScrape: async (): Promise<{ status: string; message: string; details: unknown[] }> => {
         const response = await fetch(`${API_BASE_URL}/api/scheduler/manual/news`, {
             method: 'POST'
         });

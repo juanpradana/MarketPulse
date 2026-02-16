@@ -261,8 +261,8 @@ export function DoneDetailSection({ ticker, onTickerChange }: DoneDetailSectionP
                 setStartDate(pasteDateInput);
                 setEndDate(pasteDateInput);
             }
-        } catch (error: any) {
-            setMessage({ type: 'error', text: error.message || 'Failed to save data' });
+        } catch (error: unknown) {
+            setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to save data' });
         } finally { setSaving(false); }
     };
 

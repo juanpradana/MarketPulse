@@ -26,7 +26,7 @@ const formatRupiah = (value: number): string => {
     return `${value.toFixed(0)}`;
 };
 
-const CustomTooltip = ({ active, payload }: any) => {
+const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: Record<string, unknown> }> }) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
         return (
@@ -55,7 +55,7 @@ const CustomTooltip = ({ active, payload }: any) => {
     return null;
 };
 
-const CustomizeContent = (props: any) => {
+const CustomizeContent = (props: Record<string, unknown>) => {
     const { depth, x, y, width, height, name, tps } = props;
 
     // Determine color based on TPS

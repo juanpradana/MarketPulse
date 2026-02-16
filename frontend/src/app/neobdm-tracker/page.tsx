@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { api } from '@/services/api';
+import { api, SignalItem } from '@/services/api';
 import {
     Search,
     TrendingUp,
@@ -49,7 +49,7 @@ export default function NeoBDMTrackerPage() {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const dropdownRef = React.useRef<HTMLDivElement>(null);
 
-    const [hotSignals, setHotSignals] = useState<any[]>([]);
+    const [hotSignals, setHotSignals] = useState<SignalItem[]>([]);
     const [priceFilter, setPriceFilter] = useState<string>('');
     const [showLegend, setShowLegend] = useState(false);
 
@@ -164,8 +164,8 @@ export default function NeoBDMTrackerPage() {
             if (result.history.length === 0) {
                 setError(`No historical data found for ${symbol}`);
             }
-        } catch (err: any) {
-            setError(err.message || "Failed to load flow history");
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : "Failed to load flow history");
         } finally {
             setLoading(false);
         }
@@ -184,8 +184,8 @@ export default function NeoBDMTrackerPage() {
                 fullDate: item.trade_date
             })).reverse();
             setVolumeData(formattedData);
-        } catch (err: any) {
-            setVolumeError(err.message || "Failed to load volume data");
+        } catch (err: unknown) {
+            setVolumeError(err instanceof Error ? err.message : "Failed to load volume data");
         } finally {
             setVolumeLoading(false);
         }
@@ -227,14 +227,14 @@ export default function NeoBDMTrackerPage() {
         return labels[m] || 'Money Flow';
     };
 
-    const parseMarkerValue = (val: any) => {
+    const parseMarkerValue = (val: unknown) => {
         if (!val || typeof val !== 'string') return null;
         if (val.includes('|')) return val.split('|')[1]; // Value extracted from title
         if (val.toLowerCase() === 'v') return null; // Just a marker
         return val; // Maybe direct value
     };
 
-    const CustomTooltip = ({ active, payload, label }: any) => {
+    const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ payload: Record<string, unknown> }>; label?: string }) => {
         if (active && payload && payload.length) {
             const item = payload[0].payload;
 

@@ -149,11 +149,11 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
                 setTradingDates([...updatedDates]);
                 setScrapeLog(prev => [...prev, `  ✓ ${dateInfo.date}: ${buyCount} buyers, ${sellCount} sellers`]);
 
-            } catch (error: any) {
+            } catch (error: unknown) {
                 updatedDates[i] = {
                     ...updatedDates[i],
                     status: 'error',
-                    error: error.message || String(error)
+                    error: error instanceof Error ? error.message : String(error)
                 };
                 setTradingDates([...updatedDates]);
                 setScrapeLog(prev => [...prev, `  ✗ ${dateInfo.date}: ${error.message || error}`]);

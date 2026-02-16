@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback } from "react";
 import { AlphaHunterProvider, useAlphaHunter } from "@/components/alpha-hunter/AlphaHunterContext";
+import { SignalItem } from "@/services/api/neobdm";
 import WatchlistSidebar from "@/components/alpha-hunter/WatchlistSidebar";
 import InvestigationHeader from "@/components/alpha-hunter/InvestigationHeader";
 import AnomalyScanTable from "@/components/alpha-hunter/AnomalyScanTable";
@@ -23,7 +24,7 @@ function AlphaHunterContent() {
         setRefreshKey(prev => prev + 1);
     }, []);
 
-    const handleAddToInvestigation = useCallback((signal: any) => {
+    const handleAddToInvestigation = useCallback((signal: SignalItem) => {
         // Map the signal data to Stage1Data
         const stage1Data = {
             signal_score: signal.signal_score,
