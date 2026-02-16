@@ -67,7 +67,7 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
             if (!res.ok) throw new Error("Failed to fetch trading dates");
             const data = await res.json();
 
-            const dates: TradingDateInfo[] = (data.dates || []).map((d: any) => ({
+            const dates: TradingDateInfo[] = (data.dates || []).map((d: { date: string; has_data: boolean }) => ({
                 date: d.date,
                 has_data: d.has_data,
                 selected: !d.has_data, // Auto-select dates that need scraping

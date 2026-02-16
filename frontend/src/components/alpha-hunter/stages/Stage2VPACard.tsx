@@ -160,7 +160,7 @@ export default function Stage2VPACard({ ticker }: Stage2VPACardProps) {
         if (!data) return null;
 
         // Prepare chart data with colored volumes
-        const chartData = data.pullback?.log?.map((entry: any) => {
+        const chartData = data.pullback?.log?.map((entry) => {
             const priceChg = entry.price_chg || 0;
             // Calculate approximate open from close and price_chg
             const close = entry.price;
@@ -400,7 +400,7 @@ export default function Stage2VPACard({ ticker }: Stage2VPACardProps) {
                                 </span>
                             </div>
                             <div className="flex items-center gap-1 flex-wrap">
-                                {data.pullback?.log?.map((entry: any, idx: number) => (
+                                {data.pullback?.log?.map((entry, idx) => (
                                     <div
                                         key={idx}
                                         className={cn(
