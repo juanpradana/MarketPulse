@@ -19,7 +19,7 @@ def temp_db():
     
     try:
         os.unlink(path)
-    except:
+    except Exception:
         pass
 
 

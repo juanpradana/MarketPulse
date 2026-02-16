@@ -95,7 +95,7 @@ async def get_neobdm_summary(
                     "scraped_at": scraped_at,
                     "data": sanitize_data(data_list)
                 }
-            except:
+            except Exception:
                 return {"scraped_at": None, "data": []}
         
         # New structure returns individual rows

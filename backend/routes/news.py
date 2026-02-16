@@ -83,7 +83,7 @@ async def get_news(
                     s_name = "Bloomberg Technoz"
                 else: 
                     s_name = "Web"
-            except:
+            except Exception:
                 s_name = "News"
 
             result.append({
