@@ -603,7 +603,20 @@ class DatabaseConnection:
             );
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_band_deep_lookup ON bandarmology_deep_cache(ticker, analysis_date);")
-        
+
+        # User watchlist for personalized ticker tracking
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_watchlist (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT DEFAULT 'default',
+                ticker TEXT NOT NULL,
+                added_at DATETIME DEFAULT (datetime('now')),
+                UNIQUE(user_id, ticker)
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_watchlist_user ON user_watchlist(user_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_watchlist_ticker ON user_watchlist(ticker);")
+
         # Migration: Add new columns to existing bandarmology_deep_cache table
         new_columns = [
             ("broksum_total_buy_lot", "REAL DEFAULT 0"),

@@ -14,6 +14,7 @@ export * from './doneDetail';
 export * from './brokerStalker';
 export * from './bandarmology';
 export * from './scheduler';
+export * from './watchlist';
 
 // Re-export for convenience
 import { dashboardApi } from './dashboard';
@@ -26,6 +27,7 @@ import { doneDetailApi } from './doneDetail';
 import { brokerStalkerApi } from './brokerStalker';
 import { bandarmologyApi } from './bandarmology';
 import { schedulerApi } from './scheduler';
+import { watchlistApi } from './watchlist';
 
 const api = {
     ...dashboardApi,
@@ -37,7 +39,8 @@ const api = {
     ...doneDetailApi,
     ...brokerStalkerApi,
     ...bandarmologyApi,
-    ...schedulerApi
+    ...schedulerApi,
+    ...watchlistApi
 };
 
 export {
@@ -51,5 +54,6 @@ export {
     brokerStalkerApi,
     bandarmologyApi,
     schedulerApi,
+    watchlistApi,
     api
 };

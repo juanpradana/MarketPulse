@@ -21,11 +21,18 @@ import {
     Target,
     Calculator,
     Menu,
-    X
+    X,
+    Star
 } from 'lucide-react';
 import { ScraperControl } from './scraper-control';
 
 const navGroups = [
+    {
+        title: 'Personal',
+        items: [
+            { icon: Star, label: 'My Watchlist', href: '/watchlist' },
+        ]
+    },
     {
         title: 'Investigation',
         items: [

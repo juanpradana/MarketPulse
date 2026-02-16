@@ -50,6 +50,7 @@ from routes.alpha_hunter import router as alpha_hunter_router
 from routes.broker_stalker import router as broker_stalker_router
 from routes.bandarmology import router as bandarmology_router
 from routes.scheduler import router as scheduler_router
+from routes.watchlist import router as watchlist_router
 
 # Create FastAPI app
 app = FastAPI(
@@ -137,7 +138,8 @@ async def health_check():
             "done_detail": "Done detail visualization and broker flow",
             "broker_stalker": "Broker activity tracking and analysis",
             "scrapers": "Automated data collection",
-            "scheduler": "Background task scheduler"
+            "scheduler": "Background task scheduler",
+            "watchlist": "Personalized ticker tracking"
         }
     }
 
@@ -156,6 +158,7 @@ app.include_router(alpha_hunter_router)
 app.include_router(broker_stalker_router)
 app.include_router(bandarmology_router)
 app.include_router(scheduler_router)
+app.include_router(watchlist_router)
 
 
 if __name__ == "__main__":
