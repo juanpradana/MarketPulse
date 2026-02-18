@@ -343,7 +343,7 @@ export default function BandarmologyPage() {
             <th
                 onClick={() => handleSort(sortKey)}
                 className={cn(
-                    "px-1.5 py-2 text-[10px] font-bold uppercase tracking-tight cursor-pointer hover:bg-zinc-700/50 transition-colors select-none whitespace-nowrap border-r border-zinc-700/30",
+                    "sticky top-0 z-20 bg-[#1a1f2b] px-1.5 py-2 text-[10px] font-bold uppercase tracking-tight cursor-pointer hover:bg-zinc-700/50 transition-colors select-none whitespace-nowrap border-r border-zinc-700/30",
                     className
                 )}
             >
@@ -360,9 +360,9 @@ export default function BandarmologyPage() {
 
     return (
         <>
-        <div className="flex flex-col gap-0 p-0 min-h-screen bg-[#0f1115] text-zinc-100 font-mono">
+        <div className="flex h-full min-h-0 flex-col gap-0 bg-[#0f1115] text-zinc-100 font-mono">
             {/* Header Bar */}
-            <div className="bg-[#181a1f] border-b border-zinc-800/60 sticky top-0 z-30 lg:z-40 backdrop-blur-md bg-opacity-95">
+            <div className="sticky top-0 z-40 border-b border-zinc-800/60 bg-[#181a1f]/95 shadow-[0_6px_18px_rgba(0,0,0,0.35)] backdrop-blur-md">
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 p-2">
                     <div className="flex flex-wrap items-center gap-2 lg:gap-3">
                         <div className="flex items-center gap-2">
@@ -569,7 +569,7 @@ export default function BandarmologyPage() {
             )}
 
             {/* Table */}
-            <div className="flex-1 overflow-auto relative bg-[#0f1115] min-h-[300px]">
+            <div className="relative min-h-[300px] flex-1 min-h-0 overflow-hidden bg-[#0f1115]">
                 {loading && (
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-30 flex flex-col items-center justify-center gap-3">
                         <RefreshCcw className="w-10 h-10 text-purple-500 animate-spin" />
@@ -579,19 +579,19 @@ export default function BandarmologyPage() {
                     </div>
                 )}
 
-                <div className="overflow-auto h-full scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
-                    <table className="w-auto text-left text-[11px] border-collapse leading-none tracking-tight table-fixed hidden lg:table">
-                        <thead className="sticky top-0 z-20 shadow-md">
-                            <tr className="bg-gradient-to-r from-purple-900/80 to-blue-900/80 text-zinc-200 border-b border-purple-500/30">
+                <div className="h-full min-h-0 overflow-auto scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+                    <table className="hidden w-auto table-fixed border-separate border-spacing-0 text-left text-[11px] leading-none tracking-tight lg:table">
+                        <thead className="sticky top-0 z-30 shadow-md">
+                            <tr className="border-b border-purple-500/40 bg-gradient-to-r from-[#2a173d] to-[#16243d] text-zinc-200">
                                 <SortableHeader label="#" sortKey="total_score" className="w-[30px]" />
                                 <SortableHeader label="TICKER" sortKey="symbol" className="w-[80px]" />
                                 <SortableHeader label="SCORE" sortKey="combined_score" className="w-[90px]" />
                                 <SortableHeader label="DEEP" sortKey="deep_score" className="w-[50px]" />
                                 <SortableHeader label="TYPE" sortKey="trade_type" className="w-[95px]" />
-                                <th className="px-1 py-2 text-[10px] font-bold uppercase tracking-tight text-center border-r border-zinc-700/30 w-[35px]">PK</th>
-                                <th className="px-1 py-2 text-[10px] font-bold uppercase tracking-tight text-center border-r border-zinc-700/30 w-[35px]">CR</th>
-                                <th className="px-1 py-2 text-[10px] font-bold uppercase tracking-tight text-center border-r border-zinc-700/30 w-[35px]">UN</th>
-                                <th className="px-1 py-2 text-[10px] font-bold uppercase tracking-tight text-center border-r border-zinc-700/30 w-[35px]">LQ</th>
+                                <th className="sticky top-0 z-20 w-[35px] border-r border-zinc-700/30 bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight">PK</th>
+                                <th className="sticky top-0 z-20 w-[35px] border-r border-zinc-700/30 bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight">CR</th>
+                                <th className="sticky top-0 z-20 w-[35px] border-r border-zinc-700/30 bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight">UN</th>
+                                <th className="sticky top-0 z-20 w-[35px] border-r border-zinc-700/30 bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight">LQ</th>
                                 <SortableHeader label="CONFL" sortKey="confluence_status" className="w-[55px]" />
                                 <SortableHeader label="PRICE" sortKey="price" className="w-[70px]" />
                                 <SortableHeader label="%1D" sortKey="pct_1d" className="w-[55px]" />
@@ -608,10 +608,10 @@ export default function BandarmologyPage() {
                                 <SortableHeader label="INV" sortKey="inv_accum_brokers" className="w-[55px]" />
                                 <SortableHeader label="MM" sortKey="txn_mm_cum" className="w-[60px]" />
                                 <SortableHeader label="F.CUM" sortKey="txn_foreign_cum" className="w-[60px]" />
-                                <th className="px-1 py-2 text-[10px] font-bold uppercase tracking-tight text-center border-r border-zinc-700/30 w-[40px]" title="Volume Confirmation">VOL</th>
-                                <th className="px-1 py-2 text-[10px] font-bold uppercase tracking-tight text-center border-r border-zinc-700/30 w-[35px]" title="Data Conflict Warning">⚠️</th>
-                                <th className="px-1 py-2 text-[10px] font-bold uppercase tracking-tight text-center border-r border-zinc-700/30 w-[40px]">TOP B</th>
-                                <th className="px-1 py-2 text-[10px] font-bold uppercase tracking-tight text-center w-[40px]">TOP S</th>
+                                <th className="sticky top-0 z-20 w-[40px] border-r border-zinc-700/30 bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight" title="Volume Confirmation">VOL</th>
+                                <th className="sticky top-0 z-20 w-[35px] border-r border-zinc-700/30 bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight" title="Data Conflict Warning">⚠️</th>
+                                <th className="sticky top-0 z-20 w-[40px] border-r border-zinc-700/30 bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight">TOP B</th>
+                                <th className="sticky top-0 z-20 w-[40px] bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight">TOP S</th>
                             </tr>
                         </thead>
 
