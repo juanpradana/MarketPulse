@@ -256,6 +256,23 @@ def generate_market_summary():
         return {"status": "failed", "error": str(e)}
 
 
+def _generate_latest_bandarmology_market_summary():
+    """Generate the latest bandarmology market summary snapshot and return rows + date."""
+    import sys
+    import os
+
+    backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if backend_dir not in sys.path:
+        sys.path.insert(0, backend_dir)
+
+    from modules.bandarmology_analyzer import BandarmologyAnalyzer
+
+    analyzer = BandarmologyAnalyzer()
+    results = analyzer.analyze(target_date=None)
+    actual_date = analyzer._resolve_date(None)
+    return results, actual_date
+
+
 def run_bandarmology_market_summary():
     """
     Run bandarmology market summary analysis (screening all stocks).
@@ -263,18 +280,11 @@ def run_bandarmology_market_summary():
     """
     logger.info("[Scheduler] Starting bandarmology market summary...")
     try:
-        import sys
-        import os
-        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        if backend_dir not in sys.path:
-            sys.path.insert(0, backend_dir)
-
-        from modules.bandarmology_analyzer import BandarmologyAnalyzer
-
-        analyzer = BandarmologyAnalyzer()
-        results = analyzer.analyze(target_date=None)
-        logger.info(f"[Scheduler] Bandarmology market summary completed: {len(results)} stocks analyzed")
-        return {"status": "success", "total_stocks": len(results)}
+        results, actual_date = _generate_latest_bandarmology_market_summary()
+        logger.info(
+            f"[Scheduler] Bandarmology market summary completed: {len(results)} stocks analyzed for {actual_date}"
+        )
+        return {"status": "success", "total_stocks": len(results), "date": actual_date}
 
     except Exception as e:
         logger.error(f"[Scheduler] Bandarmology market summary failed: {e}")
@@ -290,25 +300,20 @@ def run_deep_analyze_all():
     """
     logger.info("[Scheduler] Starting scheduled deep analysis for all market summary stocks...")
     try:
-        import sys
-        import os
         import asyncio
 
-        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        if backend_dir not in sys.path:
-            sys.path.insert(0, backend_dir)
-
-        from modules.bandarmology_analyzer import BandarmologyAnalyzer
-
-        analyzer = BandarmologyAnalyzer()
-        results = analyzer.analyze(target_date=None)
-        actual_date = analyzer._resolve_date(None)
+        # Always refresh summary first to avoid deep analysis using stale market summary data.
+        logger.info("[Scheduler] Refreshing bandarmology market summary before deep analyze...")
+        results, actual_date = _generate_latest_bandarmology_market_summary()
+        logger.info(
+            f"[Scheduler] Refreshed market summary for deep analyze: {len(results)} stocks on {actual_date}"
+        )
 
         if not results:
             logger.warning("[Scheduler] No stocks found for deep analysis")
             return {"status": "skipped", "reason": "No stocks in market summary"}
 
-        tickers = [r['symbol'] for r in results]
+        tickers = [r['symbol'] for r in results if r.get('symbol')]
         logger.info(f"[Scheduler] Deep analyzing {len(tickers)} stocks for date {actual_date}")
 
         # Import the async deep analysis function and run it in an event loop
