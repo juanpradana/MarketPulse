@@ -105,6 +105,7 @@ export default function BandarmologyPage() {
     const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
     const [manualTicker, setManualTicker] = useState('');
     const [manualDeepLoading, setManualDeepLoading] = useState(false);
+    const [deepTopN, setDeepTopN] = useState<number>(30);
     const deepPollRef = useRef<NodeJS.Timeout | null>(null);
     const pageSize = 50;
 
@@ -204,7 +205,7 @@ export default function BandarmologyPage() {
         try {
             await bandarmologyApi.triggerDeepAnalysis(
                 selectedDate || undefined,
-                30,
+                deepTopN,
                 20
             );
             startDeepPolling();
@@ -477,18 +478,35 @@ export default function BandarmologyPage() {
                             </button>
                         </div>
                         <div className="hidden lg:block h-5 w-px bg-zinc-700" />
-                        <button
-                            onClick={handleTriggerDeep}
-                            disabled={loading || deepLoading || (deepStatus?.running ?? false)}
-                            className="bg-gradient-to-r from-amber-600 to-orange-600 hover:opacity-90 disabled:opacity-50 text-white px-3 py-1 rounded-sm text-[10px] font-bold shadow-lg transition-all active:scale-95 flex items-center gap-1"
-                            title="Scrape inventory + transaction chart for top 30 stocks"
-                        >
-                            {deepStatus?.running ? (
-                                <><Loader2 className="w-2.5 h-2.5 animate-spin" /> Deep {deepStatus.progress}/{deepStatus.total}</>
-                            ) : (
-                                <><Microscope className="w-2.5 h-2.5" /> Deep Analyze</>
-                            )}
-                        </button>
+                        <div className="flex items-center gap-1">
+                            <div className="space-y-0">
+                                <label className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider block">Top N</label>
+                                <select
+                                    value={deepTopN}
+                                    onChange={(e) => setDeepTopN(Number(e.target.value))}
+                                    disabled={deepStatus?.running ?? false}
+                                    className="block w-16 bg-[#23252b] border border-amber-700/50 text-amber-300 font-bold text-[10px] rounded-sm py-0.5 px-1 outline-none focus:border-amber-500/50 cursor-pointer disabled:opacity-50"
+                                >
+                                    <option value={30}>30</option>
+                                    <option value={50}>50</option>
+                                    <option value={100}>100</option>
+                                    <option value={200}>200</option>
+                                    <option value={500}>500</option>
+                                </select>
+                            </div>
+                            <button
+                                onClick={handleTriggerDeep}
+                                disabled={loading || deepLoading || (deepStatus?.running ?? false)}
+                                className="bg-gradient-to-r from-amber-600 to-orange-600 hover:opacity-90 disabled:opacity-50 text-white px-3 py-1 rounded-sm text-[10px] font-bold shadow-lg transition-all active:scale-95 flex items-center gap-1 mt-3"
+                                title={`Scrape inventory + transaction chart for top ${deepTopN} stocks`}
+                            >
+                                {deepStatus?.running ? (
+                                    <><Loader2 className="w-2.5 h-2.5 animate-spin" /> Deep {deepStatus.progress}/{deepStatus.total}</>
+                                ) : (
+                                    <><Microscope className="w-2.5 h-2.5" /> Deep Analyze</>
+                                )}
+                            </button>
+                        </div>
                         <button
                             onClick={() => loadData()}
                             disabled={loading}

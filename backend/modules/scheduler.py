@@ -256,6 +256,81 @@ def generate_market_summary():
         return {"status": "failed", "error": str(e)}
 
 
+def run_bandarmology_market_summary():
+    """
+    Run bandarmology market summary analysis (screening all stocks).
+    Runs daily at 19:00 WIB on weekdays (Mon-Fri).
+    """
+    logger.info("[Scheduler] Starting bandarmology market summary...")
+    try:
+        import sys
+        import os
+        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if backend_dir not in sys.path:
+            sys.path.insert(0, backend_dir)
+
+        from modules.bandarmology_analyzer import BandarmologyAnalyzer
+
+        analyzer = BandarmologyAnalyzer()
+        results = analyzer.analyze(target_date=None)
+        logger.info(f"[Scheduler] Bandarmology market summary completed: {len(results)} stocks analyzed")
+        return {"status": "success", "total_stocks": len(results)}
+
+    except Exception as e:
+        logger.error(f"[Scheduler] Bandarmology market summary failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {"status": "failed", "error": str(e)}
+
+
+def run_deep_analyze_all():
+    """
+    Run deep analysis on ALL stocks from the latest bandarmology market summary.
+    Runs daily at 19:30 WIB on weekdays (Mon-Fri), after market summary is ready.
+    """
+    logger.info("[Scheduler] Starting scheduled deep analysis for all market summary stocks...")
+    try:
+        import sys
+        import os
+        import asyncio
+
+        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if backend_dir not in sys.path:
+            sys.path.insert(0, backend_dir)
+
+        from modules.bandarmology_analyzer import BandarmologyAnalyzer
+
+        analyzer = BandarmologyAnalyzer()
+        results = analyzer.analyze(target_date=None)
+        actual_date = analyzer._resolve_date(None)
+
+        if not results:
+            logger.warning("[Scheduler] No stocks found for deep analysis")
+            return {"status": "skipped", "reason": "No stocks in market summary"}
+
+        tickers = [r['symbol'] for r in results]
+        logger.info(f"[Scheduler] Deep analyzing {len(tickers)} stocks for date {actual_date}")
+
+        # Import the async deep analysis function and run it in an event loop
+        from routes.bandarmology import _run_deep_analysis
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(_run_deep_analysis(tickers, actual_date, results))
+        finally:
+            loop.close()
+
+        logger.info(f"[Scheduler] Scheduled deep analysis completed for {len(tickers)} stocks")
+        return {"status": "success", "total_stocks": len(tickers), "date": actual_date}
+
+    except Exception as e:
+        logger.error(f"[Scheduler] Scheduled deep analysis failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {"status": "failed", "error": str(e)}
+
+
 def cleanup_old_data():
     """
     Clean up old data files and raw records.
@@ -373,25 +448,45 @@ def setup_jobs():
     )
     logger.info("[Scheduler] Job added: News scraping every 1 hour")
 
-    # 2. NeoBDM Batch Scrape - Daily at 19:00 WIB
+    # 2. NeoBDM Batch Scrape - Weekdays at 19:00 WIB
     scheduler.add_job(
         run_neobdm_batch_scrape,
-        trigger=CronTrigger(hour=19, minute=0),
+        trigger=CronTrigger(day_of_week='mon-fri', hour=19, minute=0),
         id='neobdm_daily',
-        name='NeoBDM Daily Scrape (19:00 WIB)',
+        name='NeoBDM Daily Scrape (19:00 WIB, Weekdays)',
         replace_existing=True
     )
-    logger.info("[Scheduler] Job added: NeoBDM daily scrape at 19:00 WIB")
+    logger.info("[Scheduler] Job added: NeoBDM daily scrape at 19:00 WIB (weekdays)")
 
-    # 3. Market Summary - Daily at 19:00 WIB (after NeoBDM)
+    # 3. Bandarmology Market Summary - Weekdays at 19:00 WIB
+    scheduler.add_job(
+        run_bandarmology_market_summary,
+        trigger=CronTrigger(day_of_week='mon-fri', hour=19, minute=0),
+        id='bandarmology_market_summary',
+        name='Bandarmology Market Summary (19:00 WIB, Weekdays)',
+        replace_existing=True
+    )
+    logger.info("[Scheduler] Job added: Bandarmology market summary at 19:00 WIB (weekdays)")
+
+    # 4. Deep Analyze All Stocks - Weekdays at 19:30 WIB (after market summary)
+    scheduler.add_job(
+        run_deep_analyze_all,
+        trigger=CronTrigger(day_of_week='mon-fri', hour=19, minute=30),
+        id='bandarmology_deep_analyze_all',
+        name='Bandarmology Deep Analyze All (19:30 WIB, Weekdays)',
+        replace_existing=True
+    )
+    logger.info("[Scheduler] Job added: Bandarmology deep analyze all at 19:30 WIB (weekdays)")
+
+    # 5. Legacy Market Summary (news-based) - kept for reference
     scheduler.add_job(
         generate_market_summary,
-        trigger=CronTrigger(hour=19, minute=30),  # 30 min after NeoBDM
+        trigger=CronTrigger(day_of_week='mon-fri', hour=20, minute=0),
         id='market_summary',
-        name='Market Summary Generation (19:30 WIB)',
+        name='Market Summary Generation (20:00 WIB, Weekdays)',
         replace_existing=True
     )
-    logger.info("[Scheduler] Job added: Market summary at 19:30 WIB")
+    logger.info("[Scheduler] Job added: Market summary at 20:00 WIB (weekdays)")
 
     # 4. Data Cleanup - Weekly on Sunday at 00:00
     scheduler.add_job(

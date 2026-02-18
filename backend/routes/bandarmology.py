@@ -303,7 +303,7 @@ async def get_bandarmology_dates():
 async def trigger_deep_analysis(
     background_tasks: BackgroundTasks,
     date: Optional[str] = Query(None, description="Analysis date"),
-    top_n: int = Query(30, ge=5, le=100, description="Number of top stocks to deep analyze"),
+    top_n: int = Query(30, ge=5, le=500, description="Number of top stocks to deep analyze"),
     min_base_score: int = Query(20, ge=0, description="Minimum base score to qualify for deep analysis")
 ):
     """
