@@ -326,7 +326,7 @@ async def get_watchlist_with_analysis(user_id: str = "default"):
             # Get Bandarmology data
             bandar_data = bandar_repo.get_stock_summary(ticker)
             bandar_analysis = BandarmologyAnalysis(
-                total_score=bandar_data.get("total_score"),
+                total_score=bandar_data.get("total_score") or bandar_data.get("deep_score"),
                 deep_score=bandar_data.get("deep_score"),
                 combined_score=bandar_data.get("combined_score"),
                 trade_type=bandar_data.get("trade_type"),
@@ -339,18 +339,31 @@ async def get_watchlist_with_analysis(user_id: str = "default"):
                 pinky=bandar_data.get("pinky", False),
                 crossing=bandar_data.get("crossing", False),
                 unusual=bandar_data.get("unusual", False),
-                has_analysis=bandar_data.get("total_score") is not None
+                has_analysis=(
+                    bandar_data.get("deep_score") is not None
+                    or bandar_data.get("total_score") is not None
+                )
             )
 
             # Calculate combined rating and recommendation
             combined_rating = _calculate_combined_rating(alpha_analysis, bandar_analysis)
             recommendation = _generate_recommendation(alpha_analysis, bandar_analysis)
 
+            # Fallback: use price from neobdm_records if price_volume_data is empty
+            latest_price = item.get("latest_price")
+            if latest_price is None and alpha_data.get("price"):
+                latest_price = {
+                    "price": alpha_data["price"],
+                    "change_percent": alpha_data.get("change", 0),
+                    "volume": 0,
+                    "date": alpha_data.get("scraped_at", "")[:10] if alpha_data.get("scraped_at") else ""
+                }
+
             results.append(WatchlistItemWithAnalysis(
                 ticker=ticker,
                 added_at=item["added_at"],
                 company_name=item.get("company_name"),
-                latest_price=item.get("latest_price"),
+                latest_price=latest_price,
                 alpha_hunter=alpha_analysis,
                 bandarmology=bandar_analysis,
                 combined_rating=combined_rating,
