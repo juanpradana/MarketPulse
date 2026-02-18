@@ -507,13 +507,29 @@ class BandarmologyRepository(BaseRepository):
                 data['deep_signals'] = json.loads(data.get('deep_signals_json') or '{}')
                 data['breakout_factors'] = json.loads(data.get('breakout_factors_json') or '{}')
 
+                total_score = data.get('base_score')
+                if total_score is None:
+                    total_score = data.get('total_score')
+
+                deep_score = data.get('deep_score')
+                combined_score = data.get('combined_score')
+                if combined_score is None and total_score is not None and deep_score is not None:
+                    combined_score = total_score + deep_score
+                if combined_score is None and deep_score is not None:
+                    combined_score = deep_score
+
+                # Backward/forward-compatible trade type mapping.
+                trade_type = data.get('trade_type')
+                if trade_type is None:
+                    trade_type = data.get('deep_trade_type')
+
                 return {
                     "ticker": data.get('ticker'),
-                    "total_score": data.get('base_score'),
-                    "deep_score": data.get('deep_score'),
-                    "combined_score": data.get('combined_score'),
-                    "max_combined_score": data.get('max_combined_score'),
-                    "trade_type": data.get('trade_type'),
+                    "total_score": total_score,
+                    "deep_score": deep_score,
+                    "combined_score": combined_score,
+                    "max_combined_score": data.get('max_combined_score') or 250,
+                    "trade_type": trade_type,
                     "deep_trade_type": data.get('deep_trade_type'),
                     "accum_phase": data.get('accum_phase'),
                     "bandar_avg_cost": data.get('bandar_avg_cost'),

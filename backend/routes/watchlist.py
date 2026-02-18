@@ -325,6 +325,10 @@ async def get_watchlist_with_analysis(user_id: str = "default"):
 
             # Get Bandarmology data
             bandar_data = bandar_repo.get_stock_summary(ticker)
+            has_bandar_analysis = any(
+                bandar_data.get(k) is not None
+                for k in ("total_score", "deep_score", "combined_score")
+            )
             bandar_analysis = BandarmologyAnalysis(
                 total_score=bandar_data.get("total_score") or bandar_data.get("deep_score"),
                 deep_score=bandar_data.get("deep_score"),
@@ -339,10 +343,7 @@ async def get_watchlist_with_analysis(user_id: str = "default"):
                 pinky=bandar_data.get("pinky", False),
                 crossing=bandar_data.get("crossing", False),
                 unusual=bandar_data.get("unusual", False),
-                has_analysis=(
-                    bandar_data.get("deep_score") is not None
-                    or bandar_data.get("total_score") is not None
-                )
+                has_analysis=has_bandar_analysis
             )
 
             # Calculate combined rating and recommendation

@@ -7,7 +7,24 @@ Tracks user's favorite stocks for quick filtering and monitoring.
 
 from datetime import datetime
 from typing import List, Optional, Dict, Any
+import sqlite3
 from db.connection import BaseRepository
+
+
+def _parse_num(value: Any, default: float = 0.0) -> float:
+    """Parse numeric values that may come as strings with commas/percent symbols."""
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    s = str(value).strip().replace(',', '').replace('%', '')
+    if not s:
+        return default
+    try:
+        return float(s)
+    except (TypeError, ValueError):
+        return default
 
 
 class WatchlistRepository(BaseRepository):
@@ -132,11 +149,27 @@ class WatchlistRepository(BaseRepository):
     def _get_latest_price(self, cursor, ticker: str) -> Optional[Dict]:
         """Get latest price data for a ticker."""
         try:
+            # Current schema: price_volume(ticker, trade_date, close, volume)
             cursor.execute(
-                """SELECT close, change_percent, volume, date
-                   FROM price_volume_data
-                   WHERE ticker = ?
-                   ORDER BY date DESC
+                """SELECT
+                       p.close,
+                       CASE
+                           WHEN prev.close IS NULL OR prev.close = 0 THEN 0
+                           ELSE ((p.close - prev.close) / prev.close) * 100
+                       END AS change_percent,
+                       p.volume,
+                       p.trade_date
+                   FROM price_volume p
+                   LEFT JOIN price_volume prev
+                     ON prev.ticker = p.ticker
+                    AND prev.trade_date = (
+                        SELECT MAX(p2.trade_date)
+                        FROM price_volume p2
+                        WHERE p2.ticker = p.ticker
+                          AND p2.trade_date < p.trade_date
+                    )
+                   WHERE p.ticker = ?
+                   ORDER BY p.trade_date DESC
                    LIMIT 1""",
                 (ticker,)
             )
@@ -149,6 +182,86 @@ class WatchlistRepository(BaseRepository):
                     "volume": row[2],
                     "date": row[3]
                 }
+
+            # Current table exists but has no row for this ticker.
+            # Continue to legacy fallback for backward compatibility.
+            raise sqlite3.OperationalError("No data in price_volume for ticker")
+
+        except sqlite3.OperationalError:
+            # Backward compatibility for older DB schema.
+            try:
+                cursor.execute(
+                    """SELECT close, change_percent, volume, date
+                       FROM price_volume_data
+                       WHERE ticker = ?
+                       ORDER BY date DESC
+                       LIMIT 1""",
+                    (ticker,)
+                )
+
+                row = cursor.fetchone()
+                if row:
+                    return {
+                        "price": row[0],
+                        "change_percent": row[1],
+                        "volume": row[2],
+                        "date": row[3]
+                    }
+            except Exception:
+                pass
+
+            try:
+                # Last-resort fallback: derive price/change from latest NeoBDM daily rows.
+                # This keeps watchlist cards usable even if OHLCV sync is stale or missing.
+                cursor.execute(
+                    """SELECT price, pct_1d, scraped_at
+                       FROM neobdm_records
+                       WHERE UPPER(symbol) = UPPER(?)
+                         AND period = 'd'
+                         AND method = 'm'
+                         AND price IS NOT NULL
+                         AND TRIM(CAST(price AS TEXT)) <> ''
+                       ORDER BY scraped_at DESC
+                       LIMIT 1""",
+                    (ticker,)
+                )
+                row = cursor.fetchone()
+                if row:
+                    return {
+                        "price": _parse_num(row[0], 0.0),
+                        "change_percent": _parse_num(row[1], 0.0),
+                        "volume": 0,
+                        "date": (row[2] or "")[:10]
+                    }
+            except Exception:
+                pass
+
+            try:
+                # Final fallback: use deep-cache derived prices.
+                # Useful when watchlist contains manually deep-analyzed tickers with no OHLCV snapshot yet.
+                cursor.execute(
+                    """SELECT entry_price, bandar_avg_cost, analysis_date
+                       FROM bandarmology_deep_cache
+                       WHERE UPPER(ticker) = UPPER(?)
+                       ORDER BY analysis_date DESC
+                       LIMIT 1""",
+                    (ticker,)
+                )
+                row = cursor.fetchone()
+                if row:
+                    entry_price = _parse_num(row[0], 0.0)
+                    avg_cost = _parse_num(row[1], 0.0)
+                    price = entry_price if entry_price > 0 else avg_cost
+                    if price > 0:
+                        return {
+                            "price": price,
+                            "change_percent": 0.0,
+                            "volume": 0,
+                            "date": row[2] or ""
+                        }
+            except Exception:
+                return None
+
             return None
 
         except Exception:
