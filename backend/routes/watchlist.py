@@ -481,7 +481,7 @@ async def analyze_missing_tickers(
     _deep_analysis_status = {
         "running": True,
         "progress": 0,
-        "total": len(ticker_list) * 2,  # NeoBDM + Bandarmology for each
+        "total": len(ticker_list) * 2,  # base analysis + deep per ticker
         "current_ticker": "",
         "completed_tickers": [],
         "errors": [],
@@ -506,98 +506,172 @@ async def get_analysis_status():
 
 
 async def _run_missing_analysis(tickers: List[str]):
-    """Background task: Run NeoBDM and Bandarmology analysis for tickers."""
+    """Background task: Run NeoBDM and Bandarmology deep analysis for tickers."""
     global _deep_analysis_status
 
     try:
-        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        completed = 0
-        total_tickers = len(tickers)
+        from modules.bandarmology_analyzer import BandarmologyAnalyzer
+        from modules.neobdm_api_client import NeoBDMApiClient
+        from db.bandarmology_repository import BandarmologyRepository
+        from db.neobdm_repository import NeoBDMRepository
 
-        # Stage 1: NeoBDM (Alpha Hunter) Analysis - Single batch for all
+        analyzer = BandarmologyAnalyzer()
+        actual_date = analyzer._resolve_date(None)
+
+        # Stage 1: Run base analysis to get scores
         _deep_analysis_status["stage"] = "neobdm"
-        _deep_analysis_status["current_ticker"] = "Batch Scraping (All Tickers)"
+        _deep_analysis_status["current_ticker"] = "Running base analysis..."
         try:
-            script_path = os.path.join(backend_dir, "scripts", "batch_scrape_neobdm.py")
-
-            # Run full batch scrape (gets ALL market data including requested tickers)
-            result = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: subprocess.run(
-                    [sys.executable, script_path],
-                    cwd=backend_dir,
-                    capture_output=True,
-                    text=True,
-                    timeout=600  # 10 minute timeout for full scrape
-                )
-            )
-
-            if result.returncode == 0:
-                _deep_analysis_status["completed_tickers"].append("all_neobdm")
-            else:
-                _deep_analysis_status["errors"].append({
-                    "ticker": "all",
-                    "stage": "neobdm",
-                    "error": result.stderr or "Unknown error"
-                })
+            base_results = analyzer.analyze(target_date=actual_date)
+            _deep_analysis_status["completed_tickers"].append("base_analysis")
         except Exception as e:
+            base_results = []
             _deep_analysis_status["errors"].append({
                 "ticker": "all",
                 "stage": "neobdm",
                 "error": str(e)
             })
 
-        completed += total_tickers  # Count NeoBDM as completing all tickers
-        _deep_analysis_status["progress"] = completed
+        _deep_analysis_status["progress"] = len(tickers)
 
-        # Stage 2: Bandarmology Deep Analysis - Individual for each ticker
+        # Stage 2: Bandarmology Deep Analysis via API client
         _deep_analysis_status["stage"] = "bandarmology"
-        try:
-            from modules.bandarmology_analyzer import BandarmologyAnalyzer
+        band_repo = BandarmologyRepository()
+        neobdm_repo = NeoBDMRepository()
+        base_lookup = {r['symbol']: r for r in base_results}
 
-            analyzer = BandarmologyAnalyzer()
-            actual_date = analyzer._resolve_date(None)
-            base_results = analyzer.analyze(target_date=actual_date)
-
-            # Run deep analysis for tickers
-            for ticker in tickers:
+        api_client = NeoBDMApiClient()
+        login_ok = await api_client.login()
+        if not login_ok:
+            _deep_analysis_status["errors"].append({
+                "ticker": "all",
+                "stage": "bandarmology",
+                "error": "NeoBDM API login failed"
+            })
+        else:
+            for i, ticker in enumerate(tickers):
                 _deep_analysis_status["current_ticker"] = ticker
-                try:
-                    # Check if ticker qualifies based on base score
-                    ticker_data = next((r for r in base_results if r['symbol'] == ticker), None)
 
-                    if ticker_data and ticker_data['total_score'] >= 20:
-                        # Run deep analysis
-                        result = analyzer.run_deep_analysis(ticker, actual_date, ticker_data)
-                        if result:
-                            _deep_analysis_status["completed_tickers"].append(f"{ticker}_bandarmology")
-                        else:
+                try:
+                    # Fetch Inventory
+                    inv_data = None
+                    price_series = None
+                    try:
+                        raw_inv = await api_client.get_inventory(ticker)
+                        if raw_inv and raw_inv.get('brokers'):
+                            band_repo.save_inventory_batch(
+                                ticker,
+                                raw_inv['brokers'],
+                                raw_inv.get('firstDate', ''),
+                                raw_inv.get('lastDate', '')
+                            )
+                            inv_data = raw_inv['brokers']
+                            price_series = raw_inv.get('priceSeries')
+                    except Exception as e:
+                        _deep_analysis_status["errors"].append({
+                            "ticker": ticker, "stage": "inventory", "error": str(e)[:80]
+                        })
+
+                    await asyncio.sleep(0.5)
+
+                    # Fetch Transaction Chart
+                    txn_data = None
+                    try:
+                        raw_txn = await api_client.get_transaction_chart(ticker)
+                        if raw_txn:
+                            band_repo.save_transaction_chart(ticker, raw_txn)
+                            txn_data = band_repo.get_transaction_chart(ticker)
+                    except Exception as e:
+                        _deep_analysis_status["errors"].append({
+                            "ticker": ticker, "stage": "txn_chart", "error": str(e)[:80]
+                        })
+
+                    await asyncio.sleep(0.5)
+
+                    # Fetch Broker Summary
+                    broksum_data = None
+                    try:
+                        raw_broksum = await api_client.get_broker_summary(ticker, actual_date)
+                        if raw_broksum:
+                            neobdm_repo.save_broker_summary_batch(
+                                ticker, actual_date,
+                                raw_broksum.get('buy', []),
+                                raw_broksum.get('sell', [])
+                            )
+                            broksum_data = raw_broksum
+                    except Exception as e:
+                        _deep_analysis_status["errors"].append({
+                            "ticker": ticker, "stage": "broksum", "error": str(e)[:80]
+                        })
+
+                    await asyncio.sleep(0.3)
+
+                    # Fetch recent broker summary days
+                    try:
+                        from datetime import datetime as dt, timedelta
+                        analysis_dt = dt.strptime(actual_date, '%Y-%m-%d')
+                        for day_offset in range(1, 6):
+                            check_date = analysis_dt - timedelta(days=day_offset)
+                            if check_date.weekday() >= 5:
+                                continue
+                            date_str = check_date.strftime('%Y-%m-%d')
+                            existing = neobdm_repo.get_broker_summary(ticker, date_str)
+                            if existing and (existing.get('buy') or existing.get('sell')):
+                                continue
+                            try:
+                                raw_bs = await api_client.get_broker_summary(ticker, date_str)
+                                if raw_bs and (raw_bs.get('buy') or raw_bs.get('sell')):
+                                    neobdm_repo.save_broker_summary_batch(
+                                        ticker, date_str,
+                                        raw_bs.get('buy', []),
+                                        raw_bs.get('sell', [])
+                                    )
+                                await asyncio.sleep(0.2)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+
+                    # Run deep analysis
+                    base_data = base_lookup.get(ticker)
+                    if base_data or inv_data or txn_data:
+                        if not base_data:
+                            base_data = {'symbol': ticker, 'total_score': 0}
+                        try:
+                            broksum_multiday = neobdm_repo.get_broker_summary_multiday(ticker, actual_date, days=5)
+                            deep_result = analyzer.analyze_deep(
+                                ticker=ticker,
+                                inventory_data=inv_data,
+                                txn_chart_data=txn_data,
+                                broker_summary_data=broksum_data,
+                                base_result=base_data,
+                                analysis_date=actual_date,
+                                price_series=price_series,
+                                broksum_multiday_data=broksum_multiday,
+                            )
+                            if deep_result:
+                                band_repo.save_deep_cache(ticker, actual_date, deep_result)
+                                _deep_analysis_status["completed_tickers"].append(f"{ticker}_deep")
+                        except Exception as e:
                             _deep_analysis_status["errors"].append({
-                                "ticker": ticker,
-                                "stage": "bandarmology",
-                                "error": "Deep analysis returned no result"
+                                "ticker": ticker, "stage": "deep_analysis", "error": str(e)[:120]
                             })
                     else:
-                        # Ticker doesn't qualify, skip but mark as completed
-                        _deep_analysis_status["completed_tickers"].append(f"{ticker}_bandarmology_skipped")
+                        _deep_analysis_status["completed_tickers"].append(f"{ticker}_skipped")
 
                 except Exception as e:
                     _deep_analysis_status["errors"].append({
-                        "ticker": ticker,
-                        "stage": "bandarmology",
-                        "error": str(e)
+                        "ticker": ticker, "stage": "bandarmology", "error": str(e)[:120]
                     })
 
-                completed += 1
-                _deep_analysis_status["progress"] = completed
+                _deep_analysis_status["progress"] = len(tickers) + i + 1
 
-        except Exception as e:
-            _deep_analysis_status["errors"].append({
-                "ticker": "all",
-                "stage": "bandarmology_init",
-                "error": str(e)
-            })
+        await api_client.close()
 
+    except Exception as e:
+        _deep_analysis_status["errors"].append({
+            "ticker": "all", "stage": "init", "error": str(e)
+        })
     finally:
         _deep_analysis_status["running"] = False
         _deep_analysis_status["stage"] = "completed"
