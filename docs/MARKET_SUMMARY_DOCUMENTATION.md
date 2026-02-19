@@ -53,7 +53,7 @@ Alur dimulai dari pemilihan metode analisa hingga penyajian data mendalam.
 2.  **Date Selection**: User memilih tanggal data dari histori yang tersedia di database.
 3.  **Data Fetching**: 
     - Frontend memanggil `/api/neobdm-summary`.
-    - Jika `scrape=true`, backend akan menjalankan *headless browser* untuk mengambil data langsung dari sumber eksternal (NeoBDM).
+    - Jika `scrape=true`, backend memanggil `NeoBDMApiClient` untuk mengambil data terbaru lalu menyimpan snapshot ke database.
     - Jika `scrape=false`, backend mengambil record terbaru dari SQLite.
 4.  **Processing & UI Mapping**: Backend memetakan kolom dinamis berdasarkan periode (misal: kolom `w-1` di daily vs `c-5` di cumulative).
 5.  **Rendering**: Data disajikan dalam tabel dengan pewarnaan kondisional (hijau untuk akumulasi, merah untuk distribusi).
@@ -62,9 +62,9 @@ Alur dimulai dari pemilihan metode analisa hingga penyajian data mendalam.
 graph TD
     A[User Selects Method/Period] --> B{Found in DB?}
     B -- Yes --> C[Load Historical Data]
-    B -- No / Manual --> D[Trigger Live Scrape]
-    D --> E[Headless Browser: Login & Scrape]
-    E --> F[Analyze & Save to DB]
+    B -- No / Manual --> D[Trigger Live Fetch]
+    D --> E[NeoBDMApiClient Request]
+    E --> F[Normalize & Save to DB]
     F --> C
     C --> G[Process Columns & Pagination]
     G --> H[Render Interactive Grid]
@@ -74,8 +74,8 @@ graph TD
 
 ## 3. Cara Kerja (Mechanics)
 
-### Headless Scraper
-Sistem menggunakan modul `scraper_neobdm.py` yang mensimulasikan sesi browser pengguna untuk melewati autentikasi dan mengekstrak tabel data kompleks dari penyedia informasi pasar.
+### API Client + Batch Sync
+Pengambilan data harian dilakukan via `NeoBDMApiClient` untuk endpoint ringkas. Untuk sinkronisasi penuh, endpoint `/api/neobdm-batch-scrape` menjalankan script batch terpisah (subprocess) agar kompatibel dengan batasan event loop Playwright di Windows.
 
 ### Dynamic Column Ordering
 Tabel secara otomatis menyesuaikan kolom yang ditampilkan berdasarkan periode yang dipilih:
@@ -92,9 +92,9 @@ Tabel secara otomatis menyesuaikan kolom yang ditampilkan berdasarkan periode ya
 mindmap
   root((Mechanics))
     Collection Engine
-      Playwright/Headless Browser
+      NeoBDMApiClient (Summary Fetch)
+      Subprocess Batch Scrape (Full Sync)
       Session Management
-      Sequential Batch Tasking
     Data Schema
       Method-based Tables
       Snapshot Archiving
@@ -131,7 +131,7 @@ graph LR
     end
 
     subgraph "Engines"
-    SCRAPE[NeoBDM Scraper Module]
+    SCRAPE[NeoBDM Api Client + Batch Script]
     DB[(SQLite Storage)]
     end
 
@@ -152,8 +152,8 @@ flowchart TB
     Start((User Request)) --> Config[Select Method & Period]
     Config --> CheckDB{Data Available?}
     
-    CheckDB -- No --> Scrape[Run NeoBDM Scraper]
-    Scrape --> Parse[Parse HTML Table to DF]
+    CheckDB -- No --> Scrape[Run NeoBDM Fetch/Sync]
+    Scrape --> Parse[Normalize API/Batch Output]
     Parse --> Save[Save to neobdm_records]
     Save --> Logic[Load to Memory]
     

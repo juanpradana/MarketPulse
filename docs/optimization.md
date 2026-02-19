@@ -11,7 +11,7 @@ Dokumen ini merinci rencana teknis untuk mengoptimalkan fitur yang sudah ada gun
     *   *Goal*: Mengurangi beban RAM dan mempercepat respon API saat database membengkak.
 *   [x] **API Pagination**: Menambahkan parameter `limit` dan `page` pada endpoint berita.
     *   *Goal*: Mempercepat loading awal halaman Dashbord dan News Library.
-*   [ ] **Asynchronous Scraping**: Implementasi `asyncio` pada Scraper Engine.
+*   [x] **Asynchronous Scraping**: Implementasi `asyncio` pada Scraper Engine.
     *   *Goal*: Memungkinkan pengambilan data dari berbagai halaman berita secara paralel (mengurangi waktu tunggu hingga 70%).
 
 ### 2. Efisiensi RAG & AI Pipeline
@@ -22,11 +22,11 @@ Dokumen ini merinci rencana teknis untuk mengoptimalkan fitur yang sudah ada gun
 *   [x] **Recursive Retrieval**: Mengoptimalkan cara pencarian konteks di VectorDB agar tidak hanya mengambil chunk terdekat, tapi juga context di sekitarnya.
 
 ### 3. Visualisasi & UX (Frontend)
-*   [ ] **Skeleton Loading**: Menambahkan animasi loading transisi sebelum data muncul.
+*   [x] **Skeleton Loading**: Menambahkan animasi loading transisi sebelum data muncul.
     *   *Goal*: Memberikan persepsi aplikasi yang lebih cepat dan modern.
 *   [ ] **Synced Charts**: Sinkronisasi interaksi antara chart harga saham dan chart sentimen.
     *   *Goal*: Memudahkan analisis korelasi visual secara real-time.
-*   [ ] **Optimasi Re-render**: Mengurangi render yang tidak perlu pada komponen React menggunakan `useMemo` dan `useCallback`.
+*   [x] **Optimasi Re-render**: Mengurangi render yang tidak perlu pada komponen React menggunakan `useMemo` dan `useCallback`.
 
 ### 4. Database & Storage Management
 *   [x] **Database Indexing**: Memastikan index yang tepat pada kolom `timestamp`, `url`, dan `ticker`.
@@ -42,12 +42,14 @@ Dokumen ini merinci rencana teknis untuk mengoptimalkan fitur yang sudah ada gun
 | :--- | :--- | :--- | :--- |
 | **P1** | **SQL-Level Filtering** | Backend | [DONE] |
 | **P1** | **Database Indexing** | Database | [DONE] |
-| **P2** | **Skeleton Loading** | Frontend | [PENDING] |
+| **P2** | **Skeleton Loading** | Frontend | [DONE] |
 | **P2** | **Semantic Chunking** | AI Core | [DONE] |
 | **P2** | **Recursive Retrieval** | AI Core | [DONE] |
 | **P3** | **API Pagination** | Backend | [DONE] |
-| **P3** | **Asynchronous Scraper** | Backend | [PENDING] |
+| **P3** | **Asynchronous Scraper** | Backend | [DONE] |
+| **P3** | **Re-render Optimization** | Frontend | [DONE] |
 | **P4** | **Synced Charts** | Frontend | [PENDING] |
+| **P4** | **File Clean-up Utility** | Storage | [PENDING] |
 
 ---
-*Terakhir diperbarui: 2025-12-20*
+*Terakhir diperbarui: 2026-02-19*

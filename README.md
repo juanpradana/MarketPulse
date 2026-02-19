@@ -1,6 +1,6 @@
 ﻿# 🚀 MarketPulse
 
-**Version 2.1.0** - Next-Gen Investment Intelligence Platform untuk Analisis Saham Indonesia
+**Version 2.2.0** - Next-Gen Investment Intelligence Platform untuk Analisis Saham Indonesia
 
 ## 🎯 Overview
 MarketPulse adalah full-stack investment intelligence platform untuk analisis ekuitas Indonesia. Menggabungkan news sentiment, NeoBDM fund flow data, broker tracking, price-volume analytics, dan workflow-driven screening (Alpha Hunter).
@@ -10,14 +10,18 @@ MarketPulse adalah full-stack investment intelligence platform untuk analisis ek
 - 💰 **NeoBDM Flow Analysis** - Market maker dan fund flow tracking
 - 📊 **Price & Volume Analytics** - Anomaly detection dan scoring
 - 🎯 **Alpha Hunter** - Multi-stage screening workflow
-- 🔍 **Broker Stalker** - Track aktivitas broker spesifik (NEW!)
+- 🎯 **Bandarmology** - Deep analysis scoring dan trade classification
+- 🧮 **Adimology** - Broker power calculator berbasis fraksi
+- ⭐ **My Watchlist** - Personal watchlist dengan trigger deep analysis
+- 🔎 **Story Finder** - Pencarian corporate action story berbasis keyword
+- 🔍 **Broker Stalker** - Backend API lengkap + UI concept page
 - 📈 **Done Detail Analysis** - Analisis dari pasted trade data
 - 🤖 **AI-Powered RAG** - Chat dengan disclosure documents
 
 ### Tech Stack:
 - **Backend**: FastAPI + SQLite + Ollama
 - **Frontend**: Next.js 16 + TypeScript + Tailwind CSS
-- **AI/ML**: Ollama (LLaMA 3.2) + ChromaDB
+- **AI/ML**: Ollama (configurable models, incl. Llama/Qwen) + ChromaDB
 
 ---
 
@@ -239,13 +243,55 @@ What you see:
 
 ### 10) Broker Stalker
 UI route: `/broker-stalker`
-Purpose: Visual concept for broker surveillance.
-Status: UI prototype with static data (no backend wiring yet).
+Purpose: Broker surveillance (watchlist broker, portfolio, activity chart, execution ledger).
+Status: Backend API sudah aktif; halaman frontend saat ini masih menggunakan dummy/static dataset.
 
-### 11) Scraper Engine
+Key endpoints:
+- `GET /api/broker-stalker/watchlist`
+- `POST /api/broker-stalker/watchlist`
+- `DELETE /api/broker-stalker/watchlist/{broker_code}`
+- `GET /api/broker-stalker/portfolio/{broker_code}`
+- `GET /api/broker-stalker/analysis/{broker_code}/{ticker}`
+- `GET /api/broker-stalker/chart/{broker_code}/{ticker}`
+- `GET /api/broker-stalker/ledger/{broker_code}/{ticker}`
+- `POST /api/broker-stalker/sync/{broker_code}`
+- `GET /api/broker-stalker/ticker/{ticker}/activity`
+- `GET /api/broker-stalker/power-level/{broker_code}`
+
+### 11) Watchlist
+UI route: `/watchlist`
+Purpose: Daftar personal ticker dengan integrasi Alpha Hunter + Bandarmology.
+Key endpoints:
+- `GET /api/watchlist`
+- `GET /api/watchlist/with-analysis`
+- `POST /api/watchlist/add`
+- `POST /api/watchlist/remove`
+- `POST /api/watchlist/toggle`
+- `POST /api/watchlist/analyze-missing`
+- `GET /api/watchlist/analyze-status`
+
+### 12) Story Finder
+UI route: `/story-finder`
+Purpose: Menemukan berita corporate action berdasar keyword dan alias.
+Key endpoints:
+- `GET /api/story-finder`
+- `GET /api/story-finder/keywords`
+
+### 13) Adimology
+UI route: `/adimology`
+Purpose: Kalkulator daya investasi broker berbasis rentang fraksi dan target harga.
+Status: Frontend calculator aktif (local history via browser storage).
+
+### 14) Scraper Engine + Scheduler Control
 Backend-only feature for data ingestion and backfill.
 Key endpoint:
 - `POST /api/scrape`
+- `GET /api/scheduler/status`
+- `POST /api/scheduler/start`
+- `POST /api/scheduler/stop`
+- `POST /api/scheduler/manual/news`
+- `POST /api/scheduler/manual/neobdm`
+- `POST /api/scheduler/manual/cleanup`
 
 Notes:
 - Scrapers are in `backend/modules/scraper_*` (CNBC, EmitenNews, IDX).

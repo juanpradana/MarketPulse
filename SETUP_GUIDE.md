@@ -87,6 +87,7 @@ npm install
 ```bash
 ollama pull llama3.2:latest
 ollama pull nomic-embed-text:latest
+ollama pull qwen2.5:7b
 ```
 
 #### macOS/Linux:
@@ -94,12 +95,13 @@ ollama pull nomic-embed-text:latest
 curl -fsSL https://ollama.ai/install.sh | sh
 ollama pull llama3.2:latest
 ollama pull nomic-embed-text:latest
+ollama pull qwen2.5:7b
 ```
 
 #### Verifikasi Ollama:
 ```bash
 ollama list
-# Harus muncul: llama3.2:latest dan nomic-embed-text:latest
+# Harus muncul: llama3.2:latest, nomic-embed-text:latest, qwen2.5:7b
 ```
 
 ---
@@ -204,20 +206,23 @@ Buka browser dan akses:
 - **Health Check**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
 
-**Response Health Check:**
+**Contoh Response Health Check:**
 ```json
 {
   "status": "online",
   "message": "Financial Sentiment Analysis & Market Intelligence API is running",
-  "version": "2.0.0",
+  "version": "2.2.0",
   "features": {
     "dashboard": "Market statistics and sentiment correlation",
     "news": "News aggregation with AI insights",
     "disclosures": "IDX disclosures and RAG chat",
     "neobdm": "Market maker and fund flow analysis",
+    "bandarmology": "Deep scoring and trade classification",
+    "watchlist": "Personal ticker watchlist with integrated analysis",
     "done_detail": "Done detail visualization and broker flow",
     "broker_stalker": "Broker activity tracking and analysis",
-    "scrapers": "Automated data collection"
+    "scrapers": "Automated data collection",
+    "scheduler": "Background job scheduler and manual trigger endpoints"
   }
 }
 ```
@@ -249,13 +254,20 @@ npm run dev
 Buka browser dan akses: **http://localhost:3000**
 
 **Halaman yang Tersedia:**
-1. **Dashboard** - `/` - Market overview
-2. **News** - `/news` - News aggregation
-3. **Disclosures** - `/disclosures` - IDX disclosures & RAG chat
-4. **NeoBDM** - `/neobdm` - Market maker analysis
-5. **Alpha Hunter** - `/alpha-hunter` - Stock screening
-6. **Broker Stalker** - `/broker-stalker` - Broker tracking (NEW!)
-7. **Done Detail** - `/done-detail` - Trade flow analysis
+1. **Dashboard** - `/dashboard` - Market overview
+2. **News Library** - `/news-library` - News feed, filters, AI brief
+3. **Story Finder** - `/story-finder` - Corporate action story discovery
+4. **RAG Chat** - `/rag-chat` - IDX disclosures + conversational retrieval
+5. **Market Summary** - `/neobdm-summary` - NeoBDM data grid
+6. **Flow Tracker** - `/neobdm-tracker` - Historical flow chart
+7. **Broker Summary** - `/broker-summary` - Broker accumulation/distribution analysis
+8. **Price & Volume** - `/price-volume` - Price-volume anomaly tools
+9. **Alpha Hunter** - `/alpha-hunter` - Workflow-driven screening
+10. **Bandarmology** - `/bandarmology` - Deep score and trade type
+11. **Adimology** - `/adimology` - Broker power calculator
+12. **My Watchlist** - `/watchlist` - Personal monitoring + deep analyze trigger
+13. **Broker Stalker** - `/broker-stalker` - Backend-connected API module, frontend page masih concept/dummy data
+14. **Done Detail** - `/done-detail` - Trade flow analysis
 
 ---
 
@@ -519,9 +531,9 @@ Jika mengalami masalah:
 Jika semua langkah di atas berhasil, sistem Anda sudah berjalan dengan normal!
 
 **Next Steps:**
-1. Mulai scraping data: Gunakan endpoints di `/api/scrapers`
-2. Explore features: Navigate semua halaman di frontend
-3. Add brokers to watchlist: Gunakan Broker Stalker feature
-4. Run analysis: Gunakan Alpha Hunter untuk stock screening
+1. Mulai scraping data: gunakan endpoint `/api/scrape` atau menu scraper control di frontend.
+2. Cek scheduler: lihat status di `/api/scheduler/status` dan jalankan manual jobs bila diperlukan.
+3. Explore features: navigasi semua halaman utama dari sidebar.
+4. Jalankan analisis bertahap: mulai dari Alpha Hunter / Bandarmology / Watchlist.
 
 **Happy Trading! 📈**

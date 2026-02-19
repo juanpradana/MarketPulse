@@ -25,12 +25,7 @@ Dokumen ini menguraikan rencana pengembangan fitur masa depan untuk meningkatkan
     *   Ringkasan keterbukaan informasi paling krusial.
     *   Prediksi narasi pasar untuk sesi berikutnya.
 
-### 4. Scraper Scheduler
-*   **Deskripsi**: Mengotomatiskan proses penarikan data dari CNBC Indonesia, EmitenNews, dan IDX tanpa intervensi manual.
-*   **Goal**: Menjamin data pada dashboard selalu mutakhir (Up-to-Date) secara real-time.
-*   **Teknis**: Implementasi `APScheduler` di FastAPI atau menggunakan cron jobs untuk menjalankan script scraping pada interval yang ditentukan (misal: setiap 30 menit selama jam bursa).
-
-### 5. Sentiment-Heatmap Ticker Cloud
+### 4. Sentiment-Heatmap Ticker Cloud
 *   **Deskripsi**: Evolusi dari WordCloud saat ini, di mana warna setiap ticker merepresentasikan skor sentimen rata-rata.
 *   **Goal**: Memberikan gambaran visual cepat mengenai emiten mana yang sedang "panas" secara positif atau negatif.
 *   **Skema Warna**:
@@ -38,10 +33,22 @@ Dokumen ini menguraikan rencana pengembangan fitur masa depan untuk meningkatkan
     *   ⚪ **Grey/White**: Sentimen Netral
     *   🔴 **Bright Red**: Sentimen Bearish Kuat
 
-### 6. My Watchlist
-*   **Deskripsi**: Fitur personalisasi untuk menyimpan daftar emiten yang ingin dipantau secara khusus oleh pengguna.
-*   **Goal**: Mempersempit kebisingan data (*data noise*) dengan memberikan filter cepat untuk hanya melihat berita, chart, dan RAG yang relevan dengan portofolio pengguna.
-*   **Fitur**: Tab "Watchlist" khusus di dashboard dengan metrik ringkasan performa harian untuk emiten terpilih.
+### 5. Automated Market Narrative (Newsletter)
+*   **Deskripsi**: Evolusi dari automatic market summary menjadi format narasi siap distribusi (dashboard snapshot + narasi AI).
+*   **Goal**: Menyediakan ringkasan harian/mingguan yang bisa dipakai langsung oleh analis/internal users.
+*   **Output**: Ringkasan terstruktur + highlights sentimen + top movers berbasis data internal.
+
+---
+
+## ✅ Sudah Diimplementasikan (Dipindah dari Roadmap Lama)
+
+### 1. Scraper Scheduler
+*   **Status**: Implemented.
+*   **Catatan**: Scheduler API tersedia untuk status/start/stop/manual triggers.
+
+### 2. My Watchlist
+*   **Status**: Implemented.
+*   **Catatan**: Sudah ada endpoint CRUD watchlist + integrasi deep analysis.
 
 ---
 
@@ -49,12 +56,10 @@ Dokumen ini menguraikan rencana pengembangan fitur masa depan untuk meningkatkan
 
 | Urutan | Fitur | Kategori | Keuntungan Utama |
 | :--- | :--- | :--- | :--- |
-| **1** | **Scraper Scheduler** | Infrastruktur | Otomatisasi & Data Freshness |
-| **2** | **My Watchlist** | Personalization | Fokus Pengguna & UX |
-| **3** | **Sentiment-Heatmap Cloud** | Visualisasi | Analisis Visual Cepat |
-| **4** | **Multi-Document RAG** | AI / Intelligence | Kedalaman Analisis |
-| **5** | **Market Summary** | AI / Intelligence | Efisiensi Waktu |
-| **6** | **Knowledge Graph** | Data Mining | Pemahaman Ekosistem |
+| **1** | **Sentiment-Heatmap Cloud** | Visualisasi | Analisis Visual Cepat |
+| **2** | **Multi-Document RAG** | AI / Intelligence | Kedalaman Analisis |
+| **3** | **Automated Market Narrative** | AI / Intelligence | Efisiensi Waktu |
+| **4** | **Knowledge Graph** | Data Mining | Pemahaman Ekosistem |
 
 ---
-*Terakhir diperbarui: 2025-12-20*
+*Terakhir diperbarui: 2026-02-19*

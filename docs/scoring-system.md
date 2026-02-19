@@ -2,6 +2,9 @@
 
 Panduan ini mendefinisikan standar logika penilaian (*scoring logic*) untuk menyaring aliran dana bandar (*fund flow*) menjadi sinyal perdagangan yang objektif, terukur, dan memiliki probabilitas tinggi.
 
+> **Catatan Status Dokumen**
+> Dokumen ini adalah referensi konsep scoring. Implementasi produksi dapat berevolusi pada modul Bandarmology/NeoBDM seiring pembaruan pipeline dan kalibrasi model.
+
 ---
 
 ## 📋 Filosofi Dasar
@@ -79,4 +82,4 @@ Mendeteksi pelemahan sebelum harga berbalik arah.
 - **🔄 (Cycle)**: Potential Change of Trend.
 
 ---
-*Dokumen ini merupakan standar audit baku untuk sistem Flow Tracker MarketPulse.*
+*Dokumen ini merupakan referensi konsep scoring untuk sistem analisis flow MarketPulse (terakhir diperbarui: 2026-02-19).*

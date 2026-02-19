@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Frontend - MarketPulse
 
-## Getting Started
+Frontend aplikasi MarketPulse dibangun dengan Next.js (App Router), TypeScript, Tailwind CSS, dan modular API client di `src/services/api`.
 
-First, run the development server:
+## Menjalankan Frontend
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Default URL:
+- http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Pastikan backend sudah berjalan di `http://localhost:8000`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Environment Variable
 
-## Learn More
+Buat file `.env.local`:
 
-To learn more about Next.js, take a look at the following resources:
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Struktur Penting
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `src/app/*`: halaman utama (dashboard, news-library, rag-chat, neobdm-summary, watchlist, dll).
+- `src/components/*`: komponen UI reusable.
+- `src/context/*`: global state seperti filter context.
+- `src/services/api/*`: API client per domain (news, neobdm, watchlist, brokerStalker, scheduler, dst).
 
-## Deploy on Vercel
+## Halaman Utama
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `/dashboard`
+- `/news-library`
+- `/story-finder`
+- `/rag-chat`
+- `/neobdm-summary`
+- `/neobdm-tracker`
+- `/broker-summary`
+- `/price-volume`
+- `/alpha-hunter`
+- `/bandarmology`
+- `/adimology`
+- `/watchlist`
+- `/broker-stalker`
+- `/done-detail`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Build Production
+
+```bash
+npm run build
+npm run start
+```

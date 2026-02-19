@@ -1,12 +1,12 @@
-# News Library & Disclosure Documentation
+# News Library & Story Finder Documentation
 
-Dokumentasi ini menjelaskan fitur, alur kerja, cara kerja, dan arsitektur dari modul **News & Disclosures Library**.
+Dokumentasi ini menjelaskan fitur, alur kerja, cara kerja, dan arsitektur dari modul **News Library** dan **Story Finder**.
 
 ---
 
 ## 1. Fitur Utama
 
-- **Unified News Feed**: Menggabungkan berita dari berbagai sumber (CNBC, EmitenNews) dan keterbukaan informasi (IDX) dalam satu tabel terintegrasi.
+- **Unified News Feed**: Menggabungkan berita dari berbagai sumber (CNBC, EmitenNews, IDX, Bisnis.com, Investor.id, Bloomberg Technoz) dalam satu tabel terintegrasi.
 - **Sentiment Labeling**: Setiap artikel diberi label **Bullish**, **Bearish**, atau **Netral** beserta skor numerik presisi.
 - **AI Insight Drawer (The "Gist")**:
     - Fitur ekspansi baris menggunakan `Sparkles` icon.
@@ -15,6 +15,9 @@ Dokumentasi ini menjelaskan fitur, alur kerja, cara kerja, dan arsitektur dari m
 - **Dynamic Filtering**:
     - Filter berdasarkan Ticker (terintegrasi dengan Global Filter).
     - Filter lokal berdasarkan Sumber (Source) dan kategori Sentimen.
+- **Story Finder**:
+    - Endpoint `/api/story-finder` untuk pencarian keyword corporate action (right issue, dividen, buyback, merger, dll).
+    - Mendukung alias keyword, statistik keyword, serta highlight position pada judul.
 
 ```mermaid
 mindmap
@@ -44,12 +47,12 @@ mindmap
 Alur kerja modul ini berfokus pada penyajian data historis dan analisis AI instan.
 
 1.  **Request Service**: Frontend memanggil `/api/news` dengan parameter filter (ticker, date, sentiment, source).
-2.  **DB Query**: Backend (`DatabaseManager`) melakukan query ke tabel `news` dan `disclosures` dengan filter SQL yang dioptimasi.
+2.  **DB Query**: Backend route `news.py` melakukan query data berita tersimpan via data provider/database manager dengan filter SQL yang dioptimasi.
 3.  **Data Rendering**: Frontend merender data ke dalam `NewsFeed` component.
 4.  **Insight Generation**: 
     - Pengguna mengklik ikon `Sparkles` atau baris tabel.
     - Frontend memanggil `/api/brief-single` dengan judul berita sebagai konteks.
-    - LLM (llama3.2) memproses judul dan ticker untuk menghasilkan insight strategis.
+    - LLM (Ollama, default `qwen2.5:7b` untuk news brief endpoint) memproses judul dan ticker untuk menghasilkan insight strategis.
 5.  **Direct Link**: Pengguna dapat mengklik "VIEW" untuk langsung menuju URL sumber berita asli.
 
 ```mermaid
@@ -84,7 +87,7 @@ Data perpustakaan ini diperbarui secara berkala melalui background task atau man
 mindmap
   root((Mechanics))
     LLM Integration
-      llama3.2 Engine
+      Ollama LLM (default qwen2.5:7b untuk news brief)
       System Prompt: Senior Analyst
       4-Sentence Constraint
     Data Persistence
@@ -103,11 +106,11 @@ mindmap
 
 Modul ini menggunakan pola **Master-Detail** dalam penyajian datanya.
 
-- **Component Hierarchy**: `NewsLibraryPage` (Container) -> `NewsFeed` (Table) -> `InsightDrawer` (Sub-row).
+- **Component Hierarchy**: `news-library/page.tsx` (Container) -> komponen feed/list -> AI brief interaction.
 - **Backend Services**:
     - `modules/scraper_*.py`: Bertanggung jawab mengisi database.
-    - `modules/database.py`: Menangani filter kompleks (ticker, date, sentiment).
-    - `main.py`: Mengekspos endpoint `/api/news` dan `/api/brief-single`.
+    - `routes/news.py`: Menangani endpoint `/api/news`, `/api/brief-single`, `/api/brief-news`, `/api/ticker-counts`, `/api/wordcloud`, dan `/api/story-finder`.
+    - `main.py`: Mendaftarkan `news_router` di aplikasi FastAPI.
 
 ```mermaid
 graph LR
@@ -124,7 +127,7 @@ graph LR
 
     subgraph "Processing & AI"
     SENT[Sentiment Engine]
-    LLM[Ollama / llama3.2]
+    LLM[Ollama / qwen2.5:7b (news brief default)]
     DB[(SQLite DB)]
     end
 

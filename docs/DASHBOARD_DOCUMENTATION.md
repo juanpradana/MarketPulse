@@ -15,7 +15,7 @@ Dokumentasi ini menjelaskan fitur, alur kerja, cara kerja, dan arsitektur dari h
 - **Trending Ticker Cloud**: Visualisasi emiten yang paling banyak dibicarakan berdasarkan volume berita terbaru.
 - **Intelligent Refresh System**:
     - **Refresh Intelligence**: Tombol manual untuk memicu scraping berita terbaru.
-    - **Auto-Gathering**: Secara otomatis memicu background scraping jika data hari ini belum tersedia.
+    - **Background Pipeline Integration**: Dapat berjalan via scheduler/manual trigger backend untuk menjaga data tetap up-to-date.
 
 ```mermaid
 mindmap
@@ -37,7 +37,7 @@ mindmap
       Ticker Word Cloud
     Intelligence
       Manual Scraping
-      Auto-Gathering logic
+      Scheduler/Manual Pipeline
 ```
 
 ---
@@ -52,7 +52,7 @@ Alur dimulai dari interaksi pengguna di frontend hingga pemrosesan data di backe
     - Backend mengambil data harga dari Yahoo Finance (`yfinance`).
     - Backend mengambil data berita dari Database (SQLite/PostgreSQL).
 4.  **Processing**: `DataProvider` menyelaraskan timestamp harga dan sentimen, lalu menghitung korelasi dan statistik lainnya.
-5.  **Intelligence Check**: Jika volume berita hari ini = 0, sistem memicu scraping otomatis ke CNBC Indonesia dan EmitenNews.
+5.  **Intelligence Check**: User dapat menjalankan refresh manual dari UI atau trigger pipeline dari scheduler API untuk pembaruan data.
 6.  **Rendering**: Frontend menerima data JSON dan merender metrik serta grafik menggunakan Recharts.
 
 ```mermaid
@@ -64,8 +64,8 @@ graph TD
     C --> E[Backend: Fetch News Data - DB]
     D --> F[DataProvider: Align & Calc Stats]
     E --> F
-    F --> G{Is Data Empty for Today?}
-    G -- Yes --> H[Trigger Background Scrapers]
+    F --> G{Need Fresh Data?}
+    G -- Yes --> H[Manual Refresh / Scheduler Trigger]
     H --> I[Update DB & Refetch]
     I --> J[Return JSON to Frontend]
     G -- No --> J
@@ -124,7 +124,7 @@ Sistem ini didasarkan pada arsitektur **Modern Web Application** dengan pemisaha
 - **Backend (FastAPI)**:
     - `main.py`: Entry point API.
     - `data_provider.py`: Core logic untuk agregasi data dan perhitungan statistik.
-    - `modules/database.py`: layer komunikasi database.
+    - `db/*_repository.py`: layer repository untuk akses data terstruktur.
 - **External Services**:
     - **yfinance**: Sumber data market history.
     - **Web Scrapers**: Modul untuk mengambil berita dari CNBC & EmitenNews.
@@ -181,9 +181,9 @@ flowchart TB
     end
     
     Request --> Processing
-    Processing --> Check{Is Today Missing?}
+    Processing --> Check{Need Data Refresh?}
     
-    Check -- Yes --> Scrape[Execute Background Scrapers]
+    Check -- Yes --> Scrape[Run Manual Refresh or Scheduler Job]
     Scrape --> Update[Analyze & Store in DB]
     Update --> Processing
     

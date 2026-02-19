@@ -28,7 +28,7 @@ mindmap
       Interactive Sidebar
       Message History
     Tech Stack
-      Llama 3.2 (LLM)
+      Ollama LLM (configurable)
       ChromaDB (Vector)
       nomic-embed-text
 ```
@@ -67,6 +67,9 @@ Sistem tidak melatih ulang model AI. Sebaliknya, ia menyisipkan bagian relevan d
 ### Vector Database (ChromaDB)
 Menggunakan `nomic-embed-text` untuk mengubah teks menjadi koordinat numerik (vektor). Hal ini memungkinkan pencarian berbasis makna (Semantik), bukan hanya kata kunci.
 
+### Catatan Model
+Model LLM untuk RAG chat bersifat configurable via backend config. Endpoint news brief (`/api/brief-single`, `/api/brief-news`) dapat menggunakan model berbeda (saat ini default `qwen2.5:7b`).
+
 ### PDF-to-Process
 Modul `idx_processor.py` menangani konversi PDF yang diunduh dari IDX menjadi data terstruktur yang siap dianalisa oleh agen kecerdasan.
 
@@ -78,7 +81,7 @@ mindmap
       Text Chunking (LangChain)
       Vector Indexing
     Inference Engine
-      Ollama / Llama 3.2
+      Ollama / Configurable Chat Model
       System Analysis Prompt
       Hallucination Prevention
     Platform Integration
@@ -96,7 +99,7 @@ RAG Chat adalah perpaduan antara data engineering dan AI generatif.
 - **Component**: `RagChatInterface`.
 - **Backend API**: `/api/chat`, `/api/sync-disclosures`, `/api/open-file`.
 - **AI Stack**:
-    - **Model**: Llama 3.2 (Local via Ollama).
+    - **Model**: Configurable chat model (Local via Ollama).
     - **Embeddings**: Nomic Embeddings.
     - **Vector Store**: ChromaDB.
 
@@ -115,7 +118,7 @@ graph LR
     subgraph "RAG Engine"
     LC[LangChain]
     VEC[(ChromaDB)]
-    LLM[Llama 3.2]
+    LLM[Configurable Ollama LLM]
     end
 
     subgraph "Filesystem"

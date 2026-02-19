@@ -44,7 +44,7 @@ Alur dimulai dari pemilihan emiten untuk melihat histori aliran dananya.
 
 1.  **Ticker Search**: Pengguna mencari kode emiten (misal: BBCA, ASII).
 2.  **History Request**: Frontend memanggil `/api/neobdm-history` dengan parameter ticker, metode, dan limit waktu.
-3.  **Data Processing**: Backend mengambil data histori dari tabel `neobdm_records` dan mengurutkannya secara kronologis.
+3.  **Data Processing**: Backend mengambil data histori dari tabel `neobdm_records`, melakukan sanitasi JSON, lalu mengurutkannya secara kronologis.
 4.  **Trend Analysis**: Sistem menghitung total akumulasi/distribusi dalam periode yang dipilih untuk menentukan status "ACCUMULATING" atau "DISTRIBUTING".
 5.  **Synchronization**: Jika data histori kurang, user dapat melakukan sinkronisasi dari halaman Market Summary untuk mengisi database.
 
@@ -73,6 +73,9 @@ Logika marker (`Crossing`, `Unusual`, `Pinky`) diekstrak dari tabel database. Ji
 ### Net Flow Trend Calculation
 Menghitung jumlah seluruh `activeFlow` dalam periode yang ditampilkan. Jika hasil > 0, indikator status berubah menjadi hijau (Accumulating), memberikan kesimpulan cepat bagi investor.
 
+### Market Cap & Flow Impact Enrichment
+Endpoint histori menambahkan konteks kapitalisasi pasar (`market_cap`) serta `flow_impact_pct`, sehingga pembacaan flow tidak hanya nominal, tetapi juga proporsional terhadap ukuran emiten.
+
 ```mermaid
 mindmap
   root((Mechanics))
@@ -98,7 +101,7 @@ Modul ini adalah layer visualisasi historis di atas data Market Summary.
 
 - **Component**: `NeoBDMTrackerPage`.
 - **Backend Service**: `api.getNeoBDMHistory`.
-- **Storage**: Bergantung sepenuhnya pada tabel `neobdm_records` yang diisi oleh Scraper.
+- **Storage**: Menggunakan tabel `neobdm_records` (sinkron dari summary fetch/batch sync NeoBDM).
 
 ```mermaid
 graph LR
