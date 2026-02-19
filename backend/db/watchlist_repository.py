@@ -27,10 +27,16 @@ def _parse_num(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def _normalize_list_name(list_name: Optional[str]) -> str:
+    """Normalize list name and fallback to Default."""
+    cleaned = (list_name or "").strip()
+    return cleaned if cleaned else "Default"
+
+
 class WatchlistRepository(BaseRepository):
     """Repository for user watchlist operations."""
 
-    def add_ticker(self, ticker: str, user_id: str = "default") -> bool:
+    def add_ticker(self, ticker: str, user_id: str = "default", list_name: str = "Default") -> bool:
         """
         Add a ticker to user's watchlist.
 
@@ -45,20 +51,34 @@ class WatchlistRepository(BaseRepository):
         try:
             cursor = conn.cursor()
 
+            normalized_list = _normalize_list_name(list_name)
+
+            cursor.execute(
+                """INSERT OR IGNORE INTO user_watchlist_lists (user_id, list_name)
+                   VALUES (?, ?)""",
+                (user_id, normalized_list)
+            )
+
             # Check if already exists
             cursor.execute(
                 """SELECT 1 FROM user_watchlist
-                   WHERE user_id = ? AND ticker = ?""",
-                (user_id, ticker.upper())
+                   WHERE user_id = ? AND list_name = ? AND ticker = ?""",
+                (user_id, normalized_list, ticker.upper())
             )
             if cursor.fetchone():
                 return False
 
             # Add to watchlist
             cursor.execute(
-                """INSERT INTO user_watchlist (user_id, ticker, added_at)
-                   VALUES (?, ?, ?)""",
-                (user_id, ticker.upper(), datetime.now().isoformat())
+                """INSERT INTO user_watchlist (user_id, list_name, ticker, added_at)
+                   VALUES (?, ?, ?, ?)""",
+                (user_id, normalized_list, ticker.upper(), datetime.now().isoformat())
+            )
+            cursor.execute(
+                """UPDATE user_watchlist_lists
+                   SET updated_at = datetime('now')
+                   WHERE user_id = ? AND list_name = ?""",
+                (user_id, normalized_list)
             )
             conn.commit()
             return True
@@ -69,7 +89,7 @@ class WatchlistRepository(BaseRepository):
         finally:
             conn.close()
 
-    def remove_ticker(self, ticker: str, user_id: str = "default") -> bool:
+    def remove_ticker(self, ticker: str, user_id: str = "default", list_name: str = "Default") -> bool:
         """
         Remove a ticker from user's watchlist.
 
@@ -83,14 +103,21 @@ class WatchlistRepository(BaseRepository):
         conn = self._get_conn()
         try:
             cursor = conn.cursor()
+            normalized_list = _normalize_list_name(list_name)
 
             cursor.execute(
                 """DELETE FROM user_watchlist
-                   WHERE user_id = ? AND ticker = ?""",
-                (user_id, ticker.upper())
+                   WHERE user_id = ? AND list_name = ? AND ticker = ?""",
+                (user_id, normalized_list, ticker.upper())
             )
 
             if cursor.rowcount > 0:
+                cursor.execute(
+                    """UPDATE user_watchlist_lists
+                       SET updated_at = datetime('now')
+                       WHERE user_id = ? AND list_name = ?""",
+                    (user_id, normalized_list)
+                )
                 conn.commit()
                 return True
             return False
@@ -102,7 +129,255 @@ class WatchlistRepository(BaseRepository):
             
                 conn.close()
 
-    def get_watchlist(self, user_id: str = "default") -> List[Dict[str, Any]]:
+    def list_watchlists(self, user_id: str = "default") -> List[Dict[str, Any]]:
+        """List all watchlists for a user with ticker counts."""
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT
+                    l.list_name,
+                    l.created_at,
+                    l.updated_at,
+                    COUNT(w.id) AS ticker_count
+                FROM user_watchlist_lists l
+                LEFT JOIN user_watchlist w
+                  ON w.user_id = l.user_id
+                 AND w.list_name = l.list_name
+                WHERE l.user_id = ?
+                GROUP BY l.list_name, l.created_at, l.updated_at
+                ORDER BY l.updated_at DESC, l.list_name ASC
+                """,
+                (user_id,)
+            )
+            rows = cursor.fetchall()
+            if not rows:
+                self.create_watchlist("Default", user_id)
+                return self.list_watchlists(user_id)
+
+            return [
+                {
+                    "list_name": row[0],
+                    "created_at": row[1],
+                    "updated_at": row[2],
+                    "ticker_count": row[3],
+                }
+                for row in rows
+            ]
+        finally:
+            conn.close()
+
+    def create_watchlist(self, list_name: str, user_id: str = "default") -> bool:
+        """Create a new watchlist."""
+        normalized_list = _normalize_list_name(list_name)
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                """INSERT OR IGNORE INTO user_watchlist_lists (user_id, list_name)
+                   VALUES (?, ?)""",
+                (user_id, normalized_list)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()
+
+    def rename_watchlist(self, old_name: str, new_name: str, user_id: str = "default") -> bool:
+        """Rename existing watchlist and migrate all tickers."""
+        old_list = _normalize_list_name(old_name)
+        new_list = _normalize_list_name(new_name)
+        if old_list == new_list:
+            return False
+
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+
+            cursor.execute(
+                """SELECT 1 FROM user_watchlist_lists
+                   WHERE user_id = ? AND list_name = ?""",
+                (user_id, old_list)
+            )
+            if not cursor.fetchone():
+                return False
+
+            cursor.execute(
+                """SELECT 1 FROM user_watchlist_lists
+                   WHERE user_id = ? AND list_name = ?""",
+                (user_id, new_list)
+            )
+            if cursor.fetchone():
+                raise ValueError(f"Watchlist '{new_list}' already exists")
+
+            cursor.execute(
+                """UPDATE user_watchlist
+                   SET list_name = ?
+                   WHERE user_id = ? AND list_name = ?""",
+                (new_list, user_id, old_list)
+            )
+            cursor.execute(
+                """UPDATE user_watchlist_lists
+                   SET list_name = ?, updated_at = datetime('now')
+                   WHERE user_id = ? AND list_name = ?""",
+                (new_list, user_id, old_list)
+            )
+
+            conn.commit()
+            return True
+
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()
+
+    def delete_watchlist(
+        self,
+        list_name: str,
+        user_id: str = "default",
+        move_to_list: Optional[str] = None,
+    ) -> bool:
+        """Delete a watchlist, optionally moving its tickers to another list."""
+        source_list = _normalize_list_name(list_name)
+        target_list = _normalize_list_name(move_to_list) if move_to_list is not None else None
+
+        if target_list and target_list == source_list:
+            raise ValueError("Target list must be different from source list")
+
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                """SELECT 1 FROM user_watchlist_lists
+                   WHERE user_id = ? AND list_name = ?""",
+                (user_id, source_list)
+            )
+            if not cursor.fetchone():
+                return False
+
+            if target_list:
+                cursor.execute(
+                    """INSERT OR IGNORE INTO user_watchlist_lists (user_id, list_name)
+                       VALUES (?, ?)""",
+                    (user_id, target_list)
+                )
+                cursor.execute(
+                    """UPDATE OR IGNORE user_watchlist
+                       SET list_name = ?
+                       WHERE user_id = ? AND list_name = ?""",
+                    (target_list, user_id, source_list)
+                )
+                cursor.execute(
+                    """UPDATE user_watchlist_lists
+                       SET updated_at = datetime('now')
+                       WHERE user_id = ? AND list_name = ?""",
+                    (user_id, target_list)
+                )
+                cursor.execute(
+                    """DELETE FROM user_watchlist
+                       WHERE user_id = ? AND list_name = ?""",
+                    (user_id, source_list)
+                )
+            else:
+                cursor.execute(
+                    """DELETE FROM user_watchlist
+                       WHERE user_id = ? AND list_name = ?""",
+                    (user_id, source_list)
+                )
+
+            cursor.execute(
+                """DELETE FROM user_watchlist_lists
+                   WHERE user_id = ? AND list_name = ?""",
+                (user_id, source_list)
+            )
+
+            cursor.execute(
+                """SELECT COUNT(*) FROM user_watchlist_lists WHERE user_id = ?""",
+                (user_id,)
+            )
+            remaining = cursor.fetchone()[0]
+            if remaining == 0:
+                cursor.execute(
+                    """INSERT OR IGNORE INTO user_watchlist_lists (user_id, list_name)
+                       VALUES (?, 'Default')""",
+                    (user_id,)
+                )
+
+            conn.commit()
+            return True
+
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()
+
+    def move_ticker(
+        self,
+        ticker: str,
+        from_list_name: str,
+        to_list_name: str,
+        user_id: str = "default",
+    ) -> bool:
+        """Move a ticker from one watchlist to another."""
+        from_list = _normalize_list_name(from_list_name)
+        to_list = _normalize_list_name(to_list_name)
+
+        if from_list == to_list:
+            return False
+
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                """INSERT OR IGNORE INTO user_watchlist_lists (user_id, list_name)
+                   VALUES (?, ?)""",
+                (user_id, to_list)
+            )
+
+            cursor.execute(
+                """SELECT added_at FROM user_watchlist
+                   WHERE user_id = ? AND list_name = ? AND ticker = ?""",
+                (user_id, from_list, ticker.upper())
+            )
+            existing = cursor.fetchone()
+            if not existing:
+                return False
+
+            added_at = existing[0]
+            cursor.execute(
+                """INSERT OR IGNORE INTO user_watchlist (user_id, list_name, ticker, added_at)
+                   VALUES (?, ?, ?, ?)""",
+                (user_id, to_list, ticker.upper(), added_at)
+            )
+            cursor.execute(
+                """DELETE FROM user_watchlist
+                   WHERE user_id = ? AND list_name = ? AND ticker = ?""",
+                (user_id, from_list, ticker.upper())
+            )
+            cursor.execute(
+                """UPDATE user_watchlist_lists
+                   SET updated_at = datetime('now')
+                   WHERE user_id = ? AND list_name IN (?, ?)""",
+                (user_id, from_list, to_list)
+            )
+
+            conn.commit()
+            return True
+
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()
+
+    def get_watchlist(self, user_id: str = "default", list_name: str = "Default") -> List[Dict[str, Any]]:
         """
         Get all tickers in user's watchlist with latest price info.
 
@@ -115,13 +390,14 @@ class WatchlistRepository(BaseRepository):
         conn = self._get_conn()
         try:
             cursor = conn.cursor()
+            normalized_list = _normalize_list_name(list_name)
 
             # Get watchlist tickers
             cursor.execute(
-                """SELECT ticker, added_at FROM user_watchlist
-                   WHERE user_id = ?
+                """SELECT ticker, added_at, list_name FROM user_watchlist
+                   WHERE user_id = ? AND list_name = ?
                    ORDER BY added_at DESC""",
-                (user_id,)
+                (user_id, normalized_list)
             )
 
             results = []
@@ -134,6 +410,7 @@ class WatchlistRepository(BaseRepository):
                 results.append({
                     "ticker": ticker,
                     "added_at": row[1],
+                    "list_name": row[2],
                     "latest_price": latest_price
                 })
 
@@ -267,16 +544,24 @@ class WatchlistRepository(BaseRepository):
         except Exception:
             return None
 
-    def is_in_watchlist(self, ticker: str, user_id: str = "default") -> bool:
+    def is_in_watchlist(self, ticker: str, user_id: str = "default", list_name: Optional[str] = "Default") -> bool:
         """Check if a ticker is in user's watchlist."""
         conn = self._get_conn()
         try:
             cursor = conn.cursor()
-            cursor.execute(
-                """SELECT 1 FROM user_watchlist
-                   WHERE user_id = ? AND ticker = ?""",
-                (user_id, ticker.upper())
-            )
+            if list_name is None:
+                cursor.execute(
+                    """SELECT 1 FROM user_watchlist
+                       WHERE user_id = ? AND ticker = ?""",
+                    (user_id, ticker.upper())
+                )
+            else:
+                normalized_list = _normalize_list_name(list_name)
+                cursor.execute(
+                    """SELECT 1 FROM user_watchlist
+                       WHERE user_id = ? AND list_name = ? AND ticker = ?""",
+                    (user_id, normalized_list, ticker.upper())
+                )
             return cursor.fetchone() is not None
 
         except Exception:
@@ -285,14 +570,16 @@ class WatchlistRepository(BaseRepository):
             
                 conn.close()
 
-    def get_watchlist_count(self, user_id: str = "default") -> int:
+    def get_watchlist_count(self, user_id: str = "default", list_name: str = "Default") -> int:
         """Get number of tickers in watchlist."""
         conn = self._get_conn()
         try:
             cursor = conn.cursor()
+            normalized_list = _normalize_list_name(list_name)
             cursor.execute(
-                """SELECT COUNT(*) FROM user_watchlist WHERE user_id = ?""",
-                (user_id,)
+                """SELECT COUNT(*) FROM user_watchlist
+                   WHERE user_id = ? AND list_name = ?""",
+                (user_id, normalized_list)
             )
             result = cursor.fetchone()
             return result[0] if result else 0
@@ -303,16 +590,17 @@ class WatchlistRepository(BaseRepository):
             
                 conn.close()
 
-    def get_watchlist_tickers(self, user_id: str = "default") -> List[str]:
+    def get_watchlist_tickers(self, user_id: str = "default", list_name: str = "Default") -> List[str]:
         """Get just the ticker symbols as a list."""
         conn = self._get_conn()
         try:
             cursor = conn.cursor()
+            normalized_list = _normalize_list_name(list_name)
             cursor.execute(
                 """SELECT ticker FROM user_watchlist
-                   WHERE user_id = ?
+                   WHERE user_id = ? AND list_name = ?
                    ORDER BY ticker""",
-                (user_id,)
+                (user_id, normalized_list)
             )
             return [row[0] for row in cursor.fetchall()]
 
@@ -322,7 +610,7 @@ class WatchlistRepository(BaseRepository):
             
                 conn.close()
 
-    def reorder_watchlist(self, tickers: List[str], user_id: str = "default") -> bool:
+    def reorder_watchlist(self, tickers: List[str], user_id: str = "default", list_name: str = "Default") -> bool:
         """
         Reorder watchlist by updating added_at timestamps.
 
@@ -336,6 +624,7 @@ class WatchlistRepository(BaseRepository):
         conn = self._get_conn()
         try:
             cursor = conn.cursor()
+            normalized_list = _normalize_list_name(list_name)
 
             # Update each ticker's added_at to control order
             now = datetime.now()
@@ -344,9 +633,16 @@ class WatchlistRepository(BaseRepository):
                 cursor.execute(
                     """UPDATE user_watchlist
                        SET added_at = ?
-                       WHERE user_id = ? AND ticker = ?""",
-                    (new_time.isoformat(), user_id, ticker.upper())
+                       WHERE user_id = ? AND list_name = ? AND ticker = ?""",
+                    (new_time.isoformat(), user_id, normalized_list, ticker.upper())
                 )
+
+            cursor.execute(
+                """UPDATE user_watchlist_lists
+                   SET updated_at = datetime('now')
+                   WHERE user_id = ? AND list_name = ?""",
+                (user_id, normalized_list)
+            )
 
             conn.commit()
             return True

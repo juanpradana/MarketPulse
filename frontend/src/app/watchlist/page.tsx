@@ -20,6 +20,7 @@ import {
     CardSkeleton
 } from '@/components/shared';
 import { watchlistApi, type WatchlistItemWithAnalysis } from '@/services/api';
+import type { WatchlistCollection } from '@/services/api/watchlist';
 import { bandarmologyApi } from '@/services/api/bandarmology';
 import { useFilter } from '@/context/filter-context';
 import {
@@ -55,6 +56,10 @@ import { cn } from '@/lib/utils';
 
 export default function WatchlistPage() {
     const [watchlist, setWatchlist] = useState<WatchlistItemWithAnalysis[]>([]);
+    const [watchlists, setWatchlists] = useState<WatchlistCollection[]>([]);
+    const [selectedList, setSelectedList] = useState('Default');
+    const [newListName, setNewListName] = useState('');
+    const [creatingList, setCreatingList] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [newTicker, setNewTicker] = useState('');
@@ -72,10 +77,19 @@ export default function WatchlistPage() {
     } | null>(null);
     const { setTicker } = useFilter();
 
+    const fetchWatchlists = useCallback(async () => {
+        const collections = await watchlistApi.getLists();
+        setWatchlists(collections);
+
+        if (!collections.find((item) => item.list_name === selectedList)) {
+            setSelectedList(collections[0]?.list_name || 'Default');
+        }
+    }, [selectedList]);
+
     const fetchWatchlist = useCallback(async () => {
         try {
             setLoading(true);
-            const data = await watchlistApi.getWatchlistWithAnalysis();
+            const data = await watchlistApi.getWatchlistWithAnalysis(selectedList);
             setWatchlist(data);
             setError(null);
         } catch (err) {
@@ -83,11 +97,19 @@ export default function WatchlistPage() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [selectedList]);
 
     useEffect(() => {
-        fetchWatchlist();
-    }, [fetchWatchlist]);
+        const bootstrap = async () => {
+            try {
+                await fetchWatchlists();
+            } catch {
+                setError('Failed to load watchlist collections');
+            }
+            await fetchWatchlist();
+        };
+        bootstrap();
+    }, [fetchWatchlists, fetchWatchlist]);
 
     // Poll for analysis status when analyzing
     useEffect(() => {
@@ -169,8 +191,9 @@ export default function WatchlistPage() {
 
         try {
             setAdding(true);
-            await watchlistApi.addTicker(newTicker.trim().toUpperCase());
+            await watchlistApi.addTicker(newTicker.trim().toUpperCase(), selectedList);
             setNewTicker('');
+            await fetchWatchlists();
             await fetchWatchlist();
         } catch (err) {
             setError('Failed to add ticker');
@@ -181,10 +204,27 @@ export default function WatchlistPage() {
 
     const handleRemoveTicker = async (ticker: string) => {
         try {
-            await watchlistApi.removeTicker(ticker);
+            await watchlistApi.removeTicker(ticker, selectedList);
+            await fetchWatchlists();
             await fetchWatchlist();
         } catch (err) {
             setError('Failed to remove ticker');
+        }
+    };
+
+    const handleCreateWatchlist = async () => {
+        if (!newListName.trim()) return;
+        try {
+            setCreatingList(true);
+            await watchlistApi.createList(newListName.trim());
+            const target = newListName.trim();
+            setNewListName('');
+            await fetchWatchlists();
+            setSelectedList(target);
+        } catch (err) {
+            setError('Failed to create watchlist');
+        } finally {
+            setCreatingList(false);
         }
     };
 
@@ -384,7 +424,7 @@ export default function WatchlistPage() {
                         <Star className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-500 flex-shrink-0" />
                         <h1 className="text-xl sm:text-2xl font-bold truncate">My Watchlist</h1>
                         <Badge variant="secondary" className="flex-shrink-0 text-xs">
-                            {watchlist.length}
+                            {selectedList} · {watchlist.length}
                         </Badge>
                     </div>
                     <Button
@@ -464,7 +504,40 @@ export default function WatchlistPage() {
 
             {/* Add Ticker */}
             <Card className="p-3 sm:p-4 mb-4 sm:mb-6">
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:gap-3">
+                    <div className="flex gap-2">
+                        <select
+                            value={selectedList}
+                            onChange={(e) => setSelectedList(e.target.value)}
+                            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                            {watchlists.map((item) => (
+                                <option key={item.list_name} value={item.list_name}>
+                                    {item.list_name} ({item.ticker_count})
+                                </option>
+                            ))}
+                        </select>
+                        <div className="flex-1 flex gap-2">
+                            <Input
+                                placeholder="New list name"
+                                value={newListName}
+                                onChange={(e) => setNewListName(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleCreateWatchlist()}
+                                className="h-9 text-sm"
+                            />
+                            <Button
+                                onClick={handleCreateWatchlist}
+                                disabled={creatingList || !newListName.trim()}
+                                size="sm"
+                                variant="outline"
+                                className="h-9"
+                            >
+                                + List
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-2">
                     <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <Input
@@ -484,6 +557,7 @@ export default function WatchlistPage() {
                         <Plus className="w-4 h-4 sm:mr-1.5" />
                         <span className="hidden sm:inline text-sm">Add</span>
                     </Button>
+                    </div>
                 </div>
             </Card>
 

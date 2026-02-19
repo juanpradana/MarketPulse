@@ -609,13 +609,79 @@ class DatabaseConnection:
             CREATE TABLE IF NOT EXISTS user_watchlist (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id TEXT DEFAULT 'default',
+                list_name TEXT DEFAULT 'Default',
                 ticker TEXT NOT NULL,
                 added_at DATETIME DEFAULT (datetime('now')),
-                UNIQUE(user_id, ticker)
+                UNIQUE(user_id, list_name, ticker)
             );
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_watchlist_lists (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT DEFAULT 'default',
+                list_name TEXT NOT NULL,
+                created_at DATETIME DEFAULT (datetime('now')),
+                updated_at DATETIME DEFAULT (datetime('now')),
+                UNIQUE(user_id, list_name)
+            );
+        """)
+
+        # Migration: rebuild user_watchlist table if old schema lacks list_name
+        try:
+            cursor = conn.execute("PRAGMA table_info(user_watchlist)")
+            columns = [row[1] for row in cursor.fetchall()]
+            needs_rebuild = 'list_name' not in columns
+
+            if not needs_rebuild:
+                idx_cursor = conn.execute("PRAGMA index_list(user_watchlist)")
+                for idx in idx_cursor.fetchall():
+                    idx_name = idx[1]
+                    is_unique = idx[2]
+                    if not is_unique:
+                        continue
+                    info = conn.execute(f"PRAGMA index_info('{idx_name}')").fetchall()
+                    idx_cols = [row[2] for row in info]
+                    if idx_cols == ['user_id', 'ticker']:
+                        needs_rebuild = True
+                        break
+
+            if needs_rebuild:
+                conn.execute("DROP TABLE IF EXISTS user_watchlist_old;")
+                conn.execute("ALTER TABLE user_watchlist RENAME TO user_watchlist_old;")
+                conn.execute("""
+                    CREATE TABLE user_watchlist (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id TEXT DEFAULT 'default',
+                        list_name TEXT DEFAULT 'Default',
+                        ticker TEXT NOT NULL,
+                        added_at DATETIME DEFAULT (datetime('now')),
+                        UNIQUE(user_id, list_name, ticker)
+                    );
+                """)
+                conn.execute("""
+                    INSERT INTO user_watchlist (user_id, list_name, ticker, added_at)
+                    SELECT user_id, 'Default', ticker, added_at
+                    FROM user_watchlist_old;
+                """)
+                conn.execute("DROP TABLE user_watchlist_old;")
+        except sqlite3.OperationalError:
+            pass
+
+        # Backfill list metadata from user_watchlist rows
+        conn.execute("""
+            INSERT OR IGNORE INTO user_watchlist_lists (user_id, list_name, created_at, updated_at)
+            SELECT user_id,
+                   COALESCE(NULLIF(list_name, ''), 'Default') AS list_name,
+                   MIN(added_at),
+                   MAX(added_at)
+            FROM user_watchlist
+            GROUP BY user_id, COALESCE(NULLIF(list_name, ''), 'Default');
+        """)
+
         conn.execute("CREATE INDEX IF NOT EXISTS idx_watchlist_user ON user_watchlist(user_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_watchlist_user_list ON user_watchlist(user_id, list_name);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_watchlist_ticker ON user_watchlist(ticker);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_watchlist_lists_user ON user_watchlist_lists(user_id);")
 
         # Migration: Add new columns to existing bandarmology_deep_cache table
         new_columns = [

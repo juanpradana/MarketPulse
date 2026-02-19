@@ -9,6 +9,7 @@ import { API_BASE_URL } from './base';
 export interface WatchlistItem {
     ticker: string;
     added_at: string;
+    list_name?: string;
     company_name?: string;
     latest_price?: {
         price: number;
@@ -50,6 +51,7 @@ export interface BandarmologyAnalysis {
 export interface WatchlistItemWithAnalysis {
     ticker: string;
     added_at: string;
+    list_name?: string;
     company_name?: string;
     latest_price?: {
         price: number;
@@ -67,20 +69,29 @@ export interface WatchlistStats {
     count: number;
     tickers: string[];
     user_id: string;
+    list_name?: string;
+}
+
+export interface WatchlistCollection {
+    list_name: string;
+    created_at?: string;
+    updated_at?: string;
+    ticker_count: number;
 }
 
 export interface WatchlistToggleResponse {
     status: 'added' | 'removed';
     ticker: string;
     in_watchlist: boolean;
+    list_name?: string;
 }
 
 export const watchlistApi = {
     /**
      * Get full watchlist with details
      */
-    getWatchlist: async (): Promise<WatchlistItem[]> => {
-        const response = await fetch(`${API_BASE_URL}/api/watchlist`);
+    getWatchlist: async (listName: string = 'Default'): Promise<WatchlistItem[]> => {
+        const response = await fetch(`${API_BASE_URL}/api/watchlist?list_name=${encodeURIComponent(listName)}`);
         if (!response.ok) {
             throw new Error('Failed to fetch watchlist');
         }
@@ -90,8 +101,8 @@ export const watchlistApi = {
     /**
      * Get watchlist with Alpha Hunter and Bandarmology analysis
      */
-    getWatchlistWithAnalysis: async (): Promise<WatchlistItemWithAnalysis[]> => {
-        const response = await fetch(`${API_BASE_URL}/api/watchlist/with-analysis`);
+    getWatchlistWithAnalysis: async (listName: string = 'Default'): Promise<WatchlistItemWithAnalysis[]> => {
+        const response = await fetch(`${API_BASE_URL}/api/watchlist/with-analysis?list_name=${encodeURIComponent(listName)}`);
         if (!response.ok) {
             throw new Error('Failed to fetch watchlist with analysis');
         }
@@ -101,8 +112,8 @@ export const watchlistApi = {
     /**
      * Get just ticker symbols
      */
-    getTickers: async (): Promise<string[]> => {
-        const response = await fetch(`${API_BASE_URL}/api/watchlist/tickers`);
+    getTickers: async (listName: string = 'Default'): Promise<string[]> => {
+        const response = await fetch(`${API_BASE_URL}/api/watchlist/tickers?list_name=${encodeURIComponent(listName)}`);
         if (!response.ok) {
             throw new Error('Failed to fetch tickers');
         }
@@ -113,11 +124,11 @@ export const watchlistApi = {
     /**
      * Add ticker to watchlist
      */
-    addTicker: async (ticker: string): Promise<{ status: string; message: string }> => {
+    addTicker: async (ticker: string, listName: string = 'Default'): Promise<{ status: string; message: string; list_name?: string }> => {
         const response = await fetch(`${API_BASE_URL}/api/watchlist/add`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ticker })
+            body: JSON.stringify({ ticker, list_name: listName })
         });
         if (!response.ok) {
             const error = await response.json();
@@ -129,11 +140,11 @@ export const watchlistApi = {
     /**
      * Remove ticker from watchlist
      */
-    removeTicker: async (ticker: string): Promise<{ status: string; message: string }> => {
+    removeTicker: async (ticker: string, listName: string = 'Default'): Promise<{ status: string; message: string; list_name?: string }> => {
         const response = await fetch(`${API_BASE_URL}/api/watchlist/remove`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ticker })
+            body: JSON.stringify({ ticker, list_name: listName })
         });
         if (!response.ok) {
             const error = await response.json();
@@ -145,11 +156,11 @@ export const watchlistApi = {
     /**
      * Toggle ticker in watchlist (add if not exists, remove if exists)
      */
-    toggleTicker: async (ticker: string): Promise<WatchlistToggleResponse> => {
+    toggleTicker: async (ticker: string, listName: string = 'Default'): Promise<WatchlistToggleResponse> => {
         const response = await fetch(`${API_BASE_URL}/api/watchlist/toggle`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ticker })
+            body: JSON.stringify({ ticker, list_name: listName })
         });
         if (!response.ok) {
             const error = await response.json();
@@ -161,8 +172,8 @@ export const watchlistApi = {
     /**
      * Check if ticker is in watchlist
      */
-    checkWatchlist: async (ticker: string): Promise<{ ticker: string; in_watchlist: boolean }> => {
-        const response = await fetch(`${API_BASE_URL}/api/watchlist/check/${ticker}`);
+    checkWatchlist: async (ticker: string, listName: string = 'Default'): Promise<{ ticker: string; in_watchlist: boolean; list_name?: string }> => {
+        const response = await fetch(`${API_BASE_URL}/api/watchlist/check/${ticker}?list_name=${encodeURIComponent(listName)}`);
         if (!response.ok) {
             throw new Error('Failed to check watchlist');
         }
@@ -172,8 +183,8 @@ export const watchlistApi = {
     /**
      * Get watchlist stats
      */
-    getStats: async (): Promise<WatchlistStats> => {
-        const response = await fetch(`${API_BASE_URL}/api/watchlist/stats`);
+    getStats: async (listName: string = 'Default'): Promise<WatchlistStats> => {
+        const response = await fetch(`${API_BASE_URL}/api/watchlist/stats?list_name=${encodeURIComponent(listName)}`);
         if (!response.ok) {
             throw new Error('Failed to fetch stats');
         }
@@ -214,6 +225,87 @@ export const watchlistApi = {
         const response = await fetch(`${API_BASE_URL}/api/watchlist/analyze-status`);
         if (!response.ok) {
             throw new Error('Failed to fetch analysis status');
+        }
+        return await response.json();
+    },
+
+    /**
+     * Get all watchlist collections
+     */
+    getLists: async (): Promise<WatchlistCollection[]> => {
+        const response = await fetch(`${API_BASE_URL}/api/watchlist/lists`);
+        if (!response.ok) {
+            throw new Error('Failed to fetch watchlist collections');
+        }
+        return await response.json();
+    },
+
+    /**
+     * Create a watchlist collection
+     */
+    createList: async (listName: string): Promise<{ status: string; message: string }> => {
+        const response = await fetch(`${API_BASE_URL}/api/watchlist/lists`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ list_name: listName })
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to create watchlist');
+        }
+        return await response.json();
+    },
+
+    /**
+     * Rename watchlist collection
+     */
+    renameList: async (oldName: string, newName: string): Promise<{ status: string; message: string }> => {
+        const response = await fetch(`${API_BASE_URL}/api/watchlist/lists/${encodeURIComponent(oldName)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ new_name: newName })
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to rename watchlist');
+        }
+        return await response.json();
+    },
+
+    /**
+     * Delete watchlist collection
+     */
+    deleteList: async (listName: string, moveToList?: string): Promise<{ status: string; message: string }> => {
+        const url = new URL(`${API_BASE_URL}/api/watchlist/lists/${encodeURIComponent(listName)}`);
+        if (moveToList) {
+            url.searchParams.set('move_to_list', moveToList);
+        }
+        const response = await fetch(url.toString(), {
+            method: 'DELETE'
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to delete watchlist');
+        }
+        return await response.json();
+    },
+
+    /**
+     * Move ticker between watchlist collections
+     */
+    moveTicker: async (ticker: string, fromListName: string, toListName: string): Promise<{ status: string; message: string }> => {
+        const response = await fetch(`${API_BASE_URL}/api/watchlist/move-ticker`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ticker,
+                from_list_name: fromListName,
+                to_list_name: toListName,
+            })
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to move ticker');
         }
         return await response.json();
     }

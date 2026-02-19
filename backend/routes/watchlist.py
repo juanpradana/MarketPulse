@@ -19,17 +19,50 @@ router = APIRouter(prefix="/api/watchlist", tags=["Watchlist"])
 class AddTickerRequest(BaseModel):
     """Request to add ticker to watchlist."""
     ticker: str
+    list_name: Optional[str] = None
 
 
 class RemoveTickerRequest(BaseModel):
     """Request to remove ticker from watchlist."""
     ticker: str
+    list_name: Optional[str] = None
+
+
+class CreateWatchlistRequest(BaseModel):
+    """Request to create a new watchlist."""
+    list_name: str
+
+
+class RenameWatchlistRequest(BaseModel):
+    """Request to rename watchlist."""
+    new_name: str
+
+
+class DeleteWatchlistRequest(BaseModel):
+    """Request to delete watchlist with optional move target."""
+    move_to_list: Optional[str] = None
+
+
+class MoveTickerRequest(BaseModel):
+    """Request to move ticker across watchlists."""
+    ticker: str
+    from_list_name: str
+    to_list_name: str
+
+
+class WatchlistCollection(BaseModel):
+    """Watchlist metadata response."""
+    list_name: str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    ticker_count: int = 0
 
 
 class WatchlistItem(BaseModel):
     """Watchlist item response."""
     ticker: str
     added_at: str
+    list_name: Optional[str] = None
     company_name: Optional[str] = None
     latest_price: Optional[dict] = None
 
@@ -69,6 +102,7 @@ class WatchlistItemWithAnalysis(BaseModel):
     """Watchlist item with combined analysis."""
     ticker: str
     added_at: str
+    list_name: Optional[str] = None
     company_name: Optional[str] = None
     latest_price: Optional[dict] = None
     alpha_hunter: AlphaHunterAnalysis
@@ -78,7 +112,7 @@ class WatchlistItemWithAnalysis(BaseModel):
 
 
 @router.get("", response_model=List[WatchlistItem])
-async def get_watchlist(user_id: str = "default"):
+async def get_watchlist(user_id: str = "default", list_name: str = "Default"):
     """
     Get user's watchlist with latest price data.
 
@@ -92,7 +126,7 @@ async def get_watchlist(user_id: str = "default"):
         from db.watchlist_repository import WatchlistRepository
 
         repo = WatchlistRepository()
-        watchlist = repo.get_watchlist(user_id)
+        watchlist = repo.get_watchlist(user_id, list_name)
 
         return watchlist
 
@@ -116,17 +150,20 @@ async def add_ticker(request: AddTickerRequest, user_id: str = "default"):
         from db.watchlist_repository import WatchlistRepository
 
         repo = WatchlistRepository()
-        added = repo.add_ticker(request.ticker, user_id)
+        list_name = request.list_name or "Default"
+        added = repo.add_ticker(request.ticker, user_id, list_name)
 
         if added:
             return {
                 "status": "success",
-                "message": f"{request.ticker.upper()} added to watchlist"
+                "message": f"{request.ticker.upper()} added to watchlist '{list_name}'",
+                "list_name": list_name,
             }
         else:
             return {
                 "status": "exists",
-                "message": f"{request.ticker.upper()} is already in watchlist"
+                "message": f"{request.ticker.upper()} is already in watchlist '{list_name}'",
+                "list_name": list_name,
             }
 
     except Exception as e:
@@ -149,15 +186,17 @@ async def remove_ticker(request: RemoveTickerRequest, user_id: str = "default"):
         from db.watchlist_repository import WatchlistRepository
 
         repo = WatchlistRepository()
-        removed = repo.remove_ticker(request.ticker, user_id)
+        list_name = request.list_name or "Default"
+        removed = repo.remove_ticker(request.ticker, user_id, list_name)
 
         if removed:
             return {
                 "status": "success",
-                "message": f"{request.ticker.upper()} removed from watchlist"
+                "message": f"{request.ticker.upper()} removed from watchlist '{list_name}'",
+                "list_name": list_name,
             }
         else:
-            raise HTTPException(status_code=404, detail=f"{request.ticker.upper()} not found in watchlist")
+            raise HTTPException(status_code=404, detail=f"{request.ticker.upper()} not found in watchlist '{list_name}'")
 
     except HTTPException:
         raise
@@ -166,7 +205,7 @@ async def remove_ticker(request: RemoveTickerRequest, user_id: str = "default"):
 
 
 @router.get("/tickers")
-async def get_watchlist_tickers(user_id: str = "default"):
+async def get_watchlist_tickers(user_id: str = "default", list_name: str = "Default"):
     """
     Get just the ticker symbols from watchlist.
 
@@ -180,11 +219,12 @@ async def get_watchlist_tickers(user_id: str = "default"):
         from db.watchlist_repository import WatchlistRepository
 
         repo = WatchlistRepository()
-        tickers = repo.get_watchlist_tickers(user_id)
+        tickers = repo.get_watchlist_tickers(user_id, list_name)
 
         return {
             "tickers": tickers,
-            "count": len(tickers)
+            "count": len(tickers),
+            "list_name": list_name,
         }
 
     except Exception as e:
@@ -192,7 +232,7 @@ async def get_watchlist_tickers(user_id: str = "default"):
 
 
 @router.get("/check/{ticker}")
-async def check_watchlist(ticker: str, user_id: str = "default"):
+async def check_watchlist(ticker: str, user_id: str = "default", list_name: Optional[str] = "Default"):
     """
     Check if a specific ticker is in watchlist.
 
@@ -207,11 +247,12 @@ async def check_watchlist(ticker: str, user_id: str = "default"):
         from db.watchlist_repository import WatchlistRepository
 
         repo = WatchlistRepository()
-        is_in = repo.is_in_watchlist(ticker, user_id)
+        is_in = repo.is_in_watchlist(ticker, user_id, list_name)
 
         return {
             "ticker": ticker.upper(),
-            "in_watchlist": is_in
+            "in_watchlist": is_in,
+            "list_name": list_name,
         }
 
     except Exception as e:
@@ -219,7 +260,7 @@ async def check_watchlist(ticker: str, user_id: str = "default"):
 
 
 @router.get("/stats")
-async def get_watchlist_stats(user_id: str = "default"):
+async def get_watchlist_stats(user_id: str = "default", list_name: str = "Default"):
     """
     Get watchlist statistics.
 
@@ -233,13 +274,14 @@ async def get_watchlist_stats(user_id: str = "default"):
         from db.watchlist_repository import WatchlistRepository
 
         repo = WatchlistRepository()
-        count = repo.get_watchlist_count(user_id)
-        tickers = repo.get_watchlist_tickers(user_id)
+        count = repo.get_watchlist_count(user_id, list_name)
+        tickers = repo.get_watchlist_tickers(user_id, list_name)
 
         return {
             "count": count,
             "tickers": tickers,
-            "user_id": user_id
+            "user_id": user_id,
+            "list_name": list_name,
         }
 
     except Exception as e:
@@ -262,21 +304,24 @@ async def toggle_watchlist(request: AddTickerRequest, user_id: str = "default"):
         from db.watchlist_repository import WatchlistRepository
 
         repo = WatchlistRepository()
-        is_in = repo.is_in_watchlist(request.ticker, user_id)
+        list_name = request.list_name or "Default"
+        is_in = repo.is_in_watchlist(request.ticker, user_id, list_name)
 
         if is_in:
-            repo.remove_ticker(request.ticker, user_id)
+            repo.remove_ticker(request.ticker, user_id, list_name)
             return {
                 "status": "removed",
                 "ticker": request.ticker.upper(),
-                "in_watchlist": False
+                "in_watchlist": False,
+                "list_name": list_name,
             }
         else:
-            repo.add_ticker(request.ticker, user_id)
+            repo.add_ticker(request.ticker, user_id, list_name)
             return {
                 "status": "added",
                 "ticker": request.ticker.upper(),
-                "in_watchlist": True
+                "in_watchlist": True,
+                "list_name": list_name,
             }
 
     except Exception as e:
@@ -284,7 +329,7 @@ async def toggle_watchlist(request: AddTickerRequest, user_id: str = "default"):
 
 
 @router.get("/with-analysis", response_model=List[WatchlistItemWithAnalysis])
-async def get_watchlist_with_analysis(user_id: str = "default"):
+async def get_watchlist_with_analysis(user_id: str = "default", list_name: str = "Default"):
     """
     Get user's watchlist with Alpha Hunter and Bandarmology analysis.
 
@@ -303,7 +348,7 @@ async def get_watchlist_with_analysis(user_id: str = "default"):
         neobdm_repo = NeoBDMRepository()
         bandar_repo = BandarmologyRepository()
 
-        watchlist = repo.get_watchlist(user_id)
+        watchlist = repo.get_watchlist(user_id, list_name)
         results = []
 
         for item in watchlist:
@@ -363,6 +408,7 @@ async def get_watchlist_with_analysis(user_id: str = "default"):
             results.append(WatchlistItemWithAnalysis(
                 ticker=ticker,
                 added_at=item["added_at"],
+                list_name=item.get("list_name"),
                 company_name=item.get("company_name"),
                 latest_price=latest_price,
                 alpha_hunter=alpha_analysis,
@@ -375,6 +421,109 @@ async def get_watchlist_with_analysis(user_id: str = "default"):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get watchlist with analysis: {str(e)}")
+
+
+@router.get("/lists", response_model=List[WatchlistCollection])
+async def get_watchlist_lists(user_id: str = "default"):
+    """Get all watchlist collections for a user."""
+    try:
+        from db.watchlist_repository import WatchlistRepository
+
+        repo = WatchlistRepository()
+        return repo.list_watchlists(user_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get watchlist collections: {str(e)}")
+
+
+@router.post("/lists")
+async def create_watchlist(request: CreateWatchlistRequest, user_id: str = "default"):
+    """Create a new watchlist collection."""
+    try:
+        from db.watchlist_repository import WatchlistRepository
+
+        repo = WatchlistRepository()
+        created = repo.create_watchlist(request.list_name, user_id)
+        if not created:
+            return {
+                "status": "exists",
+                "message": f"Watchlist '{request.list_name}' already exists"
+            }
+        return {
+            "status": "success",
+            "message": f"Watchlist '{request.list_name}' created"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create watchlist: {str(e)}")
+
+
+@router.patch("/lists/{list_name}")
+async def rename_watchlist(list_name: str, request: RenameWatchlistRequest, user_id: str = "default"):
+    """Rename an existing watchlist collection."""
+    try:
+        from db.watchlist_repository import WatchlistRepository
+
+        repo = WatchlistRepository()
+        renamed = repo.rename_watchlist(list_name, request.new_name, user_id)
+        if not renamed:
+            raise HTTPException(status_code=404, detail=f"Watchlist '{list_name}' not found")
+        return {
+            "status": "success",
+            "message": f"Watchlist '{list_name}' renamed to '{request.new_name}'"
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to rename watchlist: {str(e)}")
+
+
+@router.delete("/lists/{list_name}")
+async def delete_watchlist(list_name: str, user_id: str = "default", move_to_list: Optional[str] = None):
+    """Delete a watchlist collection and optionally move its tickers."""
+    try:
+        from db.watchlist_repository import WatchlistRepository
+
+        repo = WatchlistRepository()
+        deleted = repo.delete_watchlist(list_name, user_id, move_to_list)
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Watchlist '{list_name}' not found")
+        return {
+            "status": "success",
+            "message": f"Watchlist '{list_name}' deleted",
+            "moved_to": move_to_list,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete watchlist: {str(e)}")
+
+
+@router.post("/move-ticker")
+async def move_ticker_between_lists(request: MoveTickerRequest, user_id: str = "default"):
+    """Move ticker from one watchlist collection to another."""
+    try:
+        from db.watchlist_repository import WatchlistRepository
+
+        repo = WatchlistRepository()
+        moved = repo.move_ticker(
+            ticker=request.ticker,
+            from_list_name=request.from_list_name,
+            to_list_name=request.to_list_name,
+            user_id=user_id,
+        )
+        if not moved:
+            raise HTTPException(status_code=404, detail=f"{request.ticker.upper()} not found in '{request.from_list_name}'")
+        return {
+            "status": "success",
+            "message": f"{request.ticker.upper()} moved from '{request.from_list_name}' to '{request.to_list_name}'",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to move ticker: {str(e)}")
 
 
 def _calculate_combined_rating(alpha: AlphaHunterAnalysis, bandar: BandarmologyAnalysis) -> Optional[str]:
