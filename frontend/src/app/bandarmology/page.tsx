@@ -106,6 +106,7 @@ export default function BandarmologyPage() {
     const [manualTicker, setManualTicker] = useState('');
     const [manualDeepLoading, setManualDeepLoading] = useState(false);
     const [deepTopN, setDeepTopN] = useState<number>(30);
+    const [deepConcurrency, setDeepConcurrency] = useState<number>(4);
     const deepPollRef = useRef<NodeJS.Timeout | null>(null);
     const pageSize = 50;
 
@@ -187,7 +188,8 @@ export default function BandarmologyPage() {
         try {
             await bandarmologyApi.triggerDeepAnalysisTickers(
                 manualTicker.trim(),
-                selectedDate || undefined
+                selectedDate || undefined,
+                deepConcurrency
             );
             setManualTicker('');
             startDeepPolling();
@@ -206,7 +208,8 @@ export default function BandarmologyPage() {
             await bandarmologyApi.triggerDeepAnalysis(
                 selectedDate || undefined,
                 deepTopN,
-                20
+                20,
+                deepConcurrency
             );
             startDeepPolling();
             const status = await bandarmologyApi.getDeepStatus();
@@ -494,6 +497,22 @@ export default function BandarmologyPage() {
                                     <option value={500}>500</option>
                                 </select>
                             </div>
+                            <div className="space-y-0">
+                                <label className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider block">Worker</label>
+                                <select
+                                    value={deepConcurrency}
+                                    onChange={(e) => setDeepConcurrency(Number(e.target.value))}
+                                    disabled={deepStatus?.running ?? false}
+                                    className="block w-16 bg-[#23252b] border border-cyan-700/50 text-cyan-300 font-bold text-[10px] rounded-sm py-0.5 px-1 outline-none focus:border-cyan-500/50 cursor-pointer disabled:opacity-50"
+                                >
+                                    <option value={1}>1</option>
+                                    <option value={2}>2</option>
+                                    <option value={4}>4</option>
+                                    <option value={6}>6</option>
+                                    <option value={8}>8</option>
+                                    <option value={12}>12</option>
+                                </select>
+                            </div>
                             <button
                                 onClick={handleTriggerDeep}
                                 disabled={loading || deepLoading || (deepStatus?.running ?? false)}
@@ -517,6 +536,21 @@ export default function BandarmologyPage() {
                         </button>
                     </div>
                 </div>
+
+                {deepStatus && (
+                    <div className="flex items-center gap-3 px-3 py-1 bg-[#10151d] border-t border-zinc-800/50 text-[9px] overflow-x-auto scrollbar-none">
+                        <span className="text-zinc-500">DEEP STATUS:</span>
+                        <span className="text-zinc-300">REQ <span className="font-bold">{deepStatus.requested ?? deepStatus.total}</span></span>
+                        <span className="text-zinc-300">QUAL <span className="font-bold text-emerald-400">{deepStatus.qualified ?? deepStatus.total}</span></span>
+                        <span className="text-zinc-300">PROC <span className="font-bold text-cyan-400">{deepStatus.processed ?? deepStatus.completed_tickers?.length ?? 0}</span></span>
+                        <span className="text-zinc-300">FAIL <span className="font-bold text-red-400">{deepStatus.failed ?? deepStatus.failed_tickers?.length ?? 0}</span></span>
+                        <span className="text-zinc-300">FRESH <span className="font-bold text-amber-400">{deepStatus.already_fresh_today ?? deepStatus.fresh_tickers?.length ?? 0}</span></span>
+                        <span className="text-zinc-300">WORKER <span className="font-bold text-cyan-300">{deepStatus.concurrency ?? deepConcurrency}</span></span>
+                        {deepStatus.running && deepStatus.active_tickers && deepStatus.active_tickers.length > 0 && (
+                            <span className="text-zinc-500">ACTIVE: <span className="text-zinc-300 font-bold">{deepStatus.active_tickers.join(', ')}</span></span>
+                        )}
+                    </div>
+                )}
 
                 {/* Stats Bar */}
                 <div className="flex items-center gap-3 lg:gap-4 px-3 py-1 bg-[#12141a] border-t border-zinc-800/40 text-[9px] overflow-x-auto scrollbar-none">

@@ -15,8 +15,16 @@ _deep_analysis_status = {
     "running": False,
     "progress": 0,
     "total": 0,
+    "requested": 0,
+    "qualified": 0,
+    "processed": 0,
+    "failed": 0,
+    "already_fresh_today": 0,
     "current_ticker": "",
+    "active_tickers": [],
     "completed_tickers": [],
+    "failed_tickers": [],
+    "fresh_tickers": [],
     "errors": []
 }
 
@@ -304,7 +312,8 @@ async def trigger_deep_analysis(
     background_tasks: BackgroundTasks,
     date: Optional[str] = Query(None, description="Analysis date"),
     top_n: int = Query(30, ge=5, le=500, description="Number of top stocks to deep analyze"),
-    min_base_score: int = Query(20, ge=0, description="Minimum base score to qualify for deep analysis")
+    min_base_score: int = Query(20, ge=0, description="Minimum base score to qualify for deep analysis"),
+    concurrency: int = Query(4, ge=1, le=12, description="Parallel ticker workers for deep analysis")
 ):
     """
     Trigger deep analysis (inventory + transaction chart scraping) for top N stocks.
@@ -331,6 +340,7 @@ async def trigger_deep_analysis(
 
         # Get top N candidates
         candidates = [r for r in results if r['total_score'] >= min_base_score]
+        qualified_count = len(candidates)
         tickers = [r['symbol'] for r in candidates[:top_n]]
 
         if not tickers:
@@ -341,22 +351,35 @@ async def trigger_deep_analysis(
             "running": True,
             "progress": 0,
             "total": len(tickers),
+            "requested": top_n,
+            "qualified": qualified_count,
+            "processed": 0,
+            "failed": 0,
+            "already_fresh_today": 0,
             "current_ticker": "",
+            "active_tickers": [],
             "completed_tickers": [],
+            "failed_tickers": [],
+            "fresh_tickers": [],
             "errors": [],
-            "date": actual_date
+            "date": actual_date,
+            "concurrency": concurrency
         }
 
         # Launch background task
         background_tasks.add_task(
             _run_deep_analysis,
-            tickers, actual_date, results
+            tickers, actual_date, results, concurrency
         )
 
         return {
             "message": f"Deep analysis started for {len(tickers)} stocks",
             "tickers": tickers,
-            "date": actual_date
+            "date": actual_date,
+            "requested": top_n,
+            "qualified": qualified_count,
+            "to_process": len(tickers),
+            "concurrency": concurrency
         }
 
     except Exception as e:
@@ -372,6 +395,7 @@ async def trigger_deep_analysis_tickers(
     background_tasks: BackgroundTasks,
     tickers: str = Query(..., description="Comma-separated ticker symbols to deep analyze"),
     date: Optional[str] = Query(None, description="Analysis date"),
+    concurrency: int = Query(4, ge=1, le=12, description="Parallel ticker workers for deep analysis"),
 ):
     """
     Trigger deep analysis for specific tickers (manual input).
@@ -408,21 +432,34 @@ async def trigger_deep_analysis_tickers(
             "running": True,
             "progress": 0,
             "total": len(ticker_list),
+            "requested": len(ticker_list),
+            "qualified": len(ticker_list),
+            "processed": 0,
+            "failed": 0,
+            "already_fresh_today": 0,
             "current_ticker": "",
+            "active_tickers": [],
             "completed_tickers": [],
+            "failed_tickers": [],
+            "fresh_tickers": [],
             "errors": [],
-            "date": actual_date
+            "date": actual_date,
+            "concurrency": concurrency
         }
 
         background_tasks.add_task(
             _run_deep_analysis,
-            ticker_list, actual_date, results
+            ticker_list, actual_date, results, concurrency
         )
 
         return {
             "message": f"Deep analysis started for {len(ticker_list)} ticker(s)",
             "tickers": ticker_list,
-            "date": actual_date
+            "date": actual_date,
+            "requested": len(ticker_list),
+            "qualified": len(ticker_list),
+            "to_process": len(ticker_list),
+            "concurrency": concurrency
         }
 
     except Exception as e:
@@ -439,7 +476,7 @@ async def get_deep_analysis_status():
     return _deep_analysis_status
 
 
-async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: list):
+async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: list, concurrency: int = 4):
     """Background task: scrape inventory + txn chart and run deep scoring."""
     global _deep_analysis_status
 
@@ -454,6 +491,8 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
     base_lookup = {r['symbol']: r for r in base_results}
 
     api_client = NeoBDMApiClient()
+    status_lock = asyncio.Lock()
+    db_write_lock = asyncio.Lock()
     try:
         login_ok = await api_client.login()
         if not login_ok:
@@ -464,201 +503,245 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
         from db.neobdm_repository import NeoBDMRepository
         neobdm_repo = NeoBDMRepository()
 
-        for i, ticker in enumerate(tickers):
-            _deep_analysis_status["current_ticker"] = ticker
-            _deep_analysis_status["progress"] = i
+        # Skip tickers that already have deep cache for analysis_date
+        fresh_tickers = []
+        tickers_to_process = []
+        for ticker in tickers:
+            existing = band_repo.get_deep_cache(ticker, analysis_date)
+            if existing:
+                fresh_tickers.append(ticker)
+            else:
+                tickers_to_process.append(ticker)
 
-            try:
-                # 1. Fetch Inventory via API
-                inv_data = None
-                price_series = None
+        _deep_analysis_status["fresh_tickers"] = fresh_tickers
+        _deep_analysis_status["already_fresh_today"] = len(fresh_tickers)
+        _deep_analysis_status["total"] = len(tickers_to_process)
+        _deep_analysis_status["progress"] = 0
+        _deep_analysis_status["processed"] = 0
+        _deep_analysis_status["failed"] = 0
+
+        if not tickers_to_process:
+            logger.info("Deep analysis skipped: all requested tickers already fresh for today")
+            return
+
+        semaphore = asyncio.Semaphore(max(1, int(concurrency)))
+
+        async def _process_ticker(ticker: str):
+            async with semaphore:
+                async with status_lock:
+                    _deep_analysis_status["current_ticker"] = ticker
+                    _deep_analysis_status["active_tickers"].append(ticker)
+
                 try:
-                    raw_inv = await api_client.get_inventory(ticker)
-                    if raw_inv and raw_inv.get('brokers'):
-                        band_repo.save_inventory_batch(
-                            ticker,
-                            raw_inv['brokers'],
-                            raw_inv.get('firstDate', ''),
-                            raw_inv.get('lastDate', '')
-                        )
-                        inv_data = raw_inv['brokers']
-                        price_series = raw_inv.get('priceSeries')
-                except Exception as e:
-                    logger.warning(f"Inventory API failed for {ticker}: {e}")
-                    _deep_analysis_status["errors"].append(f"{ticker} inv: {str(e)[:80]}")
-
-                await asyncio.sleep(0.5)
-
-                # 2. Fetch Transaction Chart via API
-                txn_data = None
-                try:
-                    raw_txn = await api_client.get_transaction_chart(ticker)
-                    if raw_txn:
-                        band_repo.save_transaction_chart(ticker, raw_txn)
-                        txn_data = band_repo.get_transaction_chart(ticker)
-                except Exception as e:
-                    logger.warning(f"Txn chart API failed for {ticker}: {e}")
-                    _deep_analysis_status["errors"].append(f"{ticker} txn: {str(e)[:80]}")
-
-                await asyncio.sleep(0.5)
-
-                # 3. Fetch Broker Summary via API (analysis_date + recent days)
-                broksum_data = None
-                try:
-                    raw_broksum = await api_client.get_broker_summary(ticker, analysis_date)
-                    if raw_broksum:
-                        neobdm_repo.save_broker_summary_batch(
-                            ticker, analysis_date,
-                            raw_broksum.get('buy', []),
-                            raw_broksum.get('sell', [])
-                        )
-                        broksum_data = raw_broksum
-                        print(f"   [BROKSUM] Extracted {len(raw_broksum.get('buy',[]))} buy + {len(raw_broksum.get('sell',[]))} sell for {ticker}")
-                except Exception as e:
-                    logger.warning(f"Broker summary API failed for {ticker}: {e}")
-                    _deep_analysis_status["errors"].append(f"{ticker} broksum: {str(e)[:80]}")
-
-                await asyncio.sleep(0.5)
-
-                # 3b. Fetch broker summary for recent trading days (last 4 days before analysis_date)
-                recent_dates_fetched = []
-                try:
-                    from datetime import datetime as dt, timedelta
-                    analysis_dt = dt.strptime(analysis_date, '%Y-%m-%d')
-                    for day_offset in range(1, 6):
-                        check_date = analysis_dt - timedelta(days=day_offset)
-                        # Skip weekends
-                        if check_date.weekday() >= 5:
-                            continue
-                        date_str = check_date.strftime('%Y-%m-%d')
-                        # Check if we already have this date in DB
-                        existing = neobdm_repo.get_broker_summary(ticker, date_str)
-                        if existing and (existing.get('buy') or existing.get('sell')):
-                            recent_dates_fetched.append(date_str)
-                            continue
-                        # Fetch from API
-                        try:
-                            raw_bs = await api_client.get_broker_summary(ticker, date_str)
-                            if raw_bs and (raw_bs.get('buy') or raw_bs.get('sell')):
-                                neobdm_repo.save_broker_summary_batch(
-                                    ticker, date_str,
-                                    raw_bs.get('buy', []),
-                                    raw_bs.get('sell', [])
+                    # 1. Fetch Inventory via API
+                    inv_data = None
+                    price_series = None
+                    raw_inv = None
+                    try:
+                        raw_inv = await api_client.get_inventory(ticker)
+                        if raw_inv and raw_inv.get('brokers'):
+                            async with db_write_lock:
+                                band_repo.save_inventory_batch(
+                                    ticker,
+                                    raw_inv['brokers'],
+                                    raw_inv.get('firstDate', ''),
+                                    raw_inv.get('lastDate', '')
                                 )
-                                recent_dates_fetched.append(date_str)
-                            await asyncio.sleep(0.3)
-                        except Exception as e2:
-                            logger.debug(f"Broksum fetch for {ticker} on {date_str}: {e2}")
-                        if len(recent_dates_fetched) >= 4:
-                            break
-                except Exception as e:
-                    logger.warning(f"Recent days broksum fetch failed for {ticker}: {e}")
+                            inv_data = raw_inv['brokers']
+                            price_series = raw_inv.get('priceSeries')
+                    except Exception as e:
+                        logger.warning(f"Inventory API failed for {ticker}: {e}")
+                        async with status_lock:
+                            _deep_analysis_status["errors"].append(f"{ticker} inv: {str(e)[:80]}")
 
-                # 3c. Extract important dates from inventory (turn_dates, peak_dates)
-                important_dates_data = []
-                try:
-                    if inv_data:
-                        # Run controlling broker detection early to get turn/peak dates
-                        ctrl_preview = analyzer.detect_controlling_brokers(
-                            inv_data, price_series=price_series, min_brokers=3
-                        )
-                        important_date_set = set()
-                        for cb in ctrl_preview.get('controlling_brokers', []):
-                            td = cb.get('turn_date')
-                            pd = cb.get('peak_date')
-                            if td and td != analysis_date:
-                                important_date_set.add(td)
-                            if pd and pd != analysis_date and pd != td:
-                                important_date_set.add(pd)
+                    await asyncio.sleep(0.2)
 
-                        # Fetch broker summary for each important date
-                        for imp_date in sorted(important_date_set):
-                            existing = neobdm_repo.get_broker_summary(ticker, imp_date)
+                    # 2. Fetch Transaction Chart via API
+                    txn_data = None
+                    try:
+                        raw_txn = await api_client.get_transaction_chart(ticker)
+                        if raw_txn:
+                            async with db_write_lock:
+                                band_repo.save_transaction_chart(ticker, raw_txn)
+                            txn_data = band_repo.get_transaction_chart(ticker)
+                    except Exception as e:
+                        logger.warning(f"Txn chart API failed for {ticker}: {e}")
+                        async with status_lock:
+                            _deep_analysis_status["errors"].append(f"{ticker} txn: {str(e)[:80]}")
+
+                    await asyncio.sleep(0.2)
+
+                    # 3. Fetch Broker Summary via API (analysis_date + recent days)
+                    broksum_data = None
+                    try:
+                        raw_broksum = await api_client.get_broker_summary(ticker, analysis_date)
+                        if raw_broksum:
+                            async with db_write_lock:
+                                neobdm_repo.save_broker_summary_batch(
+                                    ticker, analysis_date,
+                                    raw_broksum.get('buy', []),
+                                    raw_broksum.get('sell', [])
+                                )
+                            broksum_data = raw_broksum
+                    except Exception as e:
+                        logger.warning(f"Broker summary API failed for {ticker}: {e}")
+                        async with status_lock:
+                            _deep_analysis_status["errors"].append(f"{ticker} broksum: {str(e)[:80]}")
+
+                    await asyncio.sleep(0.2)
+
+                    # 3b. Fetch broker summary for recent trading days (last 4 days before analysis_date)
+                    recent_dates_fetched = []
+                    try:
+                        from datetime import datetime as dt, timedelta
+                        analysis_dt = dt.strptime(analysis_date, '%Y-%m-%d')
+                        for day_offset in range(1, 6):
+                            check_date = analysis_dt - timedelta(days=day_offset)
+                            # Skip weekends
+                            if check_date.weekday() >= 5:
+                                continue
+                            date_str = check_date.strftime('%Y-%m-%d')
+                            # Check if we already have this date in DB
+                            existing = neobdm_repo.get_broker_summary(ticker, date_str)
                             if existing and (existing.get('buy') or existing.get('sell')):
-                                important_dates_data.append({
-                                    'date': imp_date,
-                                    'date_type': 'turn_or_peak',
-                                    'buy': existing.get('buy', []),
-                                    'sell': existing.get('sell', []),
-                                })
+                                recent_dates_fetched.append(date_str)
                                 continue
                             # Fetch from API
                             try:
-                                raw_bs = await api_client.get_broker_summary(ticker, imp_date)
+                                raw_bs = await api_client.get_broker_summary(ticker, date_str)
                                 if raw_bs and (raw_bs.get('buy') or raw_bs.get('sell')):
-                                    neobdm_repo.save_broker_summary_batch(
-                                        ticker, imp_date,
-                                        raw_bs.get('buy', []),
-                                        raw_bs.get('sell', [])
-                                    )
+                                    async with db_write_lock:
+                                        neobdm_repo.save_broker_summary_batch(
+                                            ticker, date_str,
+                                            raw_bs.get('buy', []),
+                                            raw_bs.get('sell', [])
+                                        )
+                                    recent_dates_fetched.append(date_str)
+                                await asyncio.sleep(0.2)
+                            except Exception as e2:
+                                logger.debug(f"Broksum fetch for {ticker} on {date_str}: {e2}")
+                            if len(recent_dates_fetched) >= 4:
+                                break
+                    except Exception as e:
+                        logger.warning(f"Recent days broksum fetch failed for {ticker}: {e}")
+
+                    # 3c. Extract important dates from inventory (turn_dates, peak_dates)
+                    important_dates_data = []
+                    try:
+                        if inv_data:
+                            # Run controlling broker detection early to get turn/peak dates
+                            ctrl_preview = analyzer.detect_controlling_brokers(
+                                inv_data, price_series=price_series, min_brokers=3
+                            )
+                            important_date_set = set()
+                            for cb in ctrl_preview.get('controlling_brokers', []):
+                                td = cb.get('turn_date')
+                                pd = cb.get('peak_date')
+                                if td and td != analysis_date:
+                                    important_date_set.add(td)
+                                if pd and pd != analysis_date and pd != td:
+                                    important_date_set.add(pd)
+
+                            # Fetch broker summary for each important date
+                            for imp_date in sorted(important_date_set):
+                                existing = neobdm_repo.get_broker_summary(ticker, imp_date)
+                                if existing and (existing.get('buy') or existing.get('sell')):
                                     important_dates_data.append({
                                         'date': imp_date,
                                         'date_type': 'turn_or_peak',
-                                        'buy': raw_bs.get('buy', []),
-                                        'sell': raw_bs.get('sell', []),
+                                        'buy': existing.get('buy', []),
+                                        'sell': existing.get('sell', []),
                                     })
-                                await asyncio.sleep(0.3)
-                            except Exception as e2:
-                                logger.debug(f"Important date broksum for {ticker} on {imp_date}: {e2}")
+                                    continue
+                                # Fetch from API
+                                try:
+                                    raw_bs = await api_client.get_broker_summary(ticker, imp_date)
+                                    if raw_bs and (raw_bs.get('buy') or raw_bs.get('sell')):
+                                        async with db_write_lock:
+                                            neobdm_repo.save_broker_summary_batch(
+                                                ticker, imp_date,
+                                                raw_bs.get('buy', []),
+                                                raw_bs.get('sell', [])
+                                            )
+                                        important_dates_data.append({
+                                            'date': imp_date,
+                                            'date_type': 'turn_or_peak',
+                                            'buy': raw_bs.get('buy', []),
+                                            'sell': raw_bs.get('sell', []),
+                                        })
+                                    await asyncio.sleep(0.2)
+                                except Exception as e2:
+                                    logger.debug(f"Important date broksum for {ticker} on {imp_date}: {e2}")
+                    except Exception as e:
+                        logger.warning(f"Important dates broksum failed for {ticker}: {e}")
 
-                        if important_dates_data:
-                            print(f"   [IMPDATE] Fetched broksum for {len(important_dates_data)} important dates for {ticker}")
-                except Exception as e:
-                    logger.warning(f"Important dates broksum failed for {ticker}: {e}")
+                    # 3d. Fetch multi-day broker summary from DB (now enriched with recent fetches)
+                    broksum_multiday = None
+                    try:
+                        broksum_multiday = neobdm_repo.get_broker_summary_multiday(
+                            ticker, analysis_date, days=5
+                        )
+                    except Exception as e:
+                        logger.warning(f"Multi-day broksum fetch failed for {ticker}: {e}")
 
-                # 3d. Fetch multi-day broker summary from DB (now enriched with recent fetches)
-                broksum_multiday = None
-                try:
-                    broksum_multiday = neobdm_repo.get_broker_summary_multiday(
-                        ticker, analysis_date, days=5
+                    # 3e. Fetch previous deep cache for historical comparison
+                    previous_deep = None
+                    try:
+                        previous_deep = band_repo.get_previous_deep_cache(ticker, analysis_date)
+                    except Exception as e:
+                        logger.warning(f"Previous deep cache fetch failed for {ticker}: {e}")
+
+                    # 4. Run deep analysis
+                    base_result = base_lookup.get(ticker)
+
+                    # Prepare metadata for data validation
+                    inventory_meta = None
+                    if raw_inv:
+                        inventory_meta = {
+                            'firstDate': raw_inv.get('firstDate'),
+                            'lastDate': raw_inv.get('lastDate')
+                        }
+
+                    broker_summary_meta = {'trade_date': analysis_date} if analysis_date else None
+
+                    deep_result = analyzer.analyze_deep(
+                        ticker,
+                        inventory_data=inv_data,
+                        txn_chart_data=txn_data,
+                        broker_summary_data=broksum_data,
+                        broksum_multiday_data=broksum_multiday,
+                        price_series=price_series,
+                        base_result=base_result,
+                        previous_deep=previous_deep,
+                        important_dates_data=important_dates_data if important_dates_data else None,
+                        inventory_meta=inventory_meta,
+                        broker_summary_meta=broker_summary_meta
                     )
+
+                    # 5. Save to cache
+                    async with db_write_lock:
+                        band_repo.save_deep_cache(ticker, analysis_date, deep_result)
+
+                    async with status_lock:
+                        _deep_analysis_status["completed_tickers"].append(ticker)
+                        _deep_analysis_status["processed"] = len(_deep_analysis_status["completed_tickers"])
+
                 except Exception as e:
-                    logger.warning(f"Multi-day broksum fetch failed for {ticker}: {e}")
+                    logger.error(f"Deep analysis failed for {ticker}: {e}")
+                    async with status_lock:
+                        _deep_analysis_status["failed_tickers"].append(ticker)
+                        _deep_analysis_status["errors"].append(f"{ticker}: {str(e)[:80]}")
+                        _deep_analysis_status["failed"] = len(_deep_analysis_status["failed_tickers"])
+                finally:
+                    async with status_lock:
+                        if ticker in _deep_analysis_status["active_tickers"]:
+                            _deep_analysis_status["active_tickers"].remove(ticker)
+                        _deep_analysis_status["progress"] = (
+                            len(_deep_analysis_status["completed_tickers"]) +
+                            len(_deep_analysis_status["failed_tickers"])
+                        )
 
-                # 3e. Fetch previous deep cache for historical comparison
-                previous_deep = None
-                try:
-                    previous_deep = band_repo.get_previous_deep_cache(ticker, analysis_date)
-                except Exception as e:
-                    logger.warning(f"Previous deep cache fetch failed for {ticker}: {e}")
-
-                # 4. Run deep analysis
-                base_result = base_lookup.get(ticker)
-
-                # Prepare metadata for data validation
-                inventory_meta = None
-                if raw_inv:
-                    inventory_meta = {
-                        'firstDate': raw_inv.get('firstDate'),
-                        'lastDate': raw_inv.get('lastDate')
-                    }
-
-                broker_summary_meta = {'trade_date': analysis_date} if analysis_date else None
-
-                deep_result = analyzer.analyze_deep(
-                    ticker,
-                    inventory_data=inv_data,
-                    txn_chart_data=txn_data,
-                    broker_summary_data=broksum_data,
-                    broksum_multiday_data=broksum_multiday,
-                    price_series=price_series,
-                    base_result=base_result,
-                    previous_deep=previous_deep,
-                    important_dates_data=important_dates_data if important_dates_data else None,
-                    inventory_meta=inventory_meta,
-                    broker_summary_meta=broker_summary_meta
-                )
-
-                # 5. Save to cache
-                band_repo.save_deep_cache(ticker, analysis_date, deep_result)
-
-                _deep_analysis_status["completed_tickers"].append(ticker)
-
-            except Exception as e:
-                logger.error(f"Deep analysis failed for {ticker}: {e}")
-                _deep_analysis_status["errors"].append(f"{ticker}: {str(e)[:80]}")
-
-            await asyncio.sleep(1)
+        await asyncio.gather(*[_process_ticker(t) for t in tickers_to_process])
 
     except Exception as e:
         logger.error(f"Critical deep analysis error: {e}")
@@ -666,9 +749,19 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
     finally:
         await api_client.close()
         _deep_analysis_status["running"] = False
-        _deep_analysis_status["progress"] = len(tickers)
+        _deep_analysis_status["processed"] = len(_deep_analysis_status["completed_tickers"])
+        _deep_analysis_status["failed"] = len(_deep_analysis_status["failed_tickers"])
+        _deep_analysis_status["progress"] = (
+            _deep_analysis_status["processed"] + _deep_analysis_status["failed"]
+        )
         _deep_analysis_status["current_ticker"] = ""
-        logger.info(f"Deep analysis completed: {len(_deep_analysis_status['completed_tickers'])}/{len(tickers)} tickers")
+        _deep_analysis_status["active_tickers"] = []
+        logger.info(
+            "Deep analysis completed: "
+            f"processed={_deep_analysis_status['processed']}, "
+            f"failed={_deep_analysis_status['failed']}, "
+            f"fresh={_deep_analysis_status['already_fresh_today']}"
+        )
 
 
 @router.get("/bandarmology/watchlist-alerts")

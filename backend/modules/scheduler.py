@@ -362,7 +362,11 @@ def run_deep_analyze_all():
             return {"status": "skipped", "reason": "No stocks in market summary"}
 
         tickers = [r['symbol'] for r in results if r.get('symbol')]
-        logger.info(f"[Scheduler] Deep analyzing {len(tickers)} stocks for date {actual_date}")
+        scheduler_concurrency = 12
+        logger.info(
+            f"[Scheduler] Deep analyzing {len(tickers)} stocks for date {actual_date} "
+            f"with concurrency={scheduler_concurrency}"
+        )
 
         # Import the async deep analysis function and run it in an event loop
         from routes.bandarmology import _run_deep_analysis
@@ -370,7 +374,14 @@ def run_deep_analyze_all():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            loop.run_until_complete(_run_deep_analysis(tickers, actual_date, results))
+            loop.run_until_complete(
+                _run_deep_analysis(
+                    tickers,
+                    actual_date,
+                    results,
+                    concurrency=scheduler_concurrency,
+                )
+            )
         finally:
             loop.close()
 

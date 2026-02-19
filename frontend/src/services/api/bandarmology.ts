@@ -500,8 +500,17 @@ export interface DeepAnalysisStatus {
     running: boolean;
     progress: number;
     total: number;
+    requested?: number;
+    qualified?: number;
+    processed?: number;
+    failed?: number;
+    already_fresh_today?: number;
+    concurrency?: number;
     current_ticker: string;
+    active_tickers?: string[];
     completed_tickers: string[];
+    failed_tickers?: string[];
+    fresh_tickers?: string[];
     errors: string[];
     date?: string;
 }
@@ -548,12 +557,22 @@ export const bandarmologyApi = {
     triggerDeepAnalysis: async (
         date?: string,
         topN: number = 30,
-        minBaseScore: number = 20
-    ): Promise<{ message: string; tickers: string[]; date: string }> => {
+        minBaseScore: number = 20,
+        concurrency: number = 4
+    ): Promise<{
+        message: string;
+        tickers: string[];
+        date: string;
+        requested: number;
+        qualified: number;
+        to_process: number;
+        concurrency: number;
+    }> => {
         const params = buildParams({
             date,
             top_n: topN.toString(),
-            min_base_score: minBaseScore.toString()
+            min_base_score: minBaseScore.toString(),
+            concurrency: concurrency.toString(),
         });
         const response = await fetch(`${API_BASE_URL}/api/bandarmology/deep-analyze?${params}`, {
             method: 'POST'
@@ -581,9 +600,18 @@ export const bandarmologyApi = {
      */
     triggerDeepAnalysisTickers: async (
         tickers: string,
-        date?: string
-    ): Promise<{ message: string; tickers: string[]; date: string }> => {
-        const params = buildParams({ tickers, date });
+        date?: string,
+        concurrency: number = 4
+    ): Promise<{
+        message: string;
+        tickers: string[];
+        date: string;
+        requested: number;
+        qualified: number;
+        to_process: number;
+        concurrency: number;
+    }> => {
+        const params = buildParams({ tickers, date, concurrency: concurrency.toString() });
         const response = await fetch(`${API_BASE_URL}/api/bandarmology/deep-analyze-tickers?${params}`, {
             method: 'POST'
         });
