@@ -293,6 +293,54 @@ def run_bandarmology_market_summary():
         return {"status": "failed", "error": str(e)}
 
 
+def run_evening_neobdm_bandarmology_pipeline():
+    """
+    Run the full evening pipeline in strict order:
+    1) NeoBDM batch scrape
+    2) Bandarmology market summary
+    3) Bandarmology deep analyze all
+
+    This avoids time-based race conditions where deep analysis starts
+    before NeoBDM data refresh is finished.
+    """
+    logger.info("[Scheduler] Starting evening NeoBDM -> Bandarmology pipeline...")
+
+    neobdm_result = run_neobdm_batch_scrape()
+    if neobdm_result.get("status") != "success":
+        logger.warning("[Scheduler] Pipeline stopped: NeoBDM batch scrape did not succeed")
+        return {
+            "status": "failed",
+            "stage": "neobdm_batch",
+            "details": neobdm_result,
+        }
+
+    summary_result = run_bandarmology_market_summary()
+    if summary_result.get("status") != "success":
+        logger.warning("[Scheduler] Pipeline stopped: Bandarmology market summary did not succeed")
+        return {
+            "status": "failed",
+            "stage": "bandarmology_market_summary",
+            "details": summary_result,
+        }
+
+    deep_result = run_deep_analyze_all()
+    if deep_result.get("status") != "success":
+        logger.warning("[Scheduler] Pipeline finished with deep analysis issue")
+        return {
+            "status": "failed",
+            "stage": "bandarmology_deep_analyze_all",
+            "details": deep_result,
+        }
+
+    logger.info("[Scheduler] Evening pipeline completed successfully")
+    return {
+        "status": "success",
+        "neobdm": neobdm_result,
+        "market_summary": summary_result,
+        "deep_analyze": deep_result,
+    }
+
+
 def run_deep_analyze_all():
     """
     Run deep analysis on ALL stocks from the latest bandarmology market summary.
@@ -453,35 +501,16 @@ def setup_jobs():
     )
     logger.info("[Scheduler] Job added: News scraping every 1 hour")
 
-    # 2. NeoBDM Batch Scrape - Weekdays at 19:00 WIB
+    # 2. Evening Pipeline - Weekdays at 19:00 WIB
+    # NeoBDM batch -> Bandarmology summary -> Deep analyze (sequential, no race)
     scheduler.add_job(
-        run_neobdm_batch_scrape,
+        run_evening_neobdm_bandarmology_pipeline,
         trigger=CronTrigger(day_of_week='mon-fri', hour=19, minute=0),
-        id='neobdm_daily',
-        name='NeoBDM Daily Scrape (19:00 WIB, Weekdays)',
+        id='neobdm_evening_pipeline',
+        name='NeoBDM + Bandarmology Pipeline (19:00 WIB, Weekdays)',
         replace_existing=True
     )
-    logger.info("[Scheduler] Job added: NeoBDM daily scrape at 19:00 WIB (weekdays)")
-
-    # 3. Bandarmology Market Summary - Weekdays at 19:00 WIB
-    scheduler.add_job(
-        run_bandarmology_market_summary,
-        trigger=CronTrigger(day_of_week='mon-fri', hour=19, minute=0),
-        id='bandarmology_market_summary',
-        name='Bandarmology Market Summary (19:00 WIB, Weekdays)',
-        replace_existing=True
-    )
-    logger.info("[Scheduler] Job added: Bandarmology market summary at 19:00 WIB (weekdays)")
-
-    # 4. Deep Analyze All Stocks - Weekdays at 19:30 WIB (after market summary)
-    scheduler.add_job(
-        run_deep_analyze_all,
-        trigger=CronTrigger(day_of_week='mon-fri', hour=19, minute=30),
-        id='bandarmology_deep_analyze_all',
-        name='Bandarmology Deep Analyze All (19:30 WIB, Weekdays)',
-        replace_existing=True
-    )
-    logger.info("[Scheduler] Job added: Bandarmology deep analyze all at 19:30 WIB (weekdays)")
+    logger.info("[Scheduler] Job added: evening NeoBDM + Bandarmology pipeline at 19:00 WIB (weekdays)")
 
     # 5. Legacy Market Summary (news-based) - kept for reference
     scheduler.add_job(

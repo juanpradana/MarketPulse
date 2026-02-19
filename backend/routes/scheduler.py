@@ -14,6 +14,7 @@ from modules.scheduler import (
     run_job_manually,
     scrape_all_news,
     run_neobdm_batch_scrape,
+    run_evening_neobdm_bandarmology_pipeline,
     generate_market_summary,
     cleanup_old_data
 )
@@ -43,6 +44,19 @@ async def start() -> Dict[str, str]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/manual/evening-pipeline")
+async def manual_evening_pipeline() -> Dict[str, Any]:
+    """
+    Manually trigger the full evening pipeline:
+    NeoBDM batch -> Bandarmology market summary -> deep analyze all.
+    """
+    try:
+        result = run_evening_neobdm_bandarmology_pipeline()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/stop")
 async def stop() -> Dict[str, str]:
     """
@@ -63,7 +77,7 @@ async def run_job(job_id: str) -> Dict[str, Any]:
 
     Available job IDs:
     - news_scraper: Scrape news from all sources
-    - neobdm_daily: Run NeoBDM batch scrape
+    - neobdm_evening_pipeline: Run NeoBDM -> Bandarmology evening pipeline
     - market_summary: Generate market summary report
     - weekly_cleanup: Clean up old data
     """
@@ -136,15 +150,15 @@ async def get_schedule_config() -> Dict[str, Any]:
                 "description": "Scrapes CNBC, EmitenNews, Bisnis.com, Investor.id, Bloomberg"
             },
             {
-                "job_id": "neobdm_daily",
-                "name": "NeoBDM Daily Scrape",
+                "job_id": "neobdm_evening_pipeline",
+                "name": "NeoBDM + Bandarmology Pipeline",
                 "frequency": "Daily at 19:00 WIB",
-                "description": "Scrapes fund flow data for all tickers"
+                "description": "Runs NeoBDM batch scrape, then Bandarmology summary, then deep analyze all"
             },
             {
                 "job_id": "market_summary",
                 "name": "Market Summary",
-                "frequency": "Daily at 19:30 WIB",
+                "frequency": "Daily at 20:00 WIB",
                 "description": "Generates daily market report"
             },
             {
