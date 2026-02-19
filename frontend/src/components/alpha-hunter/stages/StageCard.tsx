@@ -100,7 +100,7 @@ export default function StageCard({
                 "border transition-all opacity-60",
                 config.bgColor,
                 config.borderColor
-            )}>
+            )} id={`alpha-stage-${stageNumber}`}>
                 <CardHeader className="pb-2 px-3 md:px-6">
                     <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
@@ -131,7 +131,7 @@ export default function StageCard({
             "border transition-all",
             config.bgColor,
             config.borderColor
-        )}>
+        )} id={`alpha-stage-${stageNumber}`}>
             <CardHeader
                 className={cn(
                     "pb-2 px-3 md:px-6",

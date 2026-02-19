@@ -55,6 +55,13 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
     const [analysisStep, setAnalysisStep] = useState("");
     const cancelRef = useRef(false);
 
+    const scrollToStage = (stageNumber: number) => {
+        const el = document.getElementById(`alpha-stage-${stageNumber}`);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    };
+
     if (!investigation) return null;
 
     const canStart = canProceedToStage(ticker, 3);
@@ -234,7 +241,7 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
                         <p className="text-xs text-slate-500 mb-3">
                             Scrape broker summary data from NeoBDM for recent trading dates to analyze smart money flow patterns.
                         </p>
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                             <div>
                                 <div className="text-xs text-slate-500">Total Dates</div>
                                 <div className="text-lg font-bold text-white">{tradingDates.length}</div>
@@ -314,7 +321,7 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
 
                     {/* Action bar */}
                     <div className="bg-slate-950/50 rounded-lg p-4 border border-slate-800">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div>
                                 <div className="text-sm text-slate-400">
                                     {selectedCount > 0 ? (
@@ -500,7 +507,7 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
                     <h4 className="text-sm font-semibold text-slate-400 uppercase mb-4">
                         📊 Floor Price Analysis
                     </h4>
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                         <div>
                             <div className="text-xs text-slate-500">Calculated Floor</div>
                             <div className="text-2xl font-bold text-emerald-400">
@@ -539,7 +546,7 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
                 </div>
 
                 {/* Checks grid */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div className={cn(
                         "p-4 rounded-lg border",
                         data.smart_money_accumulation.passed
@@ -607,7 +614,7 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center justify-between pt-4 border-t border-slate-800">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pt-4 border-t border-slate-800">
                     <div className="flex items-center gap-2">
                         <Button
                             variant="outline"
@@ -621,6 +628,7 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
 
                     <Button
                         className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500"
+                        onClick={() => scrollToStage(4)}
                     >
                         <CheckCircle2 className="w-4 h-4 mr-2" />
                         Proceed to Stage 4 (Optional) →

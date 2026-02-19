@@ -17,20 +17,21 @@ export default function InvestigationHeader({ onRefresh }: InvestigationHeaderPr
     // Scanner view header
     if (isAtScanner) {
         return (
-            <header className="h-16 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/50 backdrop-blur sticky top-0 z-10">
+            <header className="border-b border-slate-800 bg-slate-900/50 px-3 py-3 backdrop-blur md:px-6 md:py-3 sticky top-0 z-10">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+                    <h1 className="text-lg md:text-xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
                         🧪 Alpha Hunter Lab
                     </h1>
-                    <p className="text-sm text-slate-400">
+                    <p className="text-xs md:text-sm text-slate-400">
                         Stage 1: Flow-Based Signal Scanner
                     </p>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 md:gap-3">
                     {/* Quick stats */}
-                    <div className="flex items-center gap-2 text-sm">
-                        <Badge variant="outline" className="border-slate-700 text-slate-400">
+                    <div className="flex items-center gap-2 text-xs md:text-sm">
+                        <Badge variant="outline" className="border-slate-700 text-slate-400 text-[11px] md:text-xs">
                             {Object.keys(investigations).length} Active Cases
                         </Badge>
                     </div>
@@ -40,6 +41,7 @@ export default function InvestigationHeader({ onRefresh }: InvestigationHeaderPr
                             <RefreshCw className="h-4 w-4" />
                         </Button>
                     )}
+                </div>
                 </div>
             </header>
         );
@@ -81,34 +83,35 @@ export default function InvestigationHeader({ onRefresh }: InvestigationHeaderPr
     };
 
     return (
-        <header className="h-16 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/50 backdrop-blur sticky top-0 z-10">
-            <div className="flex items-center gap-4">
+        <header className="border-b border-slate-800 bg-slate-900/50 px-3 py-3 backdrop-blur md:px-6 sticky top-0 z-10">
+            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2 md:gap-4 min-w-0">
                 {/* Back button */}
                 <Button
                     variant="ghost"
                     onClick={goToScanner}
-                    className="flex items-center gap-2 text-slate-400 hover:text-emerald-400 hover:bg-slate-800"
+                    className="flex items-center gap-1.5 px-2 md:px-3 text-slate-400 hover:text-emerald-400 hover:bg-slate-800"
                 >
                     <ArrowLeft className="h-4 w-4" />
-                    <span className="text-sm">Back to Scanner</span>
+                    <span className="text-xs md:text-sm">Back</span>
                 </Button>
 
-                <div className="h-6 w-px bg-slate-700" />
+                <div className="hidden md:block h-6 w-px bg-slate-700" />
 
                 {/* Ticker info */}
-                <div>
+                <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                        <h1 className="text-xl font-bold text-slate-100">
+                        <h1 className="text-lg md:text-xl font-bold text-slate-100 truncate">
                             {selectedTicker}
                         </h1>
-                        <span className="text-slate-500">Investigation</span>
+                        <span className="text-slate-500 text-xs md:text-sm">Investigation</span>
                         {investigation?.isComplete && (
                             <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/50">
                                 Complete
                             </Badge>
                         )}
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-slate-500">
+                    <div className="flex flex-wrap items-center gap-2 md:gap-3 text-[11px] md:text-xs text-slate-500">
                         {/* Progress bar mini */}
                         <div className="flex items-center gap-1">
                             {[1, 2, 3, 4].map((stage) => (
@@ -124,13 +127,13 @@ export default function InvestigationHeader({ onRefresh }: InvestigationHeaderPr
                             ))}
                             <span className="ml-1">{progress.text}</span>
                         </div>
-                        <span>•</span>
+                        <span className="hidden md:inline">•</span>
                         <span>Last updated: {getRelativeTime(lastUpdated || null)}</span>
                     </div>
                 </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 md:gap-2 shrink-0">
                 {onRefresh && (
                     <Button variant="ghost" size="icon" onClick={onRefresh} title="Refresh Data">
                         <RefreshCw className="h-4 w-4" />
@@ -142,6 +145,7 @@ export default function InvestigationHeader({ onRefresh }: InvestigationHeaderPr
                 <Button variant="ghost" size="icon" title="Settings">
                     <Settings className="h-4 w-4" />
                 </Button>
+            </div>
             </div>
         </header>
     );

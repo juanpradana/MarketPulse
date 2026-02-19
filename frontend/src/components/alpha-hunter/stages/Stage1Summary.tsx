@@ -82,14 +82,14 @@ export default function Stage1Summary({ ticker }: Stage1SummaryProps) {
                 </div>
 
                 {/* Quick stats grid */}
-                <div className="grid grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
                     {/* Signal Score */}
-                    <div className="bg-slate-950/50 rounded-lg p-3 border border-slate-800">
+                    <div className="bg-slate-950/50 rounded-lg p-2.5 md:p-3 border border-slate-800">
                         <div className="flex items-center gap-2 mb-1">
                             <Zap className="w-3 h-3 text-amber-400" />
                             <span className="text-[10px] uppercase text-slate-500">Score</span>
                         </div>
-                        <div className="text-lg font-bold text-white">
+                        <div className="text-base md:text-lg font-bold text-white">
                             {data.signal_score}
                         </div>
                         <Badge variant="outline" className={cn(
@@ -124,7 +124,7 @@ export default function Stage1Summary({ ticker }: Stage1SummaryProps) {
                             <span className="text-[10px] uppercase text-slate-500">Price Δ</span>
                         </div>
                         <div className={cn(
-                            "text-lg font-bold",
+                            "text-base md:text-lg font-bold",
                             data.change > 0 ? "text-emerald-400" : data.change < 0 ? "text-red-400" : "text-slate-300"
                         )}>
                             {data.change > 0 ? "+" : ""}{data.change.toFixed(1)}%

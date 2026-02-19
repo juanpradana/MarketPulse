@@ -87,7 +87,10 @@ class DatabaseManager:
     
     def get_latest_hot_signals(self):
         return self.neobdm_repo.get_latest_hot_signals()
-    
+
+    def get_signals_for_ticker(self, ticker):
+        return self.neobdm_repo.get_signals_for_ticker(ticker)
+
     def save_broker_summary_batch(self, ticker, trade_date, buy_data, sell_data):
         return self.neobdm_repo.save_broker_summary_batch(ticker, trade_date, buy_data, sell_data)
     

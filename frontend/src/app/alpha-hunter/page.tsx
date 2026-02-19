@@ -18,7 +18,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 function AlphaHunterContent() {
     const { selectedTicker, investigations, isAtScanner, addInvestigation } = useAlphaHunter();
     const [refreshKey, setRefreshKey] = useState(0);
-    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
 
     const handleRefresh = useCallback(() => {
         setRefreshKey(prev => prev + 1);
@@ -46,7 +46,7 @@ function AlphaHunterContent() {
     }, []);
 
     return (
-        <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-100">
+        <div className="flex h-full min-h-0 overflow-hidden bg-slate-950 text-slate-100">
             {/* Left Sidebar: Watchlist - Hidden on mobile */}
             <div className={cn(
                 "shrink-0 transition-all hidden md:block",
@@ -67,7 +67,7 @@ function AlphaHunterContent() {
 
             {/* Mobile Watchlist Drawer */}
             <div className={cn(
-                "fixed inset-y-0 left-0 z-40 w-80 bg-slate-900 transform transition-transform duration-300 md:hidden",
+                "fixed inset-y-0 left-0 z-40 w-[85vw] max-w-80 bg-slate-900 transform transition-transform duration-300 md:hidden",
                 sidebarCollapsed ? "-translate-x-full" : "translate-x-0"
             )}>
                 <WatchlistSidebar isCollapsed={false} onToggle={toggleSidebar} />
@@ -88,7 +88,7 @@ function AlphaHunterContent() {
 
                 {/* Content Area */}
                 <ScrollArea className="flex-1">
-                    <div className="p-4 md:p-6">
+                    <div className="p-3 md:p-6">
                         {isAtScanner ? (
                             // Scanner View
                             <div className="space-y-6">

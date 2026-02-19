@@ -41,6 +41,13 @@ export default function Stage2VPACard({ ticker }: Stage2VPACardProps) {
     const [showDetails, setShowDetails] = useState(false);
     const [viewMode, setViewMode] = useState<'summary' | 'visualization'>('visualization');
 
+    const scrollToStage = (stageNumber: number) => {
+        const el = document.getElementById(`alpha-stage-${stageNumber}`);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    };
+
     if (!investigation) return null;
 
     const fetchVPAData = async () => {
@@ -293,9 +300,9 @@ export default function Stage2VPACard({ ticker }: Stage2VPACardProps) {
                         </div>
 
                         {/* ===== SECTION 2: Mini Chart + Health Score ===== */}
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                             {/* Mini Chart */}
-                            <div className="col-span-2 bg-slate-950/50 rounded-lg p-3 border border-slate-800">
+                            <div className="lg:col-span-2 bg-slate-950/50 rounded-lg p-3 border border-slate-800">
                                 <div className="flex items-center justify-between mb-2">
                                     <h4 className="text-xs font-semibold text-slate-500 uppercase">Price & Volume (Post-Spike)</h4>
                                     {data.breakout_setup?.resistance_price && (
@@ -424,7 +431,7 @@ export default function Stage2VPACard({ ticker }: Stage2VPACardProps) {
                         </div>
 
                         {/* ===== SECTION 4: Volume Asymmetry + Entry Setup ===== */}
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                             {/* Volume Asymmetry */}
                             <div className="bg-slate-950/50 rounded-lg p-3 border border-slate-800">
                                 <h4 className="text-xs font-semibold text-slate-500 uppercase mb-2">Bandar Status</h4>
@@ -525,7 +532,7 @@ export default function Stage2VPACard({ ticker }: Stage2VPACardProps) {
                                 {showDetails ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
                             </button>
                             {showDetails && (
-                                <div className="p-3 bg-slate-950/50 grid grid-cols-3 gap-3 text-xs">
+                                <div className="p-3 bg-slate-950/50 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                                     <div>
                                         <div className="text-slate-500 mb-1">Spike</div>
                                         <div className="text-slate-300">{data.spike?.date}</div>
@@ -546,7 +553,7 @@ export default function Stage2VPACard({ ticker }: Stage2VPACardProps) {
                         </div>
 
                         {/* ===== SECTION 6: Actions ===== */}
-                        <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pt-3 border-t border-slate-800">
                             <div className="flex items-center gap-2">
                                 <Button variant="outline" size="sm" onClick={fetchVPAData}>
                                     <RefreshCw className="w-3 h-3 mr-1" />
@@ -560,6 +567,7 @@ export default function Stage2VPACard({ ticker }: Stage2VPACardProps) {
                             <Button
                                 size="sm"
                                 className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500"
+                                onClick={() => scrollToStage(3)}
                             >
                                 <CheckCircle2 className="w-3 h-3 mr-1" />
                                 Stage 3 →

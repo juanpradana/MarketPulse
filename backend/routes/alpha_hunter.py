@@ -225,6 +225,69 @@ async def stage1_flow_scanner(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Stage 1 scan failed: {str(e)}")
 
+
+@router.get("/stage1/ticker/{ticker}")
+async def stage1_custom_ticker(ticker: str):
+    """
+    Get Stage 1 signal payload for a specific ticker from latest NeoBDM records.
+    Allows custom investigation even when ticker is not part of current hot signal output.
+    """
+    db = DatabaseManager()
+
+    try:
+        data = db.get_signals_for_ticker(ticker.upper())
+        if not data:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No NeoBDM signal data found for ticker {ticker.upper()}. Run market summary/NeoBDM scrape first."
+            )
+
+        raw_patterns = data.get("patterns") or []
+        pattern_objs = [
+            {
+                "name": str(p),
+                "display": str(p).replace("_", " ").title(),
+                "score": 10,
+                "icon": "📊"
+            }
+            for p in raw_patterns
+        ]
+
+        flow_val = data.get("flow", 0) or 0
+        change_val = data.get("change", 0) or 0
+        if -1 <= change_val <= 3 and flow_val > 50:
+            entry_zone = "SWEET_SPOT"
+        elif -3 <= change_val <= 5:
+            entry_zone = "ACCEPTABLE"
+        else:
+            entry_zone = "RISKY"
+
+        signal = {
+            "symbol": data.get("ticker") or ticker.upper(),
+            "signal_score": data.get("signal_score", 0),
+            "signal_strength": data.get("signal_strength", "WEAK"),
+            "conviction": data.get("conviction", "LOW"),
+            "entry_zone": entry_zone,
+            "flow": data.get("flow", 0),
+            "change": data.get("change", 0),
+            "price": data.get("price", 0),
+            "patterns": pattern_objs,
+            "pattern_names": [p.get("name") for p in pattern_objs],
+            "has_positive_pattern": len(pattern_objs) > 0,
+            "alignment_status": "CUSTOM_TICKER",
+            "momentum_status": data.get("momentum_status") or "NEUTRAL",
+            "warning_status": data.get("warning_status") or "NONE",
+            "pinky": "v" if "REPO_RISK" in raw_patterns else "",
+            "crossing": "v" if "CROSSING_DISTRIBUTION" in raw_patterns else "",
+            "unusual": "v" if "UNUSUAL_ACTIVITY" in raw_patterns else ""
+        }
+
+        return {"ticker": ticker.upper(), "signal": signal}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Custom ticker stage1 failed: {str(e)}")
+
 @router.get("/health/{ticker}")
 async def get_pullback_health(
     ticker: str,

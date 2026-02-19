@@ -40,6 +40,13 @@ export default function Stage4SupplyCard({ ticker }: Stage4SupplyCardProps) {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [parseError, setParseError] = useState<string | null>(null);
 
+    const scrollToStage = (stageNumber: number) => {
+        const el = document.getElementById(`alpha-stage-${stageNumber}`);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    };
+
     if (!investigation) return null;
 
     // Check if Stage 3 is complete
@@ -399,7 +406,7 @@ AB	4500000	1500000	+3000000
                 </div>
 
                 {/* Checks grid */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className={cn(
                         "p-4 rounded-lg border",
                         data.fifty_pct_rule.passed
@@ -464,7 +471,7 @@ AB	4500000	1500000	+3000000
                         <h4 className="text-sm font-semibold text-slate-400 uppercase mb-3">
                             Entry Strategy
                         </h4>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                             <div>
                                 <span className="text-slate-500">Entry Zone:</span>
                                 <span className="ml-2 text-emerald-400 font-semibold">
@@ -502,7 +509,7 @@ AB	4500000	1500000	+3000000
                 )}
 
                 {/* Actions */}
-                <div className="flex items-center justify-between pt-4 border-t border-slate-800">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pt-4 border-t border-slate-800">
                     <Button
                         variant="outline"
                         size="sm"
@@ -514,6 +521,7 @@ AB	4500000	1500000	+3000000
 
                     <Button
                         className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500"
+                        onClick={() => scrollToStage(5)}
                     >
                         <CheckCircle2 className="w-4 h-4 mr-2" />
                         Complete Investigation

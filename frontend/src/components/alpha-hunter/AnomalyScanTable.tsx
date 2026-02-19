@@ -6,13 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RefreshCw, TrendingUp, Zap, Target, Flame, AlertTriangle, ArrowRightCircle, HelpCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { RefreshCw, TrendingUp, Zap, Target, Flame, AlertTriangle, ArrowRightCircle, HelpCircle, ChevronDown, ChevronUp, Search } from "lucide-react";
 
 interface Pattern {
     name: string;
     display: string;
     score: number;
     icon: string;
+}
+
+interface CustomTickerResponse {
+    ticker: string;
+    signal: FlowSignal;
 }
 
 interface FlowSignal {
@@ -71,6 +76,9 @@ export default function AnomalyScanTable({ onAddToWatchlist, onAddToInvestigatio
     const [priceValue, setPriceValue] = useState("");
     const [priceOperator, setPriceOperator] = useState("lt");
     const [totalMatches, setTotalMatches] = useState(0);
+    const [customTicker, setCustomTicker] = useState("");
+    const [customLoading, setCustomLoading] = useState(false);
+    const [customError, setCustomError] = useState<string | null>(null);
 
     // Auto scan on mount
     useEffect(() => {
@@ -109,6 +117,37 @@ export default function AnomalyScanTable({ onAddToWatchlist, onAddToInvestigatio
             setError("Failed to fetch signals. Check if server is running.");
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleCustomTickerInvestigate = async () => {
+        const ticker = customTicker.trim().toUpperCase();
+        if (!ticker) return;
+
+        setCustomLoading(true);
+        setCustomError(null);
+        try {
+            const res = await fetch(`http://localhost:8000/api/alpha-hunter/stage1/ticker/${ticker}`);
+            const data = await res.json();
+
+            if (!res.ok) {
+                setCustomError(data?.detail || `Failed to fetch custom ticker ${ticker}`);
+                return;
+            }
+
+            const payload = data as CustomTickerResponse;
+            if (!payload.signal) {
+                setCustomError(`No signal data found for ${ticker}`);
+                return;
+            }
+
+            await handleInvestigate(payload.signal);
+            setCustomTicker("");
+        } catch (err) {
+            console.error(err);
+            setCustomError(`Custom ticker lookup failed for ${ticker}`);
+        } finally {
+            setCustomLoading(false);
         }
     };
 
@@ -197,7 +236,7 @@ export default function AnomalyScanTable({ onAddToWatchlist, onAddToInvestigatio
     return (
         <Card className="bg-slate-900 border-slate-800">
             <CardHeader className="border-b border-slate-800 pb-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                         <CardTitle className="text-xl flex items-center gap-2">
                             <Flame className="h-5 w-5 text-orange-500" />
@@ -207,10 +246,10 @@ export default function AnomalyScanTable({ onAddToWatchlist, onAddToInvestigatio
                             Detecting smart money accumulation patterns from NeoBDM flow data.
                         </p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-end gap-2 md:gap-3">
                         {/* Min Score Filter */}
                         <Select value={minScore} onValueChange={setMinScore}>
-                            <SelectTrigger className="w-[140px] bg-slate-800 border-slate-700">
+                            <SelectTrigger className="w-[120px] md:w-[140px] bg-slate-800 border-slate-700">
                                 <SelectValue placeholder="Min Score" />
                             </SelectTrigger>
                             <SelectContent className="bg-slate-800 border-slate-700">
@@ -223,7 +262,7 @@ export default function AnomalyScanTable({ onAddToWatchlist, onAddToInvestigatio
 
                         {/* Strength Filter */}
                         <Select value={strengthFilter} onValueChange={setStrengthFilter}>
-                            <SelectTrigger className="w-[160px] bg-slate-800 border-slate-700">
+                            <SelectTrigger className="w-[140px] md:w-[160px] bg-slate-800 border-slate-700">
                                 <SelectValue placeholder="Strength" />
                             </SelectTrigger>
                             <SelectContent className="bg-slate-800 border-slate-700">
@@ -236,9 +275,9 @@ export default function AnomalyScanTable({ onAddToWatchlist, onAddToInvestigatio
 
                         {/* Price Filter */}
                         <div className="flex items-center gap-1">
-                            <span className="text-xs text-slate-500">Price</span>
+                            <span className="hidden md:inline text-xs text-slate-500">Price</span>
                             <Select value={priceOperator} onValueChange={setPriceOperator}>
-                                <SelectTrigger className="w-[70px] bg-slate-800 border-slate-700">
+                                <SelectTrigger className="w-[64px] md:w-[70px] bg-slate-800 border-slate-700">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent className="bg-slate-800 border-slate-700">
@@ -254,7 +293,7 @@ export default function AnomalyScanTable({ onAddToWatchlist, onAddToInvestigatio
                                 value={priceValue}
                                 onChange={(e) => setPriceValue(e.target.value)}
                                 placeholder="e.g. 500"
-                                className="w-[80px] bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-600"
+                                className="w-[86px] md:w-[90px] bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-600"
                             />
                         </div>
 
@@ -262,12 +301,38 @@ export default function AnomalyScanTable({ onAddToWatchlist, onAddToInvestigatio
                             <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
                             {isLoading ? 'Scanning...' : 'Scan'}
                         </Button>
+
+                        {/* Custom ticker investigation */}
+                        <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                            <input
+                                type="text"
+                                value={customTicker}
+                                onChange={(e) => setCustomTicker(e.target.value.toUpperCase())}
+                                onKeyDown={(e) => { if (e.key === 'Enter') void handleCustomTickerInvestigate(); }}
+                                placeholder="Custom ticker (e.g. SMGA)"
+                                className="w-full sm:w-[190px] bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-600"
+                            />
+                            <Button
+                                onClick={() => void handleCustomTickerInvestigate()}
+                                disabled={!customTicker.trim() || customLoading}
+                                className="bg-cyan-700 hover:bg-cyan-600 text-white"
+                            >
+                                <Search className={`mr-1.5 h-4 w-4 ${customLoading ? 'animate-spin' : ''}`} />
+                                Investigate
+                            </Button>
+                        </div>
                     </div>
                 </div>
 
+                {customError && (
+                    <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-xs text-amber-300">
+                        {customError}
+                    </div>
+                )}
+
                 {/* Stats Bar */}
                 {stats && (
-                    <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-800">
+                    <div className="flex flex-wrap items-center gap-3 md:gap-4 mt-4 pt-4 border-t border-slate-800">
                         <div className="text-sm text-slate-400">
                             <span className="font-medium text-white">{results.length}</span>/{totalSignals} signals
                         </div>
@@ -394,6 +459,7 @@ export default function AnomalyScanTable({ onAddToWatchlist, onAddToInvestigatio
                 )}
 
                 <div className="rounded-md border-0 overflow-x-auto">
+                    <div className="hidden md:block">
                     <Table>
                         <TableHeader className="bg-slate-950/50">
                             <TableRow className="border-slate-800 hover:bg-slate-900">
@@ -506,6 +572,64 @@ export default function AnomalyScanTable({ onAddToWatchlist, onAddToInvestigatio
                             ))}
                         </TableBody>
                     </Table>
+                    </div>
+
+                    {/* Mobile cards */}
+                    <div className="md:hidden space-y-3">
+                        {results.length === 0 && !isLoading && !error && (
+                            <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-center text-sm text-slate-500">
+                                No signals found with current filters.
+                            </div>
+                        )}
+
+                        {isLoading && (
+                            <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-center text-sm text-slate-500">
+                                <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2" />
+                                Scanning market for flow signals...
+                            </div>
+                        )}
+
+                        {results.map((item, index) => (
+                            <div key={item.symbol} className="rounded-lg border border-slate-800 bg-slate-950/40 p-3 space-y-2">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                        <div className="text-xs text-slate-500">#{index + 1}</div>
+                                        <div className="text-lg font-bold text-indigo-400 leading-tight">{item.symbol}</div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-[11px] text-slate-500">Score</div>
+                                        <div className="text-lg font-bold text-amber-300">{item.signal_score}</div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                    <div className="rounded bg-slate-900/70 p-2">
+                                        <div className="text-slate-500 mb-0.5">Price</div>
+                                        <div className="text-slate-200 font-semibold">{item.price ? `Rp ${item.price.toLocaleString()}` : '-'}</div>
+                                    </div>
+                                    <div className="rounded bg-slate-900/70 p-2">
+                                        <div className="text-slate-500 mb-0.5">Flow</div>
+                                        <div className="text-slate-200 font-semibold">{item.flow.toFixed(1)}M</div>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    {getConvictionBadge(item.conviction)}
+                                    {getEntryZoneBadge(item.entry_zone)}
+                                    {getMomentumBadge(item.momentum_status)}
+                                </div>
+
+                                <Button
+                                    size="sm"
+                                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white"
+                                    onClick={() => void handleInvestigate(item)}
+                                >
+                                    <ArrowRightCircle className="h-4 w-4 mr-1" />
+                                    Investigate
+                                </Button>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </CardContent>
         </Card>
