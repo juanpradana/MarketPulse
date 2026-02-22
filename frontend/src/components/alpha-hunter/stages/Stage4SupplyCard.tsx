@@ -80,7 +80,7 @@ export default function Stage4SupplyCard({ ticker }: Stage4SupplyCardProps) {
         updateStageStatus(ticker, 4, 'loading');
 
         try {
-            const response = await fetch('http://localhost:8000/api/alpha-hunter/parse-done-detail', {
+            const response = await fetch('/api/alpha-hunter/parse-done-detail', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

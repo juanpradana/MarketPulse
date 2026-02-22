@@ -4,7 +4,7 @@
  * Handles API calls for OHLCV candlestick data and moving averages.
  */
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export interface OHLCVRecord {
     time: string;

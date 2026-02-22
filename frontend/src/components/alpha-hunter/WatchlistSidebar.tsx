@@ -49,7 +49,7 @@ export default function WatchlistSidebar({ isCollapsed = false, onToggle }: Watc
 
         try {
             // Also remove from backend watchlist
-            await fetch("http://localhost:8000/api/alpha-hunter/watchlist", {
+            await fetch("/api/alpha-hunter/watchlist", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ action: "remove", ticker })

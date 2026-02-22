@@ -154,7 +154,7 @@ export default function Stage2VisualizationPanel({ ticker }: Stage2Visualization
 
         try {
             const response = await fetch(
-                `http://localhost:8000/api/alpha-hunter/stage2/visualization/${ticker}`
+                `/api/alpha-hunter/stage2/visualization/${ticker}`
             );
 
             if (!response.ok) {

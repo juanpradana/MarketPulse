@@ -85,7 +85,7 @@ export default function PullbackHealthPanel({ ticker }: PullbackHealthPanelProps
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            const res = await fetch(`http://localhost:8000/api/alpha-hunter/stage2/vpa/${ticker}`);
+            const res = await fetch(`/api/alpha-hunter/stage2/vpa/${ticker}`);
             const json = await res.json();
             if (!res.ok) {
                 console.error(json.detail || "Failed to fetch stage 2 data");

@@ -89,7 +89,7 @@ export default function AnomalyScanTable({ onAddToWatchlist, onAddToInvestigatio
         setIsLoading(true);
         setError(null);
         try {
-            let url = `http://localhost:8000/api/alpha-hunter/stage1/scan?min_score=${minScore}&min_flow=0&max_price_change=20&max_results=20`;
+            let url = `/api/alpha-hunter/stage1/scan?min_score=${minScore}&min_flow=0&max_price_change=20&max_results=20`;
 
             if (strengthFilter !== "all") {
                 url += `&strength_filter=${strengthFilter}`;
@@ -127,7 +127,7 @@ export default function AnomalyScanTable({ onAddToWatchlist, onAddToInvestigatio
         setCustomLoading(true);
         setCustomError(null);
         try {
-            const res = await fetch(`http://localhost:8000/api/alpha-hunter/stage1/ticker/${ticker}`);
+            const res = await fetch(`/api/alpha-hunter/stage1/ticker/${ticker}`);
             const data = await res.json();
 
             if (!res.ok) {
@@ -153,7 +153,7 @@ export default function AnomalyScanTable({ onAddToWatchlist, onAddToInvestigatio
 
     const handleInvestigate = async (item: FlowSignal) => {
         try {
-            await fetch("http://localhost:8000/api/alpha-hunter/watchlist", {
+            await fetch("/api/alpha-hunter/watchlist", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({

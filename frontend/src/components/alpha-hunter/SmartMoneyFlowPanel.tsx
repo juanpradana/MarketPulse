@@ -66,7 +66,7 @@ export default function SmartMoneyFlowPanel({ ticker, onStageComplete }: SmartMo
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            const res = await fetch(`http://localhost:8000/api/alpha-hunter/flow/${ticker}?days=${days}`);
+            const res = await fetch(`/api/alpha-hunter/flow/${ticker}?days=${days}`);
             const json = await res.json();
             setData(json);
         } catch (err) {
@@ -92,7 +92,7 @@ export default function SmartMoneyFlowPanel({ ticker, onStageComplete }: SmartMo
                 if (dates.length >= 7) break;
             }
 
-            const res = await fetch(`http://localhost:8000/api/alpha-hunter/scrape-broker/${ticker}`, {
+            const res = await fetch(`/api/alpha-hunter/scrape-broker/${ticker}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(dates)

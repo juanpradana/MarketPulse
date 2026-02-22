@@ -70,7 +70,7 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
     const fetchTradingDates = useCallback(async () => {
         setIsLoadingDates(true);
         try {
-            const res = await fetch(`http://localhost:8000/api/alpha-hunter/stage3/trading-dates/${ticker}?days=7`);
+            const res = await fetch(`/api/alpha-hunter/stage3/trading-dates/${ticker}?days=7`);
             if (!res.ok) throw new Error("Failed to fetch trading dates");
             const data = await res.json();
 
@@ -134,7 +134,7 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
 
             try {
                 const res = await fetch(
-                    `http://localhost:8000/api/neobdm-broker-summary?ticker=${ticker}&trade_date=${dateInfo.date}&scrape=true`
+                    `/api/neobdm-broker-summary?ticker=${ticker}&trade_date=${dateInfo.date}&scrape=true`
                 );
 
                 if (!res.ok) {
@@ -184,7 +184,7 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
         setScrapeLog(prev => [...prev, "Running flow analysis..."]);
 
         try {
-            const response = await fetch(`http://localhost:8000/api/alpha-hunter/flow/${ticker}?days=7`);
+            const response = await fetch(`/api/alpha-hunter/flow/${ticker}?days=7`);
             const data = await response.json();
 
             if (data.data_available) {

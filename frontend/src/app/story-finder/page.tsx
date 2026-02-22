@@ -35,7 +35,7 @@ interface StoryFinderResponse {
     total: number;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 // Default keywords
 const DEFAULT_KEYWORDS: KeywordInfo[] = [
@@ -182,7 +182,7 @@ export default function StoryFinderPage() {
                 end_date: dateRange.end
             });
 
-            const response = await fetch(`${API_BASE_URL}/api/story-finder?${params}`);
+            const response = await fetch(`/api/story-finder?${params}`);
             if (response.ok) {
                 const result = await response.json();
                 setData(result);

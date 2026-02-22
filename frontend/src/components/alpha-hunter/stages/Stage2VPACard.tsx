@@ -62,7 +62,7 @@ export default function Stage2VPACard({ ticker }: Stage2VPACardProps) {
             setCurrentStep("Fetching OHLCV data...");
             setProgress(30);
 
-            const response = await fetch(`http://localhost:8000/api/alpha-hunter/stage2/vpa/${ticker}`);
+            const response = await fetch(`/api/alpha-hunter/stage2/vpa/${ticker}`);
 
             if (!response.ok) {
                 throw new Error("Failed to fetch VPA data");

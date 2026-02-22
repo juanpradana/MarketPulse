@@ -88,7 +88,7 @@ export default function SupplyAnalysisPanel({ ticker }: SupplyAnalysisPanelProps
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            const res = await fetch(`http://localhost:8000/api/alpha-hunter/supply/${ticker}`);
+            const res = await fetch(`/api/alpha-hunter/supply/${ticker}`);
             const json = await res.json();
             setData(json);
         } catch (err) {
@@ -107,7 +107,7 @@ export default function SupplyAnalysisPanel({ ticker }: SupplyAnalysisPanelProps
         setIsParsing(true);
         setParseError(null);
         try {
-            const res = await fetch("http://localhost:8000/api/alpha-hunter/parse-done-detail", {
+            const res = await fetch("/api/alpha-hunter/parse-done-detail", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ ticker, raw_data: rawData })
