@@ -335,12 +335,26 @@ export const PriceVolumeChart: React.FC<PriceVolumeChartProps> = ({
             });
         }
 
+        const safelySetCrosshairPosition = (
+            chart: IChartApi,
+            time: Time,
+            series: ReturnType<IChartApi['addSeries']>
+        ) => {
+            try {
+                chart.setCrosshairPosition(NaN, time, series);
+            } catch (error) {
+                if (process.env.NODE_ENV === 'development') {
+                    console.debug('Skipped crosshair sync for unmatched time point', error);
+                }
+            }
+        };
+
         // Sync crosshair between charts using series references
         priceChart.subscribeCrosshairMove((param) => {
             if (param.time) {
-                volumeChart.setCrosshairPosition(NaN, param.time, volumeSeries);
+                safelySetCrosshairPosition(volumeChart, param.time, volumeSeries);
                 if (mcapChart && mcapSeries) {
-                    mcapChart.setCrosshairPosition(NaN, param.time, mcapSeries);
+                    safelySetCrosshairPosition(mcapChart, param.time, mcapSeries);
                 }
             } else {
                 volumeChart.clearCrosshairPosition();
@@ -350,9 +364,9 @@ export const PriceVolumeChart: React.FC<PriceVolumeChartProps> = ({
 
         volumeChart.subscribeCrosshairMove((param) => {
             if (param.time) {
-                priceChart.setCrosshairPosition(NaN, param.time, candlestickSeries);
+                safelySetCrosshairPosition(priceChart, param.time, candlestickSeries);
                 if (mcapChart && mcapSeries) {
-                    mcapChart.setCrosshairPosition(NaN, param.time, mcapSeries);
+                    safelySetCrosshairPosition(mcapChart, param.time, mcapSeries);
                 }
             } else {
                 priceChart.clearCrosshairPosition();
@@ -363,8 +377,8 @@ export const PriceVolumeChart: React.FC<PriceVolumeChartProps> = ({
         if (mcapChart && mcapSeries) {
             mcapChart.subscribeCrosshairMove((param) => {
                 if (param.time) {
-                    priceChart.setCrosshairPosition(NaN, param.time, candlestickSeries);
-                    volumeChart.setCrosshairPosition(NaN, param.time, volumeSeries);
+                    safelySetCrosshairPosition(priceChart, param.time, candlestickSeries);
+                    safelySetCrosshairPosition(volumeChart, param.time, volumeSeries);
                 } else {
                     priceChart.clearCrosshairPosition();
                     volumeChart.clearCrosshairPosition();
