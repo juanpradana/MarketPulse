@@ -22,6 +22,14 @@ router = APIRouter(prefix="/api", tags=["price-volume"])
 logger = logging.getLogger(__name__)
 
 
+def normalize_idx_ticker(ticker: str) -> str:
+    """Normalize IDX ticker from user input (accepts with/without .JK)."""
+    cleaned = ticker.strip().upper()
+    if cleaned.endswith('.JK'):
+        cleaned = cleaned[:-3]
+    return cleaned
+
+
 def calculate_moving_averages(data: list, periods: list = [5, 10, 20]) -> dict:
     """
     Calculate moving averages for price and volume data.
@@ -379,7 +387,7 @@ async def get_spike_markers(
             "marker_count": 5
         }
     """
-    ticker = ticker.upper()
+    ticker = normalize_idx_ticker(ticker)
     
     try:
         markers = price_volume_repo.get_volume_spike_markers(
@@ -425,7 +433,7 @@ async def get_sideways_compression(
             "avg_close": 8050.0
         }
     """
-    ticker = ticker.upper()
+    ticker = normalize_idx_ticker(ticker)
     
     try:
         compression = price_volume_repo.detect_sideways_compression(ticker, days)
@@ -466,7 +474,7 @@ async def get_flow_impact(
             "has_market_cap": true
         }
     """
-    ticker = ticker.upper()
+    ticker = normalize_idx_ticker(ticker)
     
     # If no date provided, get latest date for this ticker
     if not date:
@@ -517,7 +525,7 @@ async def get_hk_analysis(
     """
     import statistics
     
-    ticker = ticker.upper()
+    ticker = normalize_idx_ticker(ticker)
     
     try:
         # Get OHLCV data (9 months)
@@ -757,7 +765,7 @@ async def get_price_volume(
             "records_added": 5
         }
     """
-    ticker = ticker.upper()
+    ticker = normalize_idx_ticker(ticker)
     yf_ticker = f"{ticker}.JK"  # IDX ticker format for Yahoo Finance
     
     try:
@@ -880,7 +888,7 @@ async def check_ticker_data_exists(ticker: str):
             "earliest_date": "2025-04-20"
         }
     """
-    ticker = ticker.upper()
+    ticker = normalize_idx_ticker(ticker)
     
     exists = price_volume_repo.has_data_for_ticker(ticker)
     record_count = price_volume_repo.get_record_count(ticker) if exists else 0
@@ -927,8 +935,8 @@ async def get_market_cap_data(
             ]
         }
     """
-    ticker = ticker.upper()
-    
+    ticker = normalize_idx_ticker(ticker)
+
     try:
         # Get current market cap
         current_mcap = market_meta_repo.get_market_cap(ticker)

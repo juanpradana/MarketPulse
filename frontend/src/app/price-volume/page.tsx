@@ -7,6 +7,11 @@ import { UnusualVolumeList } from '@/components/charts/UnusualVolumeList';
 import { priceVolumeApi, PriceVolumeResponse, UnusualVolumeEvent, SpikeMarker, MarketCapResponse, RefreshAllResponse, HKAnalysisResponse } from '@/services/api/priceVolume';
 import { api } from '@/services/api';
 
+const normalizeTickerInput = (value: string): string => {
+    const normalized = value.trim().toUpperCase();
+    return normalized.endsWith('.JK') ? normalized.slice(0, -3) : normalized;
+};
+
 
 export default function PriceVolumePage() {
     const [ticker, setTicker] = useState('');
@@ -75,20 +80,21 @@ export default function PriceVolumePage() {
 
     // Handle ticker search
     const handleSearch = useCallback(async (tickerSymbol: string) => {
-        if (!tickerSymbol.trim()) return;
+        const normalizedTicker = normalizeTickerInput(tickerSymbol);
+        if (!normalizedTicker) return;
 
         setIsLoading(true);
         setError(null);
-        setTicker(tickerSymbol.toUpperCase());
+        setTicker(normalizedTicker);
         setShowSuggestions(false);
 
         try {
-            const data = await priceVolumeApi.getOHLCV(tickerSymbol);
+            const data = await priceVolumeApi.getOHLCV(normalizedTicker);
             setChartData(data);
 
             // Fetch spike markers for this ticker
             try {
-                const markersResponse = await priceVolumeApi.getSpikeMarkers(tickerSymbol);
+                const markersResponse = await priceVolumeApi.getSpikeMarkers(normalizedTicker);
                 setSpikeMarkers(markersResponse.markers);
             } catch (err) {
                 console.error('Failed to fetch spike markers:', err);
@@ -97,7 +103,7 @@ export default function PriceVolumePage() {
 
             // Fetch market cap data
             try {
-                const mcapResponse = await priceVolumeApi.getMarketCap(tickerSymbol);
+                const mcapResponse = await priceVolumeApi.getMarketCap(normalizedTicker);
                 setMarketCapData(mcapResponse);
             } catch (err) {
                 console.error('Failed to fetch market cap:', err);
@@ -107,7 +113,7 @@ export default function PriceVolumePage() {
             // Fetch HK Analysis
             try {
                 setIsLoadingHK(true);
-                const hkResponse = await priceVolumeApi.getHKAnalysis(tickerSymbol);
+                const hkResponse = await priceVolumeApi.getHKAnalysis(normalizedTicker);
                 setHkAnalysis(hkResponse);
             } catch (err) {
                 console.error('Failed to fetch HK analysis:', err);
@@ -132,8 +138,10 @@ export default function PriceVolumePage() {
         if (value.length >= 1) {
             try {
                 const tickers = await api.getTickers();
-                const filtered = tickers.filter((t: string) =>
-                    t.toLowerCase().includes(value.toLowerCase())
+                const normalizedTickers = [...new Set(tickers.map((t: string) => normalizeTickerInput(t)).filter(Boolean))];
+                const normalizedQuery = normalizeTickerInput(value);
+                const filtered = normalizedTickers.filter((t: string) =>
+                    t.toLowerCase().includes(normalizedQuery.toLowerCase())
                 );
                 setSuggestions(filtered.slice(0, 8));
                 setShowSuggestions(true);
