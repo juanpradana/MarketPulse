@@ -25,16 +25,7 @@ import { cn } from '@/lib/utils';
 import StockDetailModal from '@/components/bandarmology/StockDetailModal';
 
 type SortDirection = 'asc' | 'desc';
-type SortRule = { key: keyof BandarmologyItem; direction: SortDirection };
-
-const SORT_LABELS: Partial<Record<keyof BandarmologyItem, string>> = {
-    total_score: 'Score',
-    combined_score: 'Combined Score',
-    deep_score: 'Deep',
-    pump_tomorrow_score: 'Pump Tomorrow',
-    breakout_probability: 'Breakout Prob',
-    symbol: 'Ticker',
-};
+type SortConfig = { key: keyof BandarmologyItem; direction: SortDirection } | null;
 
 const TRADE_TYPE_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
     'BOTH': { label: 'SWING + INTRA', color: 'text-yellow-300', bg: 'bg-yellow-500/20 border-yellow-500/30' },
@@ -102,7 +93,7 @@ export default function BandarmologyPage() {
     const [error, setError] = useState<string | null>(null);
     const [availableDates, setAvailableDates] = useState<string[]>([]);
     const [selectedDate, setSelectedDate] = useState<string>("");
-    const [sortRules, setSortRules] = useState<SortRule[]>([{ key: 'total_score', direction: 'desc' }]);
+    const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'total_score', direction: 'desc' });
     const [tradeTypeFilter, setTradeTypeFilter] = useState<string>("");
     const [minScoreFilter, setMinScoreFilter] = useState<number>(0);
     const [searchTicker, setSearchTicker] = useState<string>("");
@@ -288,19 +279,15 @@ export default function BandarmologyPage() {
         if (flagFilters.unusual) result = result.filter(r => r.unusual);
         if (flagFilters.likuid) result = result.filter(r => r.likuid);
 
-        // Sort (multi-sort with priority by rule order)
-        if (sortRules.length > 0) {
+        // Sort
+        if (sortConfig) {
             result.sort((a, b) => {
-                for (const rule of sortRules) {
-                    const diff = compareValues(a[rule.key], b[rule.key], rule.direction);
-                    if (diff !== 0) return diff;
-                }
-                return 0;
+                return compareValues(a[sortConfig.key], b[sortConfig.key], sortConfig.direction);
             });
         }
 
         return result;
-    }, [data, minScoreFilter, tradeTypeFilter, searchTicker, flagFilters, sortRules, compareValues]);
+    }, [data, minScoreFilter, tradeTypeFilter, searchTicker, flagFilters, sortConfig, compareValues]);
 
     // Pagination
     const totalPages = Math.ceil(processedData.length / pageSize);
@@ -314,44 +301,18 @@ export default function BandarmologyPage() {
         setCurrentPage(1);
     }, [minScoreFilter, tradeTypeFilter, searchTicker, flagFilters, selectedDate]);
 
-    const handleSort = (key: keyof BandarmologyItem, append = false) => {
-        setSortRules(prev => {
-            const existingIndex = prev.findIndex(rule => rule.key === key);
-
-            if (append) {
-                if (existingIndex === -1) {
-                    return [...prev, { key, direction: 'desc' }];
-                }
-
-                const updated = [...prev];
-                if (updated[existingIndex].direction === 'desc') {
-                    updated[existingIndex] = { ...updated[existingIndex], direction: 'asc' };
-                    return updated;
-                }
-
-                updated.splice(existingIndex, 1);
-                return updated;
+    const handleSort = (key: keyof BandarmologyItem) => {
+        setSortConfig(prev => {
+            if (!prev || prev.key !== key) {
+                return { key, direction: 'desc' };
             }
 
-            if (existingIndex === -1) {
-                if (prev.length === 0) return [{ key, direction: 'desc' }];
-                return [...prev, { key, direction: 'desc' }];
+            if (prev.direction === 'desc') {
+                return { key, direction: 'asc' };
             }
 
-            const updated = [...prev];
-            const existing = updated[existingIndex];
-            if (existing.direction === 'desc') {
-                updated[existingIndex] = { ...existing, direction: 'asc' };
-                return updated;
-            }
-
-            updated.splice(existingIndex, 1);
-            return updated;
+            return null;
         });
-    };
-
-    const clearSortRules = () => {
-        setSortRules([]);
     };
 
     const toggleFlagFilter = (flag: string) => {
@@ -391,26 +352,21 @@ export default function BandarmologyPage() {
     };
 
     const SortableHeader = ({ label, sortKey, className = "" }: { label: string; sortKey: keyof BandarmologyItem; className?: string }) => {
-        const sortIndex = sortRules.findIndex(rule => rule.key === sortKey);
-        const sortRule = sortIndex >= 0 ? sortRules[sortIndex] : null;
-        const isSorted = sortRule !== null;
+        const isSorted = sortConfig?.key === sortKey;
         return (
             <th
-                onClick={(e) => handleSort(sortKey, e.shiftKey)}
+                onClick={() => handleSort(sortKey)}
                 className={cn(
                     "sticky top-0 z-20 bg-[#1a1f2b] px-1.5 py-2 text-[10px] font-bold uppercase tracking-tight cursor-pointer hover:bg-zinc-700/50 transition-colors select-none whitespace-nowrap border-r border-zinc-700/30",
                     className
                 )}
-                title="Klik untuk sort tunggal, Shift+Klik untuk tambah multi-sort"
+                title="Klik untuk ubah sort"
             >
                 <div className="flex items-center justify-center gap-0.5">
                     {label}
-                    {isSorted && (
-                        <span className="text-[8px] text-cyan-300 font-black">{sortIndex + 1}</span>
-                    )}
                     <div className="flex flex-col">
-                        <ChevronUp className={cn("w-2 h-2 opacity-20", isSorted && sortRule?.direction === 'asc' && "opacity-100 text-blue-400")} />
-                        <ChevronDown className={cn("w-2 h-2 -mt-0.5 opacity-20", isSorted && sortRule?.direction === 'desc' && "opacity-100 text-blue-400")} />
+                        <ChevronUp className={cn("w-2 h-2 opacity-20", isSorted && sortConfig?.direction === 'asc' && "opacity-100 text-blue-400")} />
+                        <ChevronDown className={cn("w-2 h-2 -mt-0.5 opacity-20", isSorted && sortConfig?.direction === 'desc' && "opacity-100 text-blue-400")} />
                     </div>
                 </div>
             </th>
@@ -612,31 +568,7 @@ export default function BandarmologyPage() {
                 <div className="flex items-center gap-3 lg:gap-4 px-3 py-1 bg-[#12141a] border-t border-zinc-800/40 text-[9px] overflow-x-auto scrollbar-none">
                     <div className="flex items-center gap-1.5 text-cyan-300">
                         <ArrowUpDown className="w-2.5 h-2.5" />
-                        <span className="font-bold">MULTI SORT AKTIF</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                        {sortRules.length > 0 ? (
-                            sortRules.map((rule, idx) => (
-                                <span
-                                    key={`${String(rule.key)}-${idx}`}
-                                    className="px-1 py-0.5 rounded border border-cyan-700/50 bg-cyan-950/40 text-cyan-300 font-bold"
-                                    title="Klik header yang sama untuk ubah arah / hapus rule"
-                                >
-                                    {idx + 1}.{SORT_LABELS[rule.key] ?? String(rule.key)} {rule.direction === 'asc' ? '↑' : '↓'}
-                                </span>
-                            ))
-                        ) : (
-                            <span className="text-zinc-500">No sort rule</span>
-                        )}
-                        {sortRules.length > 0 && (
-                            <button
-                                onClick={clearSortRules}
-                                className="ml-1 px-1.5 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors"
-                                title="Hapus semua rule sort"
-                            >
-                                Clear
-                            </button>
-                        )}
+                        <span className="font-bold">SORT: KLIK HEADER KOLOM</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                         <span className="text-zinc-500">TOTAL:</span>
