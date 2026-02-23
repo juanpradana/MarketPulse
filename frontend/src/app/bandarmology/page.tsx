@@ -24,7 +24,8 @@ import {
 import { cn } from '@/lib/utils';
 import StockDetailModal from '@/components/bandarmology/StockDetailModal';
 
-type SortConfig = { key: string; direction: 'asc' | 'desc' } | null;
+type SortDirection = 'asc' | 'desc';
+type SortRule = { key: keyof BandarmologyItem; direction: SortDirection };
 
 const TRADE_TYPE_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
     'BOTH': { label: 'SWING + INTRA', color: 'text-yellow-300', bg: 'bg-yellow-500/20 border-yellow-500/30' },
@@ -92,7 +93,7 @@ export default function BandarmologyPage() {
     const [error, setError] = useState<string | null>(null);
     const [availableDates, setAvailableDates] = useState<string[]>([]);
     const [selectedDate, setSelectedDate] = useState<string>("");
-    const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'total_score', direction: 'desc' });
+    const [sortRules, setSortRules] = useState<SortRule[]>([{ key: 'total_score', direction: 'desc' }]);
     const [tradeTypeFilter, setTradeTypeFilter] = useState<string>("");
     const [minScoreFilter, setMinScoreFilter] = useState<number>(0);
     const [searchTicker, setSearchTicker] = useState<string>("");
@@ -221,6 +222,31 @@ export default function BandarmologyPage() {
         }
     };
 
+    const compareValues = useCallback((a: unknown, b: unknown, direction: SortDirection) => {
+        const order = direction === 'asc' ? 1 : -1;
+
+        const toNumber = (value: unknown): number | null => {
+            if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+            if (typeof value === 'string') {
+                const parsed = Number.parseFloat(value);
+                return Number.isNaN(parsed) ? null : parsed;
+            }
+            return null;
+        };
+
+        const numA = toNumber(a);
+        const numB = toNumber(b);
+        if (numA !== null && numB !== null) {
+            if (numA === numB) return 0;
+            return numA > numB ? order : -order;
+        }
+
+        const strA = String(a ?? '').toLowerCase();
+        const strB = String(b ?? '').toLowerCase();
+        if (strA === strB) return 0;
+        return strA > strB ? order : -order;
+    }, []);
+
     // Processing pipeline: filter → sort → paginate
     const processedData = useMemo(() => {
         let result = [...data];
@@ -253,32 +279,19 @@ export default function BandarmologyPage() {
         if (flagFilters.unusual) result = result.filter(r => r.unusual);
         if (flagFilters.likuid) result = result.filter(r => r.likuid);
 
-        // Sort
-        if (sortConfig) {
+        // Sort (multi-sort with priority by rule order)
+        if (sortRules.length > 0) {
             result.sort((a, b) => {
-                const key = sortConfig.key as keyof BandarmologyItem;
-                let valA = a[key];
-                let valB = b[key];
-
-                // Handle numeric
-                const numA = typeof valA === 'number' ? valA : parseFloat(String(valA || '0'));
-                const numB = typeof valB === 'number' ? valB : parseFloat(String(valB || '0'));
-
-                if (!isNaN(numA) && !isNaN(numB)) {
-                    return sortConfig.direction === 'asc' ? numA - numB : numB - numA;
+                for (const rule of sortRules) {
+                    const diff = compareValues(a[rule.key], b[rule.key], rule.direction);
+                    if (diff !== 0) return diff;
                 }
-
-                // String fallback
-                const strA = String(valA || '').toLowerCase();
-                const strB = String(valB || '').toLowerCase();
-                if (strA < strB) return sortConfig.direction === 'asc' ? -1 : 1;
-                if (strA > strB) return sortConfig.direction === 'asc' ? 1 : -1;
                 return 0;
             });
         }
 
         return result;
-    }, [data, minScoreFilter, tradeTypeFilter, searchTicker, flagFilters, sortConfig]);
+    }, [data, minScoreFilter, tradeTypeFilter, searchTicker, flagFilters, sortRules, compareValues]);
 
     // Pagination
     const totalPages = Math.ceil(processedData.length / pageSize);
@@ -292,16 +305,36 @@ export default function BandarmologyPage() {
         setCurrentPage(1);
     }, [minScoreFilter, tradeTypeFilter, searchTicker, flagFilters, selectedDate]);
 
-    const handleSort = (key: string) => {
-        if (sortConfig?.key === key) {
-            if (sortConfig.direction === 'desc') {
-                setSortConfig({ key, direction: 'asc' });
-            } else {
-                setSortConfig(null);
+    const handleSort = (key: keyof BandarmologyItem, append = false) => {
+        setSortRules(prev => {
+            const existingIndex = prev.findIndex(rule => rule.key === key);
+
+            if (append) {
+                if (existingIndex === -1) {
+                    return [...prev, { key, direction: 'desc' }];
+                }
+
+                const updated = [...prev];
+                if (updated[existingIndex].direction === 'desc') {
+                    updated[existingIndex] = { ...updated[existingIndex], direction: 'asc' };
+                    return updated;
+                }
+
+                updated.splice(existingIndex, 1);
+                return updated;
             }
-        } else {
-            setSortConfig({ key, direction: 'desc' });
-        }
+
+            if (existingIndex === -1) {
+                return [{ key, direction: 'desc' }];
+            }
+
+            const existing = prev[existingIndex];
+            if (existing.direction === 'desc') {
+                return [{ key, direction: 'asc' }];
+            }
+
+            return [];
+        });
     };
 
     const toggleFlagFilter = (flag: string) => {
@@ -340,21 +373,27 @@ export default function BandarmologyPage() {
         URL.revokeObjectURL(url);
     };
 
-    const SortableHeader = ({ label, sortKey, className = "" }: { label: string; sortKey: string; className?: string }) => {
-        const isSorted = sortConfig?.key === sortKey;
+    const SortableHeader = ({ label, sortKey, className = "" }: { label: string; sortKey: keyof BandarmologyItem; className?: string }) => {
+        const sortIndex = sortRules.findIndex(rule => rule.key === sortKey);
+        const sortRule = sortIndex >= 0 ? sortRules[sortIndex] : null;
+        const isSorted = sortRule !== null;
         return (
             <th
-                onClick={() => handleSort(sortKey)}
+                onClick={(e) => handleSort(sortKey, e.shiftKey)}
                 className={cn(
                     "sticky top-0 z-20 bg-[#1a1f2b] px-1.5 py-2 text-[10px] font-bold uppercase tracking-tight cursor-pointer hover:bg-zinc-700/50 transition-colors select-none whitespace-nowrap border-r border-zinc-700/30",
                     className
                 )}
+                title="Klik untuk sort tunggal, Shift+Klik untuk tambah multi-sort"
             >
                 <div className="flex items-center justify-center gap-0.5">
                     {label}
+                    {isSorted && (
+                        <span className="text-[8px] text-cyan-300 font-black">{sortIndex + 1}</span>
+                    )}
                     <div className="flex flex-col">
-                        <ChevronUp className={cn("w-2 h-2 opacity-20", isSorted && sortConfig?.direction === 'asc' && "opacity-100 text-blue-400")} />
-                        <ChevronDown className={cn("w-2 h-2 -mt-0.5 opacity-20", isSorted && sortConfig?.direction === 'desc' && "opacity-100 text-blue-400")} />
+                        <ChevronUp className={cn("w-2 h-2 opacity-20", isSorted && sortRule?.direction === 'asc' && "opacity-100 text-blue-400")} />
+                        <ChevronDown className={cn("w-2 h-2 -mt-0.5 opacity-20", isSorted && sortRule?.direction === 'desc' && "opacity-100 text-blue-400")} />
                     </div>
                 </div>
             </th>
@@ -554,6 +593,10 @@ export default function BandarmologyPage() {
 
                 {/* Stats Bar */}
                 <div className="flex items-center gap-3 lg:gap-4 px-3 py-1 bg-[#12141a] border-t border-zinc-800/40 text-[9px] overflow-x-auto scrollbar-none">
+                    <div className="flex items-center gap-1.5 text-cyan-300">
+                        <ArrowUpDown className="w-2.5 h-2.5" />
+                        <span className="font-bold">MULTI SORT: SHIFT+KLIK HEADER</span>
+                    </div>
                     <div className="flex items-center gap-1.5">
                         <span className="text-zinc-500">TOTAL:</span>
                         <span className="text-zinc-300 font-bold">{processedData.length}</span>
@@ -621,6 +664,7 @@ export default function BandarmologyPage() {
                                 <SortableHeader label="TICKER" sortKey="symbol" className="w-[80px]" />
                                 <SortableHeader label="SCORE" sortKey="combined_score" className="w-[90px]" />
                                 <SortableHeader label="DEEP" sortKey="deep_score" className="w-[50px]" />
+                                <SortableHeader label="PUMP TMRW" sortKey="pump_tomorrow_score" className="w-[70px]" />
                                 <SortableHeader label="TYPE" sortKey="trade_type" className="w-[95px]" />
                                 <th className="sticky top-0 z-20 w-[35px] border-r border-zinc-700/30 bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight">PK</th>
                                 <th className="sticky top-0 z-20 w-[35px] border-r border-zinc-700/30 bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight">CR</th>
@@ -688,6 +732,20 @@ export default function BandarmologyPage() {
                                                         (row.deep_score ?? 0) >= 20 ? 'text-blue-400' : 'text-zinc-500'
                                                     )}>
                                                         +{row.deep_score}
+                                                    </span>
+                                                ) : <span className="text-zinc-800 text-[9px]">—</span>}
+                                            </td>
+
+                                            {/* Pump Tomorrow Score */}
+                                            <td className="px-1 py-1 text-center border-r border-zinc-800/30">
+                                                {(row.pump_tomorrow_score ?? 0) > 0 ? (
+                                                    <span className={cn(
+                                                        "text-[10px] font-bold tabular-nums",
+                                                        (row.pump_tomorrow_score ?? 0) >= 80 ? 'text-emerald-400' :
+                                                        (row.pump_tomorrow_score ?? 0) >= 60 ? 'text-cyan-400' :
+                                                        (row.pump_tomorrow_score ?? 0) >= 40 ? 'text-amber-400' : 'text-zinc-400'
+                                                    )}>
+                                                        {Math.round(row.pump_tomorrow_score ?? 0)}
                                                     </span>
                                                 ) : <span className="text-zinc-800 text-[9px]">—</span>}
                                             </td>
@@ -868,7 +926,7 @@ export default function BandarmologyPage() {
                                 })
                             ) : (
                                 <tr>
-                                    <td colSpan={29} className="px-4 py-32 text-center text-zinc-600 italic">
+                                    <td colSpan={30} className="px-4 py-32 text-center text-zinc-600 italic">
                                         <div className="flex flex-col items-center gap-2">
                                             <AlertCircle className="w-6 h-6 opacity-20" />
                                             <span>{data.length === 0 ? "No data available. Run a Full Sync on Market Summary first." : "No stocks match your filter criteria."}</span>
