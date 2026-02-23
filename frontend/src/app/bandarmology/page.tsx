@@ -27,6 +27,15 @@ import StockDetailModal from '@/components/bandarmology/StockDetailModal';
 type SortDirection = 'asc' | 'desc';
 type SortRule = { key: keyof BandarmologyItem; direction: SortDirection };
 
+const SORT_LABELS: Partial<Record<keyof BandarmologyItem, string>> = {
+    total_score: 'Score',
+    combined_score: 'Combined Score',
+    deep_score: 'Deep',
+    pump_tomorrow_score: 'Pump Tomorrow',
+    breakout_probability: 'Breakout Prob',
+    symbol: 'Ticker',
+};
+
 const TRADE_TYPE_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
     'BOTH': { label: 'SWING + INTRA', color: 'text-yellow-300', bg: 'bg-yellow-500/20 border-yellow-500/30' },
     'SWING': { label: 'SWING', color: 'text-emerald-300', bg: 'bg-emerald-500/20 border-emerald-500/30' },
@@ -325,16 +334,24 @@ export default function BandarmologyPage() {
             }
 
             if (existingIndex === -1) {
-                return [{ key, direction: 'desc' }];
+                if (prev.length === 0) return [{ key, direction: 'desc' }];
+                return [...prev, { key, direction: 'desc' }];
             }
 
-            const existing = prev[existingIndex];
+            const updated = [...prev];
+            const existing = updated[existingIndex];
             if (existing.direction === 'desc') {
-                return [{ key, direction: 'asc' }];
+                updated[existingIndex] = { ...existing, direction: 'asc' };
+                return updated;
             }
 
-            return [];
+            updated.splice(existingIndex, 1);
+            return updated;
         });
+    };
+
+    const clearSortRules = () => {
+        setSortRules([]);
     };
 
     const toggleFlagFilter = (flag: string) => {
@@ -595,7 +612,31 @@ export default function BandarmologyPage() {
                 <div className="flex items-center gap-3 lg:gap-4 px-3 py-1 bg-[#12141a] border-t border-zinc-800/40 text-[9px] overflow-x-auto scrollbar-none">
                     <div className="flex items-center gap-1.5 text-cyan-300">
                         <ArrowUpDown className="w-2.5 h-2.5" />
-                        <span className="font-bold">MULTI SORT: SHIFT+KLIK HEADER</span>
+                        <span className="font-bold">MULTI SORT AKTIF</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                        {sortRules.length > 0 ? (
+                            sortRules.map((rule, idx) => (
+                                <span
+                                    key={`${String(rule.key)}-${idx}`}
+                                    className="px-1 py-0.5 rounded border border-cyan-700/50 bg-cyan-950/40 text-cyan-300 font-bold"
+                                    title="Klik header yang sama untuk ubah arah / hapus rule"
+                                >
+                                    {idx + 1}.{SORT_LABELS[rule.key] ?? String(rule.key)} {rule.direction === 'asc' ? '↑' : '↓'}
+                                </span>
+                            ))
+                        ) : (
+                            <span className="text-zinc-500">No sort rule</span>
+                        )}
+                        {sortRules.length > 0 && (
+                            <button
+                                onClick={clearSortRules}
+                                className="ml-1 px-1.5 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors"
+                                title="Hapus semua rule sort"
+                            >
+                                Clear
+                            </button>
+                        )}
                     </div>
                     <div className="flex items-center gap-1.5">
                         <span className="text-zinc-500">TOTAL:</span>
@@ -664,6 +705,7 @@ export default function BandarmologyPage() {
                                 <SortableHeader label="TICKER" sortKey="symbol" className="w-[80px]" />
                                 <SortableHeader label="SCORE" sortKey="combined_score" className="w-[90px]" />
                                 <SortableHeader label="DEEP" sortKey="deep_score" className="w-[50px]" />
+                                <SortableHeader label="BRK PROB" sortKey="breakout_probability" className="w-[70px]" />
                                 <SortableHeader label="PUMP TMRW" sortKey="pump_tomorrow_score" className="w-[70px]" />
                                 <SortableHeader label="TYPE" sortKey="trade_type" className="w-[95px]" />
                                 <th className="sticky top-0 z-20 w-[35px] border-r border-zinc-700/30 bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight">PK</th>
@@ -732,6 +774,20 @@ export default function BandarmologyPage() {
                                                         (row.deep_score ?? 0) >= 20 ? 'text-blue-400' : 'text-zinc-500'
                                                     )}>
                                                         +{row.deep_score}
+                                                    </span>
+                                                ) : <span className="text-zinc-800 text-[9px]">—</span>}
+                                            </td>
+
+                                            {/* Breakout Probability */}
+                                            <td className="px-1 py-1 text-center border-r border-zinc-800/30">
+                                                {(row.breakout_probability ?? 0) > 0 ? (
+                                                    <span className={cn(
+                                                        "text-[10px] font-bold tabular-nums",
+                                                        (row.breakout_probability ?? 0) >= 80 ? 'text-emerald-400' :
+                                                        (row.breakout_probability ?? 0) >= 60 ? 'text-cyan-400' :
+                                                        (row.breakout_probability ?? 0) >= 40 ? 'text-amber-400' : 'text-zinc-400'
+                                                    )}>
+                                                        {Math.round(row.breakout_probability ?? 0)}%
                                                     </span>
                                                 ) : <span className="text-zinc-800 text-[9px]">—</span>}
                                             </td>
@@ -926,7 +982,7 @@ export default function BandarmologyPage() {
                                 })
                             ) : (
                                 <tr>
-                                    <td colSpan={30} className="px-4 py-32 text-center text-zinc-600 italic">
+                                    <td colSpan={31} className="px-4 py-32 text-center text-zinc-600 italic">
                                         <div className="flex flex-col items-center gap-2">
                                             <AlertCircle className="w-6 h-6 opacity-20" />
                                             <span>{data.length === 0 ? "No data available. Run a Full Sync on Market Summary first." : "No stocks match your filter criteria."}</span>
