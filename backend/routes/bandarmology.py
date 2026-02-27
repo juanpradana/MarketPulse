@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from typing import Optional, List
 import logging
 import asyncio
+import copy
 import numpy as np
 
 router = APIRouter(prefix="/api", tags=["bandarmology"])
@@ -27,6 +28,34 @@ _deep_analysis_status = {
     "fresh_tickers": [],
     "errors": []
 }
+_deep_analysis_status_lock = asyncio.Lock()
+
+
+def _build_deep_analysis_status(
+    total: int,
+    requested: int,
+    qualified: int,
+    analysis_date: str,
+    concurrency: int,
+) -> dict:
+    return {
+        "running": True,
+        "progress": 0,
+        "total": total,
+        "requested": requested,
+        "qualified": qualified,
+        "processed": 0,
+        "failed": 0,
+        "already_fresh_today": 0,
+        "current_ticker": "",
+        "active_tickers": [],
+        "completed_tickers": [],
+        "failed_tickers": [],
+        "fresh_tickers": [],
+        "errors": [],
+        "date": analysis_date,
+        "concurrency": concurrency,
+    }
 
 
 def sanitize_data(data):
@@ -320,16 +349,15 @@ async def trigger_deep_analysis(
     
     This runs as a background task. Poll /bandarmology/deep-status for progress.
     """
-    global _deep_analysis_status
-
-    if _deep_analysis_status["running"]:
-        return JSONResponse(
-            status_code=409,
-            content={
-                "error": "Deep analysis already running",
-                "status": _deep_analysis_status
-            }
-        )
+    async with _deep_analysis_status_lock:
+        if _deep_analysis_status["running"]:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "error": "Deep analysis already running",
+                    "status": copy.deepcopy(_deep_analysis_status)
+                }
+            )
 
     try:
         from modules.bandarmology_analyzer import BandarmologyAnalyzer
@@ -346,25 +374,27 @@ async def trigger_deep_analysis(
         if not tickers:
             return {"message": "No stocks qualify for deep analysis", "tickers": []}
 
-        # Reset status
-        _deep_analysis_status = {
-            "running": True,
-            "progress": 0,
-            "total": len(tickers),
-            "requested": top_n,
-            "qualified": qualified_count,
-            "processed": 0,
-            "failed": 0,
-            "already_fresh_today": 0,
-            "current_ticker": "",
-            "active_tickers": [],
-            "completed_tickers": [],
-            "failed_tickers": [],
-            "fresh_tickers": [],
-            "errors": [],
-            "date": actual_date,
-            "concurrency": concurrency
-        }
+        # Reset status atomically (re-check running to avoid TOCTOU race)
+        async with _deep_analysis_status_lock:
+            if _deep_analysis_status["running"]:
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "error": "Deep analysis already running",
+                        "status": copy.deepcopy(_deep_analysis_status)
+                    }
+                )
+
+            _deep_analysis_status.clear()
+            _deep_analysis_status.update(
+                _build_deep_analysis_status(
+                    total=len(tickers),
+                    requested=top_n,
+                    qualified=qualified_count,
+                    analysis_date=actual_date,
+                    concurrency=concurrency,
+                )
+            )
 
         # Launch background task
         background_tasks.add_task(
@@ -401,16 +431,15 @@ async def trigger_deep_analysis_tickers(
     Trigger deep analysis for specific tickers (manual input).
     Accepts comma-separated ticker symbols, e.g. ?tickers=BBCA,BMRI,TLKM
     """
-    global _deep_analysis_status
-
-    if _deep_analysis_status["running"]:
-        return JSONResponse(
-            status_code=409,
-            content={
-                "error": "Deep analysis already running",
-                "status": _deep_analysis_status
-            }
-        )
+    async with _deep_analysis_status_lock:
+        if _deep_analysis_status["running"]:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "error": "Deep analysis already running",
+                    "status": copy.deepcopy(_deep_analysis_status)
+                }
+            )
 
     try:
         from modules.bandarmology_analyzer import BandarmologyAnalyzer
@@ -427,25 +456,27 @@ async def trigger_deep_analysis_tickers(
                 content={"error": "No valid tickers provided"}
             )
 
-        # Reset status
-        _deep_analysis_status = {
-            "running": True,
-            "progress": 0,
-            "total": len(ticker_list),
-            "requested": len(ticker_list),
-            "qualified": len(ticker_list),
-            "processed": 0,
-            "failed": 0,
-            "already_fresh_today": 0,
-            "current_ticker": "",
-            "active_tickers": [],
-            "completed_tickers": [],
-            "failed_tickers": [],
-            "fresh_tickers": [],
-            "errors": [],
-            "date": actual_date,
-            "concurrency": concurrency
-        }
+        # Reset status atomically (re-check running to avoid TOCTOU race)
+        async with _deep_analysis_status_lock:
+            if _deep_analysis_status["running"]:
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "error": "Deep analysis already running",
+                        "status": copy.deepcopy(_deep_analysis_status)
+                    }
+                )
+
+            _deep_analysis_status.clear()
+            _deep_analysis_status.update(
+                _build_deep_analysis_status(
+                    total=len(ticker_list),
+                    requested=len(ticker_list),
+                    qualified=len(ticker_list),
+                    analysis_date=actual_date,
+                    concurrency=concurrency,
+                )
+            )
 
         background_tasks.add_task(
             _run_deep_analysis,
@@ -473,13 +504,12 @@ async def trigger_deep_analysis_tickers(
 @router.get("/bandarmology/deep-status")
 async def get_deep_analysis_status():
     """Get the status of the running deep analysis task."""
-    return _deep_analysis_status
+    async with _deep_analysis_status_lock:
+        return copy.deepcopy(_deep_analysis_status)
 
 
 async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: list, concurrency: int = 4):
     """Background task: scrape inventory + txn chart and run deep scoring."""
-    global _deep_analysis_status
-
     from modules.neobdm_api_client import NeoBDMApiClient
     from modules.bandarmology_analyzer import BandarmologyAnalyzer
     from db.bandarmology_repository import BandarmologyRepository
@@ -491,13 +521,14 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
     base_lookup = {r['symbol']: r for r in base_results}
 
     api_client = NeoBDMApiClient()
-    status_lock = asyncio.Lock()
+    status_lock = _deep_analysis_status_lock
     db_write_lock = asyncio.Lock()
     try:
         login_ok = await api_client.login()
         if not login_ok:
-            _deep_analysis_status["running"] = False
-            _deep_analysis_status["errors"].append("Login failed")
+            async with status_lock:
+                _deep_analysis_status["running"] = False
+                _deep_analysis_status["errors"].append("Login failed")
             return
 
         from db.neobdm_repository import NeoBDMRepository
@@ -513,12 +544,13 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
             else:
                 tickers_to_process.append(ticker)
 
-        _deep_analysis_status["fresh_tickers"] = fresh_tickers
-        _deep_analysis_status["already_fresh_today"] = len(fresh_tickers)
-        _deep_analysis_status["total"] = len(tickers_to_process)
-        _deep_analysis_status["progress"] = 0
-        _deep_analysis_status["processed"] = 0
-        _deep_analysis_status["failed"] = 0
+        async with status_lock:
+            _deep_analysis_status["fresh_tickers"] = fresh_tickers
+            _deep_analysis_status["already_fresh_today"] = len(fresh_tickers)
+            _deep_analysis_status["total"] = len(tickers_to_process)
+            _deep_analysis_status["progress"] = 0
+            _deep_analysis_status["processed"] = 0
+            _deep_analysis_status["failed"] = 0
 
         if not tickers_to_process:
             logger.info("Deep analysis skipped: all requested tickers already fresh for today")
@@ -745,22 +777,28 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
 
     except Exception as e:
         logger.error(f"Critical deep analysis error: {e}")
-        _deep_analysis_status["errors"].append(f"Critical: {str(e)[:120]}")
+        async with status_lock:
+            _deep_analysis_status["errors"].append(f"Critical: {str(e)[:120]}")
     finally:
         await api_client.close()
-        _deep_analysis_status["running"] = False
-        _deep_analysis_status["processed"] = len(_deep_analysis_status["completed_tickers"])
-        _deep_analysis_status["failed"] = len(_deep_analysis_status["failed_tickers"])
-        _deep_analysis_status["progress"] = (
-            _deep_analysis_status["processed"] + _deep_analysis_status["failed"]
-        )
-        _deep_analysis_status["current_ticker"] = ""
-        _deep_analysis_status["active_tickers"] = []
+        async with status_lock:
+            _deep_analysis_status["running"] = False
+            _deep_analysis_status["processed"] = len(_deep_analysis_status["completed_tickers"])
+            _deep_analysis_status["failed"] = len(_deep_analysis_status["failed_tickers"])
+            _deep_analysis_status["progress"] = (
+                _deep_analysis_status["processed"] + _deep_analysis_status["failed"]
+            )
+            _deep_analysis_status["current_ticker"] = ""
+            _deep_analysis_status["active_tickers"] = []
+
+            processed = _deep_analysis_status["processed"]
+            failed = _deep_analysis_status["failed"]
+            fresh = _deep_analysis_status["already_fresh_today"]
         logger.info(
             "Deep analysis completed: "
-            f"processed={_deep_analysis_status['processed']}, "
-            f"failed={_deep_analysis_status['failed']}, "
-            f"fresh={_deep_analysis_status['already_fresh_today']}"
+            f"processed={processed}, "
+            f"failed={failed}, "
+            f"fresh={fresh}"
         )
 
 

@@ -70,6 +70,8 @@ async def add_broker_to_watchlist(request: AddBrokerRequest):
             }
         else:
             raise HTTPException(status_code=400, detail="Failed to add broker")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -95,6 +97,8 @@ async def remove_broker_from_watchlist(broker_code: str):
             }
         else:
             raise HTTPException(status_code=404, detail="Broker not found")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -157,6 +161,8 @@ async def get_broker_analysis(
             "status": "success",
             "analysis": analysis
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

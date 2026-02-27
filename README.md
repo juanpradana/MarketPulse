@@ -315,7 +315,7 @@ Once the backend is running:
 
 ## Development
 Backend:
-- `python backend/test_routers.py`
+- `python -m pytest backend/tests -q`
 - `uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000`
 
 Frontend:
