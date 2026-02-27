@@ -1,25 +1,22 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-    Target,
-    Activity,
-    Flame,
-    LayoutGrid,
+    AlertTriangle,
+    BarChart3,
+    Calendar,
+    Loader2,
+    Plus,
+    RefreshCw,
     Search,
+    SearchCheck,
+    Target,
+    Trash2,
     TrendingUp,
     Zap,
-    ArrowUpRight,
-    ArrowDownRight,
-    SearchCheck,
-    Calendar,
-    BarChart3,
-    History,
-    MoreHorizontal,
-    ExternalLink
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { brokerStalkerApi, type BrokerAnalysis, type BrokerWatchlistItem, type ChartDataPoint, type ExecutionLedgerEntry, type BrokerPortfolioPosition } from '@/services/api/brokerStalker';
 import {
     BarChart,
     Bar,
@@ -28,51 +25,186 @@ import {
     CartesianGrid,
     Tooltip,
     ResponsiveContainer,
-    Cell,
     LineChart,
     Line
 } from 'recharts';
 
-// --- DUMMY DATA ---
-
-const BROKER_PROFILE = {
-    code: 'AK',
-    name: 'Alpha Knights Securities',
-    description: 'Specializes in infrastructure and energy sectors. High correlation with large-cap movements.',
-    powerLevel: 85,
+const formatCompactCurrency = (value: number): string => {
+    const abs = Math.abs(value);
+    if (abs >= 1_000_000_000_000) return `${(value / 1_000_000_000_000).toFixed(2)}T`;
+    if (abs >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
+    if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+    return value.toLocaleString('id-ID');
 };
 
-const STALKED_STOCKS = [
-    { ticker: 'ANTM', streak: 8, netVal: '542.5B', status: 'Accumulation', avgPrice: 1540, lastChange: '+2.4%' },
-    { ticker: 'TLKM', streak: 3, netVal: '1.2T', status: 'Big Player', avgPrice: 3820, lastChange: '-0.5%' },
-    { ticker: 'BBRI', streak: 12, netVal: '2.8T', status: 'Whale Move', avgPrice: 5650, lastChange: '+1.2%' },
-    { ticker: 'GOTO', streak: -2, netVal: '-150B', status: 'Distributing', avgPrice: 65, lastChange: '-3.1%' },
-];
-
-const DAILY_CHART_DATA = [
-    { day: '01/01', buy: 120, sell: 45, net: 75 },
-    { day: '01/02', buy: 95, sell: 80, net: 15 },
-    { day: '01/03', buy: 150, sell: 30, net: 120 },
-    { day: '01/04', buy: 110, sell: 120, net: -10 },
-    { day: '01/05', buy: 200, sell: 50, net: 150 },
-    { day: '01/06', buy: 180, sell: 40, net: 140 },
-    { day: '01/07', buy: 220, sell: 60, net: 160 },
-];
-
-const DAILY_LOGS = [
-    { date: '2026-01-08', ticker: 'ANTM', buy: '52.4B', sell: '12.1B', net: '40.3B', avg: 1565 },
-    { date: '2026-01-07', ticker: 'ANTM', buy: '45.1B', sell: '5.2B', net: '39.9B', avg: 1540 },
-    { date: '2026-01-06', ticker: 'ANTM', buy: '38.2B', sell: '18.4B', net: '19.8B', avg: 1525 },
-    { date: '2026-01-05', ticker: 'ANTM', buy: '60.5B', sell: '2.1B', net: '58.4B', avg: 1510 },
-];
+const toChartLabel = (date: string): string => {
+    if (!date) return '-';
+    const parts = date.split('-');
+    if (parts.length !== 3) return date;
+    return `${parts[2]}/${parts[1]}`;
+};
 
 export default function BrokerStalkerAdvanced() {
-    const [selectedTicker, setSelectedTicker] = useState('ANTM');
-    const [searchTerm, setSearchTerm] = useState('');
+    const [brokers, setBrokers] = useState<BrokerWatchlistItem[]>([]);
+    const [selectedBroker, setSelectedBroker] = useState<string>('');
+    const [portfolio, setPortfolio] = useState<BrokerPortfolioPosition[]>([]);
+    const [selectedTicker, setSelectedTicker] = useState<string>('');
+    const [analysis, setAnalysis] = useState<BrokerAnalysis | null>(null);
+    const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
+    const [ledger, setLedger] = useState<ExecutionLedgerEntry[]>([]);
 
-    const currentStock = useMemo(() =>
-        STALKED_STOCKS.find(s => s.ticker === selectedTicker) || STALKED_STOCKS[0]
-        , [selectedTicker]);
+    const [loading, setLoading] = useState(true);
+    const [detailLoading, setDetailLoading] = useState(false);
+    const [syncing, setSyncing] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const [searchTerm, setSearchTerm] = useState('');
+    const [newBrokerCode, setNewBrokerCode] = useState('');
+
+    const selectedBrokerData = useMemo(
+        () => brokers.find((b) => b.broker_code === selectedBroker) || null,
+        [brokers, selectedBroker]
+    );
+
+    const filteredBrokers = useMemo(() => {
+        if (!searchTerm.trim()) return brokers;
+        const q = searchTerm.trim().toUpperCase();
+        return brokers.filter((b) =>
+            b.broker_code.includes(q) || (b.broker_name || '').toUpperCase().includes(q)
+        );
+    }, [brokers, searchTerm]);
+
+    const selectedPortfolioItem = useMemo(
+        () => portfolio.find((item) => item.ticker === selectedTicker) || null,
+        [portfolio, selectedTicker]
+    );
+
+    const chartWithLabel = useMemo(
+        () => chartData.map((p) => ({ ...p, day: toChartLabel(p.date) })),
+        [chartData]
+    );
+
+    const loadBrokers = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const result = await brokerStalkerApi.getWatchlist();
+            const items = result.brokers || [];
+            setBrokers(items);
+
+            if (items.length > 0) {
+                setSelectedBroker((prev) => (items.some((b) => b.broker_code === prev) ? prev : items[0].broker_code));
+            } else {
+                setSelectedBroker('');
+                setPortfolio([]);
+                setSelectedTicker('');
+                setAnalysis(null);
+                setChartData([]);
+                setLedger([]);
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to load broker watchlist');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        void loadBrokers();
+    }, []);
+
+    useEffect(() => {
+        const run = async () => {
+            if (!selectedBroker) return;
+            setDetailLoading(true);
+            setError(null);
+            try {
+                const p = await brokerStalkerApi.getBrokerPortfolio(selectedBroker);
+                const items = p.portfolio || [];
+                setPortfolio(items);
+                setSelectedTicker((prev) => (items.some((i) => i.ticker === prev) ? prev : (items[0]?.ticker || '')));
+            } catch (err) {
+                setPortfolio([]);
+                setSelectedTicker('');
+                setError(err instanceof Error ? err.message : 'Failed to load broker portfolio');
+            } finally {
+                setDetailLoading(false);
+            }
+        };
+        void run();
+    }, [selectedBroker]);
+
+    useEffect(() => {
+        const run = async () => {
+            if (!selectedBroker || !selectedTicker) {
+                setAnalysis(null);
+                setChartData([]);
+                setLedger([]);
+                return;
+            }
+            setDetailLoading(true);
+            setError(null);
+            try {
+                const [a, c, l] = await Promise.all([
+                    brokerStalkerApi.getBrokerAnalysis(selectedBroker, selectedTicker, 30),
+                    brokerStalkerApi.getChartData(selectedBroker, selectedTicker, 14),
+                    brokerStalkerApi.getExecutionLedger(selectedBroker, selectedTicker, 12),
+                ]);
+                setAnalysis(a.analysis);
+                setChartData(c.data || []);
+                setLedger(l.ledger || []);
+            } catch (err) {
+                setAnalysis(null);
+                setChartData([]);
+                setLedger([]);
+                setError(err instanceof Error ? err.message : 'Failed to load broker analysis detail');
+            } finally {
+                setDetailLoading(false);
+            }
+        };
+        void run();
+    }, [selectedBroker, selectedTicker]);
+
+    const handleSync = async () => {
+        if (!selectedBroker) return;
+        setSyncing(true);
+        setError(null);
+        try {
+            await brokerStalkerApi.syncBrokerData(selectedBroker, undefined, 14);
+            await loadBrokers();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to sync broker data');
+        } finally {
+            setSyncing(false);
+        }
+    };
+
+    const handleAddBroker = async () => {
+        const code = newBrokerCode.trim().toUpperCase();
+        if (!code) return;
+        setError(null);
+        try {
+            await brokerStalkerApi.addBrokerToWatchlist({ broker_code: code });
+            setNewBrokerCode('');
+            await loadBrokers();
+            setSelectedBroker(code);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to add broker');
+        }
+    };
+
+    const handleRemoveBroker = async (brokerCode: string) => {
+        setError(null);
+        try {
+            await brokerStalkerApi.removeBrokerFromWatchlist(brokerCode);
+            await loadBrokers();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to remove broker');
+        }
+    };
+
+    const currentNetVal = selectedPortfolioItem?.total_net_value ?? analysis?.net_value ?? 0;
+    const currentAvgPrice = selectedPortfolioItem?.avg_execution_price ?? 0;
 
     return (
         <div className="min-h-screen bg-[#050507] text-slate-100 font-sans selection:bg-blue-500/30 overflow-x-hidden">
@@ -91,30 +223,70 @@ export default function BrokerStalkerAdvanced() {
                     <div>
                         <h1 className="text-xl font-black tracking-tight flex items-center gap-2">
                             BROKER STALKER
-                            <span className="text-[10px] bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20">ADVANCED</span>
+                            <span className="text-[10px] bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20">LIVE API</span>
                         </h1>
                         <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-2">
-                            Tracking: <span className="text-white font-black">{BROKER_PROFILE.name} ({BROKER_PROFILE.code})</span>
+                            Tracking: <span className="text-white font-black">{selectedBrokerData?.broker_name || 'Select Broker'} ({selectedBrokerData?.broker_code || '-'})</span>
                         </p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4">
-                    <div className="relative flex items-center bg-white/5 border border-white/10 rounded-2xl px-4 py-2.5 focus-within:border-blue-500/50 transition-all w-72 group">
+                <div className="flex flex-wrap items-center gap-3">
+                    <div className="relative flex items-center bg-white/5 border border-white/10 rounded-2xl px-4 py-2.5 transition-all w-72 group">
                         <Search className="w-4 h-4 text-slate-500 mr-2" />
                         <input
                             type="text"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value.toUpperCase())}
-                            placeholder="SWITCH BROKER..."
+                            placeholder="SEARCH BROKER..."
                             className="bg-transparent border-none outline-none text-xs font-bold w-full placeholder:text-slate-600 font-mono"
                         />
-                        <div className="absolute right-3 px-1.5 py-0.5 bg-white/5 rounded border border-white/10 text-[8px] font-black text-slate-500">⌘ K</div>
                     </div>
+
+                    <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl px-3 py-2">
+                        <input
+                            type="text"
+                            value={newBrokerCode}
+                            onChange={(e) => setNewBrokerCode(e.target.value.toUpperCase())}
+                            placeholder="ADD CODE"
+                            className="bg-transparent border-none outline-none text-xs font-bold w-20 placeholder:text-slate-600 font-mono"
+                        />
+                        <button
+                            onClick={handleAddBroker}
+                            className="inline-flex items-center gap-1 rounded-md bg-blue-500/20 px-2 py-1 text-[10px] font-bold text-blue-300 hover:bg-blue-500/30"
+                        >
+                            <Plus className="w-3 h-3" />
+                            Add
+                        </button>
+                    </div>
+
+                    <button
+                        onClick={handleSync}
+                        disabled={syncing || !selectedBroker}
+                        className="inline-flex items-center gap-1 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <RefreshCw className={cn('w-3.5 h-3.5', syncing && 'animate-spin')} />
+                        Sync 14D
+                    </button>
+
+                    <button
+                        onClick={() => void loadBrokers()}
+                        disabled={loading}
+                        className="inline-flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-slate-200 hover:bg-white/10 disabled:opacity-50"
+                    >
+                        <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
+                        Refresh
+                    </button>
                 </div>
             </header>
 
             <main className="p-8 max-w-[1600px] mx-auto space-y-8">
+                {error && (
+                    <div className="flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+                        <AlertTriangle className="w-4 h-4" />
+                        {error}
+                    </div>
+                )}
 
                 {/* Dashboard Grid */}
                 <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
@@ -123,62 +295,105 @@ export default function BrokerStalkerAdvanced() {
                     <div className="xl:col-span-4 space-y-6">
                         <div className="flex items-center justify-between px-2">
                             <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.2em] flex items-center gap-2">
-                                <History className="w-4 h-4 text-blue-500" />
-                                Target Portfolio
+                                <Target className="w-4 h-4 text-blue-500" />
+                                Broker Watchlist
                             </h3>
-                            <button className="p-1 px-2 hover:bg-white/5 rounded-lg border border-white/5 transition-colors">
-                                <MoreHorizontal className="w-4 h-4 text-slate-500" />
-                            </button>
                         </div>
 
                         <div className="space-y-3">
-                            {STALKED_STOCKS.map((stock) => (
-                                <motion.div
-                                    key={stock.ticker}
-                                    whileHover={{ x: 5 }}
-                                    onClick={() => setSelectedTicker(stock.ticker)}
-                                    className={cn(
-                                        "p-5 rounded-3xl border transition-all cursor-pointer group",
-                                        selectedTicker === stock.ticker
-                                            ? "bg-blue-600/10 border-blue-500/30 shadow-[0_0_30px_rgba(59,130,246,0.1)]"
-                                            : "bg-[#0c0c0e] border-white/5 hover:border-white/10"
-                                    )}
-                                >
+                            {loading ? (
+                                <div className="rounded-3xl border border-white/10 bg-[#0c0c0e] p-6 text-center text-slate-400">
+                                    <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
+                                    Loading brokers...
+                                </div>
+                            ) : filteredBrokers.length === 0 ? (
+                                <div className="rounded-3xl border border-white/10 bg-[#0c0c0e] p-6 text-center text-slate-500">
+                                    No brokers found.
+                                </div>
+                            ) : (
+                                filteredBrokers.map((broker) => (
+                                    <div
+                                        key={broker.broker_code}
+                                        onClick={() => setSelectedBroker(broker.broker_code)}
+                                        className={cn(
+                                            "p-5 rounded-3xl border transition-all cursor-pointer group",
+                                            selectedBroker === broker.broker_code
+                                                ? "bg-blue-600/10 border-blue-500/30 shadow-[0_0_30px_rgba(59,130,246,0.1)]"
+                                                : "bg-[#0c0c0e] border-white/5 hover:border-white/10"
+                                        )}
+                                    >
                                     <div className="flex justify-between items-start mb-4">
                                         <div className="flex items-center gap-3">
                                             <div className={cn(
                                                 "w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm",
-                                                selectedTicker === stock.ticker ? "bg-blue-500 text-white" : "bg-white/5 text-slate-400"
+                                                selectedBroker === broker.broker_code ? "bg-blue-500 text-white" : "bg-white/5 text-slate-400"
                                             )}>
-                                                {stock.ticker.substring(0, 2)}
+                                                {broker.broker_code}
                                             </div>
                                             <div>
-                                                <div className="text-base font-black tracking-tight">{stock.ticker}</div>
-                                                <div className="text-[10px] font-bold text-slate-500 uppercase">{stock.status}</div>
+                                                <div className="text-base font-black tracking-tight">{broker.broker_name || broker.broker_code}</div>
+                                                <div className="text-[10px] font-bold text-slate-500 uppercase">Code: {broker.broker_code}</div>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <div className={cn("text-xs font-black", stock.streak > 0 ? "text-emerald-400" : "text-red-400")}>
-                                                {stock.streak > 0 ? `+${stock.streak}` : stock.streak} Days
-                                            </div>
-                                            <div className="text-[9px] font-bold text-slate-600 uppercase tracking-tighter">Streak</div>
-                                        </div>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                void handleRemoveBroker(broker.broker_code);
+                                            }}
+                                            className="rounded-md border border-rose-500/30 bg-rose-500/10 p-1 text-rose-300 hover:bg-rose-500/20"
+                                            title="Remove broker"
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </button>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                         <div className="bg-black/20 p-2 rounded-xl border border-white/5">
-                                            <div className="text-[8px] font-black text-slate-600 uppercase mb-0.5">Net Val</div>
-                                            <div className="text-xs font-bold text-slate-300">{stock.netVal}</div>
+                                            <div className="text-[8px] font-black text-slate-600 uppercase mb-0.5">Power Level</div>
+                                            <div className="text-xs font-bold text-slate-300">{broker.power_level}</div>
                                         </div>
                                         <div className="bg-black/20 p-2 rounded-xl border border-white/5">
-                                            <div className="text-[8px] font-black text-slate-600 uppercase mb-0.5">Last Change</div>
-                                            <div className={cn("text-xs font-bold", stock.lastChange.startsWith('+') ? "text-emerald-400" : "text-red-400")}>
-                                                {stock.lastChange}
-                                            </div>
+                                            <div className="text-[8px] font-black text-slate-600 uppercase mb-0.5">Updated</div>
+                                            <div className="text-xs font-bold text-slate-300">{broker.updated_at?.slice(0, 10) || '-'}</div>
                                         </div>
                                     </div>
-                                </motion.div>
-                            ))}
+                                    </div>
+                                ))
+                            )}
+
+                            <div className="rounded-2xl border border-white/10 bg-[#0c0c0e] p-4">
+                                <h4 className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-500">Tracked Portfolio</h4>
+                                {detailLoading ? (
+                                    <div className="text-xs text-slate-400">Loading portfolio...</div>
+                                ) : portfolio.length === 0 ? (
+                                    <div className="text-xs text-slate-500">No portfolio records for selected broker.</div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {portfolio.map((item) => (
+                                            <button
+                                                key={item.ticker}
+                                                onClick={() => setSelectedTicker(item.ticker)}
+                                                className={cn(
+                                                    'w-full rounded-lg border px-3 py-2 text-left text-xs transition-all',
+                                                    selectedTicker === item.ticker
+                                                        ? 'border-blue-500/40 bg-blue-500/10 text-blue-200'
+                                                        : 'border-white/10 bg-black/20 text-slate-300 hover:border-white/20'
+                                                )}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <span className="font-black">{item.ticker}</span>
+                                                    <span className={cn('font-bold', item.streak_days >= 0 ? 'text-emerald-400' : 'text-rose-400')}>
+                                                        {item.streak_days >= 0 ? `+${item.streak_days}` : item.streak_days}d
+                                                    </span>
+                                                </div>
+                                                <div className="mt-1 text-[10px] text-slate-500">
+                                                    Net: {formatCompactCurrency(item.total_net_value)}
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -193,25 +408,24 @@ export default function BrokerStalkerAdvanced() {
                             <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
                                 <div className="space-y-2">
                                     <div className="flex items-center gap-3">
-                                        <h2 className="text-3xl font-black">{selectedTicker} <span className="text-slate-500 font-medium">Surveillance</span></h2>
-                                        <button className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors">
-                                            <ExternalLink className="w-4 h-4 text-slate-400" />
-                                        </button>
+                                        <h2 className="text-3xl font-black">{selectedTicker || '-'} <span className="text-slate-500 font-medium">Surveillance</span></h2>
                                     </div>
                                     <p className="text-sm text-slate-400 max-w-md font-medium">
-                                        Deep tracking for <span className="text-white font-bold">{BROKER_PROFILE.code}</span> activity. Current trend shows
-                                        {currentStock.streak > 5 ? ' strong institutional accumulation' : ' fluctuating distribution patterns'}.
+                                        Deep tracking for <span className="text-white font-bold">{selectedBroker || '-'}</span> activity.
+                                        {analysis?.status ? ` Status: ${analysis.status}.` : ' Select broker and ticker to view analysis.'}
                                     </p>
                                 </div>
                                 <div className="flex gap-4">
                                     <div className="text-right">
                                         <div className="text-[10px] font-black text-slate-500 uppercase mb-1">Total Net (30D)</div>
-                                        <div className="text-2xl font-black text-emerald-400">{currentStock.netVal}</div>
+                                        <div className={cn('text-2xl font-black', currentNetVal >= 0 ? 'text-emerald-400' : 'text-rose-400')}>
+                                            {formatCompactCurrency(currentNetVal)}
+                                        </div>
                                     </div>
                                     <div className="w-1 px-4 border-r border-white/10" />
                                     <div className="text-right">
                                         <div className="text-[10px] font-black text-slate-500 uppercase mb-1">Avg Buy Price</div>
-                                        <div className="text-2xl font-black text-blue-400">Rp {currentStock.avgPrice.toLocaleString()}</div>
+                                        <div className="text-2xl font-black text-blue-400">Rp {Math.round(currentAvgPrice || 0).toLocaleString('id-ID')}</div>
                                     </div>
                                 </div>
                             </div>
@@ -241,7 +455,7 @@ export default function BrokerStalkerAdvanced() {
 
                                 <div className="h-[250px] w-full">
                                     <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                                        <BarChart data={DAILY_CHART_DATA}>
+                                        <BarChart data={chartWithLabel}>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff05" />
                                             <XAxis
                                                 dataKey="day"
@@ -275,7 +489,7 @@ export default function BrokerStalkerAdvanced() {
 
                                 <div className="h-[250px] w-full">
                                     <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                                        <LineChart data={DAILY_CHART_DATA}>
+                                        <LineChart data={chartWithLabel}>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff05" />
                                             <XAxis
                                                 dataKey="day"
@@ -320,24 +534,31 @@ export default function BrokerStalkerAdvanced() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-white/5">
-                                        {DAILY_LOGS.map((log, i) => (
-                                            <tr key={i} className="hover:bg-white/[0.02] transition-colors group">
+                                        {ledger.map((log, i) => (
+                                            <tr key={`${log.date}-${i}`} className="hover:bg-white/[0.02] transition-colors group">
                                                 <td className="p-6 text-xs font-bold text-slate-400 font-mono">{log.date}</td>
-                                                <td className="p-6 text-xs font-black text-emerald-400/80">{log.buy}</td>
-                                                <td className="p-6 text-xs font-black text-red-400/80">{log.sell}</td>
+                                                <td className="p-6 text-xs font-black text-emerald-400/80">{log.action === 'BUY' ? formatCompactCurrency(log.volume) : '-'}</td>
+                                                <td className="p-6 text-xs font-black text-red-400/80">{log.action === 'SELL' ? formatCompactCurrency(log.volume) : '-'}</td>
                                                 <td className="p-6">
                                                     <div className={cn(
                                                         "text-xs font-black px-2 py-1 rounded-lg inline-block",
-                                                        log.net.startsWith('-') ? "bg-red-500/10 text-red-400" : "bg-emerald-500/10 text-emerald-400"
+                                                        log.action === 'SELL' ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'
                                                     )}>
-                                                        {log.net}
+                                                        {log.action}
                                                     </div>
                                                 </td>
                                                 <td className="p-6 text-right text-xs font-black text-slate-200">
-                                                    Rp {log.avg.toLocaleString()}
+                                                    Rp {Math.round(log.avg_price || 0).toLocaleString('id-ID')}
                                                 </td>
                                             </tr>
                                         ))}
+                                        {ledger.length === 0 && (
+                                            <tr>
+                                                <td colSpan={5} className="p-6 text-center text-xs text-slate-500">
+                                                    {detailLoading ? 'Loading ledger...' : 'No execution ledger data available.'}
+                                                </td>
+                                            </tr>
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
@@ -348,12 +569,16 @@ export default function BrokerStalkerAdvanced() {
                 {/* Footer Status */}
                 <footer className="bg-white/[0.02] border border-white/10 rounded-full p-4 flex items-center justify-center gap-8">
                     <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-[10px] font-black text-slate-500 uppercase">System Status: Optimal</span>
+                        <div className={cn('w-2 h-2 rounded-full animate-pulse', detailLoading ? 'bg-amber-500' : 'bg-emerald-500')} />
+                        <span className="text-[10px] font-black text-slate-500 uppercase">
+                            System Status: {detailLoading ? 'Loading' : 'Live'}
+                        </span>
                     </div>
                     <div className="h-4 border-r border-white/10" />
                     <div className="flex items-center gap-3">
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tracking accuracy: 99.2%</span>
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                            {selectedBroker ? `Broker: ${selectedBroker}` : 'No broker selected'}
+                        </span>
                     </div>
                 </footer>
 

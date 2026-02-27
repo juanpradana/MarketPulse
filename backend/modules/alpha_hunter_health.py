@@ -11,39 +11,97 @@ from modules.database import DatabaseManager
 class AlphaHunterHealth:
     def __init__(self):
         self.db = DatabaseManager()
+
+    @staticmethod
+    def _auto_detect_spike_date(records: List[Dict], min_ratio: float = 2.0, lookback_days: int = 20) -> Optional[str]:
+        """Auto-detect latest spike date from volume history.
+
+        A spike is detected when current volume is >= min_ratio * median(volume of previous lookback_days),
+        with non-negative daily price change.
+        """
+        if not records:
+            return None
+
+        df = pd.DataFrame(records)
+        required_cols = {'trade_date', 'volume', 'close_price'}
+        if not required_cols.issubset(df.columns):
+            return None
+
+        df['trade_date'] = pd.to_datetime(df['trade_date'])
+        df = df.sort_values('trade_date').reset_index(drop=True)
+        if len(df) < 6:
+            return None
+
+        df['volume'] = pd.to_numeric(df['volume'], errors='coerce').fillna(0)
+        df['close_price'] = pd.to_numeric(df['close_price'], errors='coerce').fillna(0)
+
+        candidates = []
+        for idx in range(1, len(df)):
+            baseline_start = max(0, idx - lookback_days)
+            baseline = df['volume'].iloc[baseline_start:idx]
+            if baseline.empty:
+                continue
+
+            baseline_median = float(baseline.median())
+            if baseline_median <= 0:
+                continue
+
+            current_volume = float(df.at[idx, 'volume'])
+            ratio = current_volume / baseline_median
+
+            prev_close = float(df.at[idx - 1, 'close_price'])
+            current_close = float(df.at[idx, 'close_price'])
+            price_chg = ((current_close - prev_close) / prev_close * 100) if prev_close > 0 else 0
+
+            if ratio >= min_ratio and price_chg >= 0:
+                candidates.append(df.at[idx, 'trade_date'])
+
+        if not candidates:
+            return None
+        return max(candidates).strftime('%Y-%m-%d')
         
     def check_pullback_health(self, ticker: str, spike_date: str = None) -> Dict:
         """
         Analyze price/volume correlation after an anomaly spike.
         Target: Price Down + Volume Down = HEALTHY (Accumulation held)
         """
-        # 1. Get history since spike
-        # If spike_date not provided, try to find it from watchlist or scan
-        if not spike_date:
-            # Try watchlist first
-            repo = self.db.get_alpha_hunter_repo()
-            # This requires a get_watchlist_item method or we scan all
-            # For simplicity, let's assume caller provides spike_date or we auto-detect
-            # Auto-detect fallback:
-            pass # TODO: auto-detect logic if needed
-            
-        # Get daily data from spike_date to NOW
-        # We need data starting from spike_date
+        # Get full daily data first; used for both auto-detect and tracking window
         records = self.db.get_volume_history(ticker)
-        
+
         if not records:
              return {"error": "No data found"}
+
+        spike_source = "user_input" if spike_date else "none"
+
+        # If spike_date not provided, try watchlist first then auto-detect
+        if not spike_date:
+            repo = self.db.get_alpha_hunter_repo()
+            item = repo.get_watchlist_item(ticker) if repo else None
+            if item and item.get('spike_date'):
+                spike_date = item['spike_date']
+                spike_source = "watchlist"
+            else:
+                auto_spike_date = self._auto_detect_spike_date(records)
+                if auto_spike_date:
+                    spike_date = auto_spike_date
+                    spike_source = "auto_detected"
+                else:
+                    spike_source = "fallback_last_14d"
              
         df = pd.DataFrame(records)
         df['trade_date'] = pd.to_datetime(df['trade_date'])
         df = df.sort_values('trade_date')
         
         if spike_date:
-             mask = df['trade_date'] >= pd.to_datetime(spike_date)
-             df_tracking = df[mask].copy()
+            mask = df['trade_date'] >= pd.to_datetime(spike_date)
+            df_tracking = df[mask].copy()
+            if df_tracking.empty:
+                df_tracking = df.tail(14).copy()
+                spike_source = "fallback_last_14d"
+                spike_date = None
         else:
-             # Default to last 14 days if no spike date
-             df_tracking = df.tail(14).copy()
+            # Default to last 14 days if no spike date
+            df_tracking = df.tail(14).copy()
              
         # Analysis
         health_score = 100
@@ -99,6 +157,8 @@ class AlphaHunterHealth:
         
         return {
             "ticker": ticker,
+            "spike_date": spike_date,
+            "spike_source": spike_source,
             "health_score": health_score,
             "verdict": verdict,
             "days_tracked": len(tracking_log),
