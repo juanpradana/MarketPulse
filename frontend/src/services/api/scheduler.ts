@@ -14,6 +14,32 @@ export interface ScheduledJob {
     trigger: string;
 }
 
+export interface MarketSummaryResponse {
+    status: 'success' | 'skipped' | 'failed';
+    reason?: string;
+    error?: string;
+    summary?: {
+        date: string;
+        top_positive_news: unknown[];
+        top_negative_news: unknown[];
+        unusual_volume_tickers: unknown[];
+        strong_accumulation: unknown[];
+        market_breadth?: {
+            news_count: number;
+            bullish_count: number;
+            bearish_count: number;
+            neutral_count: number;
+            avg_sentiment_score: number;
+        };
+        narrative?: {
+            headline: string;
+            bullets: string[];
+            newsletter: string;
+        };
+        generated_at: string;
+    };
+}
+
 export interface SchedulerStatus {
     running: boolean;
     job_count: number;
@@ -110,6 +136,20 @@ export const schedulerApi = {
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.detail || 'Failed to scrape NeoBDM');
+        }
+        return await response.json();
+    },
+
+    /**
+     * Manually trigger market summary generation with narrative output
+     */
+    manualMarketSummary: async (): Promise<MarketSummaryResponse> => {
+        const response = await fetch(`${API_BASE_URL}/api/scheduler/manual/market-summary`, {
+            method: 'POST'
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Failed to generate market summary');
         }
         return await response.json();
     },

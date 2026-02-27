@@ -7,6 +7,7 @@ Manual triggers still work via frontend buttons.
 
 import logging
 from datetime import datetime
+from urllib.parse import urlparse
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
@@ -225,6 +226,78 @@ def run_neobdm_batch_scrape():
         return {"status": "failed", "error": str(e)}
 
 
+def _infer_news_source(url: str) -> str:
+    """Infer human-friendly source from URL."""
+    try:
+        host = urlparse(url or "").netloc.lower()
+    except Exception:
+        host = ""
+
+    if "cnbcindonesia.com" in host:
+        return "CNBC"
+    if "emitennews.com" in host:
+        return "EmitenNews"
+    if "idx.co.id" in host:
+        return "IDX"
+    if "bisnis.com" in host:
+        return "Bisnis.com"
+    if "investor.id" in host:
+        return "Investor.id"
+    if "bloombergtechnoz.com" in host:
+        return "Bloomberg Technoz"
+    return "Web"
+
+
+def _to_float(value, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _build_market_summary_narrative(summary: dict) -> dict:
+    """Build deterministic newsletter/narrative text from summary sections."""
+    breadth = summary.get("market_breadth", {})
+    bullish = int(breadth.get("bullish_count", 0))
+    bearish = int(breadth.get("bearish_count", 0))
+    avg_sentiment = _to_float(breadth.get("avg_sentiment_score", 0.0), 0.0)
+    hot_count = len(summary.get("strong_accumulation", []))
+    unusual_count = len(summary.get("unusual_volume_tickers", []))
+
+    if bullish > bearish and avg_sentiment >= 0:
+        tone = "cenderung konstruktif"
+    elif bearish > bullish and avg_sentiment < 0:
+        tone = "cenderung defensif"
+    else:
+        tone = "mixed dengan volatilitas selektif"
+
+    top_pos = summary.get("top_positive_news", [])
+    top_neg = summary.get("top_negative_news", [])
+    top_pos_ticker = top_pos[0].get("ticker", "-") if top_pos else "-"
+    top_neg_ticker = top_neg[0].get("ticker", "-") if top_neg else "-"
+
+    bullets = [
+        f"Sentimen harian {tone} (bullish: {bullish}, bearish: {bearish}, avg score: {avg_sentiment:.3f}).",
+        f"{hot_count} ticker masuk daftar akumulasi kuat dari signal engine terbaru.",
+        f"{unusual_count} ticker terdeteksi anomali volume yang perlu dipantau lanjutan.",
+        f"Headline positif dominan: {top_pos_ticker}; tekanan negatif utama: {top_neg_ticker}.",
+    ]
+
+    headline = f"Market Pulse {summary.get('date', '')}: Sentimen {tone}"
+    newsletter = (
+        f"{headline}. "
+        f"Di sisi berita, rasio bullish vs bearish berada di {bullish}:{bearish} dengan rerata skor {avg_sentiment:.3f}. "
+        f"Engine mendeteksi {hot_count} kandidat akumulasi kuat dan {unusual_count} anomali volume signifikan. "
+        "Fokus berikutnya: validasi follow-through harga dan disiplin manajemen risiko pada ticker dengan sinyal paling konsisten."
+    )
+
+    return {
+        "headline": headline,
+        "bullets": bullets,
+        "newsletter": newsletter,
+    }
+
+
 def generate_market_summary():
     """
     Generate daily market summary report.
@@ -233,6 +306,7 @@ def generate_market_summary():
     logger.info("[Scheduler] Generating market summary...")
     try:
         from db import NewsRepository, NeoBDMRepository
+        from db.price_volume_repository import price_volume_repo
 
         news_repo = NewsRepository()
         neobdm_repo = NeoBDMRepository()
@@ -243,11 +317,104 @@ def generate_market_summary():
             "top_negative_news": [],
             "unusual_volume_tickers": [],
             "strong_accumulation": [],
+            "market_breadth": {
+                "news_count": 0,
+                "bullish_count": 0,
+                "bearish_count": 0,
+                "neutral_count": 0,
+                "avg_sentiment_score": 0.0,
+            },
+            "narrative": {
+                "headline": "",
+                "bullets": [],
+                "newsletter": "",
+            },
             "generated_at": datetime.now().isoformat()
         }
 
-        # Get top news by sentiment
-        # This is a placeholder - implement actual logic based on your news schema
+        end_date = datetime.now().strftime("%Y-%m-%d")
+
+        # 1) News sentiment summary (latest 24h window)
+        news_df = news_repo.get_news(start_date=end_date, end_date=end_date, limit=300)
+        if not news_df.empty:
+            # Deduplicate by title
+            news_df = news_df.copy()
+            news_df["title_key"] = news_df["title"].astype(str).str.strip().str.lower()
+            news_df = news_df.drop_duplicates(subset=["title_key"])  # keep first (latest)
+
+            score_series = news_df["sentiment_score"].apply(_to_float)
+            summary["market_breadth"] = {
+                "news_count": int(len(news_df)),
+                "bullish_count": int((news_df["sentiment_label"] == "Bullish").sum()),
+                "bearish_count": int((news_df["sentiment_label"] == "Bearish").sum()),
+                "neutral_count": int((news_df["sentiment_label"] == "Netral").sum()),
+                "avg_sentiment_score": round(float(score_series.mean()) if len(score_series) > 0 else 0.0, 4),
+            }
+
+            top_positive = news_df.sort_values("sentiment_score", ascending=False).head(5)
+            top_negative = news_df.sort_values("sentiment_score", ascending=True).head(5)
+
+            summary["top_positive_news"] = [
+                {
+                    "ticker": str(row.get("ticker") or "-").split(",")[0].strip() or "-",
+                    "title": str(row.get("title") or ""),
+                    "score": round(_to_float(row.get("sentiment_score"), 0.0), 4),
+                    "sentiment_label": row.get("sentiment_label") or "Netral",
+                    "source": _infer_news_source(str(row.get("url") or "")),
+                    "timestamp": str(row.get("timestamp") or ""),
+                    "url": str(row.get("url") or ""),
+                }
+                for _, row in top_positive.iterrows()
+            ]
+
+            summary["top_negative_news"] = [
+                {
+                    "ticker": str(row.get("ticker") or "-").split(",")[0].strip() or "-",
+                    "title": str(row.get("title") or ""),
+                    "score": round(_to_float(row.get("sentiment_score"), 0.0), 4),
+                    "sentiment_label": row.get("sentiment_label") or "Netral",
+                    "source": _infer_news_source(str(row.get("url") or "")),
+                    "timestamp": str(row.get("timestamp") or ""),
+                    "url": str(row.get("url") or ""),
+                }
+                for _, row in top_negative.iterrows()
+            ]
+
+        # 2) Unusual volume candidates
+        try:
+            unusual = price_volume_repo.detect_unusual_volumes(scan_days=3, lookback_days=20, min_ratio=2.0)
+            summary["unusual_volume_tickers"] = [
+                {
+                    "ticker": row.get("ticker"),
+                    "date": row.get("date"),
+                    "ratio": row.get("ratio"),
+                    "price_change": row.get("price_change"),
+                    "category": row.get("category"),
+                }
+                for row in unusual[:10]
+            ]
+        except Exception as vol_err:
+            logger.warning(f"[Scheduler] Unusual volume scan skipped: {vol_err}")
+
+        # 3) Strong accumulation from latest signal engine
+        try:
+            hot_signals = neobdm_repo.get_latest_hot_signals()
+            summary["strong_accumulation"] = [
+                {
+                    "ticker": row.get("symbol"),
+                    "signal_score": int(row.get("signal_score", 0)),
+                    "signal_strength": row.get("signal_strength"),
+                    "flow": row.get("flow"),
+                    "change": row.get("change"),
+                    "confluence_status": row.get("confluence_status"),
+                }
+                for row in hot_signals[:10]
+            ]
+        except Exception as signal_err:
+            logger.warning(f"[Scheduler] Hot signal summary skipped: {signal_err}")
+
+        summary["narrative"] = _build_market_summary_narrative(summary)
+
         has_meaningful_data = any([
             summary["top_positive_news"],
             summary["top_negative_news"],
@@ -264,7 +431,10 @@ def generate_market_summary():
             }
 
         logger.info("[Scheduler] Market summary generated")
-        return summary
+        return {
+            "status": "success",
+            "summary": summary,
+        }
 
     except Exception as e:
         logger.error(f"[Scheduler] Market summary generation failed: {e}")

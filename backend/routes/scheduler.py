@@ -122,6 +122,17 @@ async def manual_neobdm_scrape() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/manual/market-summary")
+async def manual_market_summary() -> Dict[str, Any]:
+    """
+    Manually trigger market summary generation with newsletter/narrative output.
+    """
+    try:
+        return generate_market_summary()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/manual/cleanup")
 async def manual_cleanup() -> Dict[str, Any]:
     """
