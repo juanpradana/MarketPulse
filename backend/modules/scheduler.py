@@ -248,6 +248,21 @@ def generate_market_summary():
 
         # Get top news by sentiment
         # This is a placeholder - implement actual logic based on your news schema
+        has_meaningful_data = any([
+            summary["top_positive_news"],
+            summary["top_negative_news"],
+            summary["unusual_volume_tickers"],
+            summary["strong_accumulation"],
+        ])
+
+        if not has_meaningful_data:
+            logger.warning("[Scheduler] Market summary skipped: placeholder returned empty sections")
+            return {
+                "status": "skipped",
+                "reason": "placeholder_no_data",
+                "summary": summary,
+            }
+
         logger.info("[Scheduler] Market summary generated")
         return summary
 

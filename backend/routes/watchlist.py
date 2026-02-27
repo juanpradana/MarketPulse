@@ -535,16 +535,18 @@ def _calculate_combined_rating(alpha: AlphaHunterAnalysis, bandar: BandarmologyA
     score = 0
     count = 0
 
-    if alpha.has_signal and alpha.signal_score:
+    if alpha.has_signal and alpha.signal_score is not None:
         # Normalize alpha score (typically 0-100)
         score += min(100, max(0, alpha.signal_score))
         count += 1
 
     if bandar.has_analysis:
-        if bandar.combined_score:
-            score += bandar.combined_score
+        if bandar.combined_score is not None:
+            # Normalize Bandarmology combined score (0-250) to 0-100 scale
+            normalized_bandar_score = (bandar.combined_score / 250) * 100
+            score += min(100, max(0, normalized_bandar_score))
             count += 1
-        elif bandar.total_score:
+        elif bandar.total_score is not None:
             score += bandar.total_score
             count += 1
 

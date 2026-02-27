@@ -186,8 +186,12 @@ export default function StoryFinderPage() {
             if (response.ok) {
                 const result = await response.json();
                 setData(result);
+            } else {
+                setData({ stories: [], keyword_stats: {}, total: 0 });
+                console.error('Story Finder API error:', response.status, response.statusText);
             }
         } catch (error) {
+            setData({ stories: [], keyword_stats: {}, total: 0 });
             console.error('Story Finder fetch error:', error);
         } finally {
             setLoading(false);
