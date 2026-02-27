@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+const MAX_COMBINED_SCORE = 250;
+
 interface StockDetailModalProps {
     ticker: string | null;
     date?: string;
@@ -113,7 +115,7 @@ function generateChatText(data: StockDetailResponse): string {
     lines.push(`  Base: ${data.base_score}/${data.max_base_score}`);
     if (data.has_deep) {
         lines.push(`  Deep: +${data.deep_score ?? 0}`);
-        lines.push(`  Combined: ${data.combined_score ?? data.base_score}/${data.max_combined_score ?? 200}`);
+        lines.push(`  Combined: ${data.combined_score ?? data.base_score}/${data.max_combined_score ?? MAX_COMBINED_SCORE}`);
     }
     if (data.breakout_probability) lines.push(`  Breakout Prob: ${data.breakout_probability}%`);
     if (data.pump_tomorrow_score) {
@@ -359,7 +361,7 @@ function generatePdfHtml(data: StockDetailResponse): string {
     const scoreCards = [
         { label: 'Base Score', value: `${data.base_score}`, sub: `/ ${data.max_base_score}`, color: scoreColor(data.base_score, data.max_base_score) },
         { label: 'Deep Score', value: data.has_deep ? `+${data.deep_score ?? 0}` : '—', sub: data.has_deep ? 'Analyzed' : 'N/A', color: '#60a5fa' },
-        { label: 'Combined', value: `${data.combined_score ?? data.base_score}`, sub: `/ ${data.max_combined_score ?? 200}`, color: scoreColor(data.combined_score ?? data.base_score, data.max_combined_score ?? 200) },
+        { label: 'Combined', value: `${data.combined_score ?? data.base_score}`, sub: `/ ${data.max_combined_score ?? MAX_COMBINED_SCORE}`, color: scoreColor(data.combined_score ?? data.base_score, data.max_combined_score ?? MAX_COMBINED_SCORE) },
         { label: 'Breakout Prob', value: data.breakout_probability ? `${data.breakout_probability}%` : '—', sub: data.breakout_probability ? (data.breakout_probability >= 70 ? 'HIGH' : data.breakout_probability >= 40 ? 'MEDIUM' : 'LOW') : '', color: (data.breakout_probability ?? 0) >= 70 ? '#34d399' : (data.breakout_probability ?? 0) >= 40 ? '#f59e0b' : '#94a3b8' },
         { label: 'Pump Tomorrow', value: data.pump_tomorrow_score ? `${data.pump_tomorrow_score}%` : '—', sub: data.pump_tomorrow_signal === 'STRONG_PUMP' ? '🚀 STRONG' : data.pump_tomorrow_signal === 'LIKELY_PUMP' ? '📈 LIKELY' : data.pump_tomorrow_signal === 'POSSIBLE_PUMP' ? '🔄 POSSIBLE' : data.pump_tomorrow_signal === 'LOW_CHANCE' ? '⚠️ LOW' : '', color: (data.pump_tomorrow_score ?? 0) >= 75 ? '#34d399' : (data.pump_tomorrow_score ?? 0) >= 55 ? '#06b6d4' : (data.pump_tomorrow_score ?? 0) >= 40 ? '#f59e0b' : '#94a3b8' },
         { label: 'Entry Price', value: data.entry_price ? fmt(data.entry_price) : '—', sub: data.entry_price && data.price ? `${((data.price - data.entry_price) / data.entry_price * 100).toFixed(1)}% from current` : '', color: '#06b6d4' },
@@ -826,7 +828,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                 <MetricCard
                                     label="Combined"
                                     value={data.combined_score ?? data.base_score}
-                                    sub={`/ ${data.max_combined_score ?? 200}`}
+                                    sub={`/ ${data.max_combined_score ?? MAX_COMBINED_SCORE}`}
                                     color={(data.combined_score ?? data.base_score) >= 80 ? 'text-emerald-400' : (data.combined_score ?? data.base_score) >= 50 ? 'text-blue-400' : 'text-orange-400'}
                                     icon={<Target className="w-3 h-3 text-zinc-600" />}
                                 />

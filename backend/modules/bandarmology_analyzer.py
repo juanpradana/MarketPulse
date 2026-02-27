@@ -86,6 +86,15 @@ class BandarmologyAnalyzer:
     # Format: { 'TICKER': 'SECTOR_NAME' }
     _sector_mapping: Dict[str, str] = {}
 
+    # Score system constants (single source of truth)
+    BASE_MAX_SCORE = 100
+    DEEP_MAX_SCORE = 150
+    MAX_COMBINED_SCORE = BASE_MAX_SCORE + DEEP_MAX_SCORE
+
+    # Transparency constants
+    PUMP_TOMORROW_MAX_HEURISTIC_CONFIDENCE = 0.78
+    HISTORICAL_CONFIDENCE_WEIGHT = 0.20
+
     def __init__(self, db_path: Optional[str] = None):
         self.db_path = db_path or os.path.join(config.DATA_DIR, "market_sentinel.db")
         self.broker_classes = _load_broker_classifications()
@@ -112,6 +121,33 @@ class BandarmologyAnalyzer:
     def _get_conn(self):
         import sqlite3
         return sqlite3.connect(self.db_path)
+
+    def _get_dynamic_price_diff_thresholds(self, deep: Dict) -> Dict[str, float]:
+        """
+        Build adaptive price-vs-cost thresholds based on current regime proxies.
+
+        Regime proxies used:
+        - flow_acceleration_signal
+        - volume_confirmation_multiplier
+        """
+        accel_signal = deep.get('flow_acceleration_signal', 'NONE')
+        vol_mult = max(0.8, min(1.2, _safe_float(deep.get('volume_confirmation_multiplier', 1.0))))
+
+        accel_mult = 1.0
+        if accel_signal in ('STRONG_ACCELERATING', 'ACCELERATING'):
+            accel_mult = 1.15
+        elif accel_signal in ('MILD_DECELERATING', 'DECELERATING'):
+            accel_mult = 0.85
+
+        regime_mult = max(0.8, min(1.25, accel_mult * vol_mult))
+
+        return {
+            'near_low': -0.03 * regime_mult,
+            'near_high': 0.05 * regime_mult,
+            'discount_low': -0.10 * regime_mult,
+            'slightly_above_high': 0.10 * regime_mult,
+            'above_high': 0.20 * regime_mult,
+        }
 
     def analyze(self, target_date: Optional[str] = None) -> List[Dict]:
         """
@@ -1367,6 +1403,10 @@ class BandarmologyAnalyzer:
             'prev_phase': '',
             'phase_transition': 'NONE',
             'score_trend': 'NONE',
+            'confidence_score_base': 0,
+            'confidence_score_final': 0,
+            'historical_confidence_weight': 0,
+            'historical_confidence_adjustment': 0,
             # Flow velocity/acceleration
             'flow_velocity_mm': 0,
             'flow_velocity_foreign': 0,
@@ -1382,6 +1422,8 @@ class BandarmologyAnalyzer:
             'pump_tomorrow_score': 0,
             'pump_tomorrow_signal': 'NONE',
             'pump_tomorrow_factors': {},
+            'pump_tomorrow_signal_type': 'HEURISTIC_RULE_BASED',
+            'pump_tomorrow_confidence': 0,
         }
 
         signals = {}
@@ -1893,6 +1935,10 @@ class BandarmologyAnalyzer:
         deep['pump_tomorrow_score'] = pt_score
         deep['pump_tomorrow_signal'] = pt_signal
         deep['pump_tomorrow_factors'] = pt_factors
+        deep['pump_tomorrow_signal_type'] = 'HEURISTIC_RULE_BASED'
+        deep['pump_tomorrow_confidence'] = _safe_float(
+            pt_factors.get('heuristic_confidence', 0)
+        )
 
         # Enhanced classification
         deep['deep_trade_type'] = self._classify_deep_trade_type(
@@ -1911,6 +1957,22 @@ class BandarmologyAnalyzer:
                 deep['historical_freshness'] = freshness
                 if freshness < 1.0:
                     deep['historical_warning'] = f"Previous analysis is {freshness:.0%} fresh ({prev_date})"
+
+        # ---- FINAL CONFIDENCE SCORE (transparent weighting) ----
+        # Base confidence uses coordination score from controlling broker analysis.
+        base_confidence = _safe_float(deep.get('coordination_score', 0))
+        hist_raw_adjustment = _safe_float(deep.get('historical_confidence_adjustment_raw', 0))
+        hist_freshness = _safe_float(deep.get('historical_freshness', 1.0))
+        hist_weight = self.HISTORICAL_CONFIDENCE_WEIGHT * hist_freshness
+        weighted_hist_adjustment = hist_raw_adjustment * hist_weight
+
+        deep['confidence_score_base'] = round(base_confidence, 1)
+        deep['historical_confidence_weight'] = round(hist_weight, 3)
+        deep['historical_confidence_adjustment'] = round(weighted_hist_adjustment, 2)
+        deep['confidence_score_final'] = round(
+            max(0, min(100, base_confidence + weighted_hist_adjustment)),
+            1,
+        )
 
         return deep
 
@@ -2875,17 +2937,18 @@ class BandarmologyAnalyzer:
         bandar_cost = deep.get('bandar_avg_cost', 0)
         if current_price > 0 and bandar_cost > 0:
             pct_diff = (current_price - bandar_cost) / bandar_cost
-            if -0.03 <= pct_diff <= 0.05:
+            thresholds = self._get_dynamic_price_diff_thresholds(deep)
+            if thresholds['near_low'] <= pct_diff <= thresholds['near_high']:
                 price_score = 100   # Near cost = best entry
-            elif -0.10 <= pct_diff < -0.03:
+            elif thresholds['discount_low'] <= pct_diff < thresholds['near_low']:
                 price_score = 90    # Below cost = discount
-            elif 0.05 < pct_diff <= 0.10:
+            elif thresholds['near_high'] < pct_diff <= thresholds['slightly_above_high']:
                 price_score = 70    # Slightly above
-            elif 0.10 < pct_diff <= 0.20:
+            elif thresholds['slightly_above_high'] < pct_diff <= thresholds['above_high']:
                 price_score = 40    # Above cost
-            elif pct_diff > 0.20:
+            elif pct_diff > thresholds['above_high']:
                 price_score = 10    # Far above = risky
-            elif pct_diff < -0.10:
+            elif pct_diff < thresholds['discount_low']:
                 price_score = 50    # Deep discount = might be weak
         factors['price_vs_cost'] = price_score
         weights['price_vs_cost'] = 0.20
@@ -3033,10 +3096,15 @@ class BandarmologyAnalyzer:
             'MILD_ACCELERATING': 55, 'STABLE': 25,
             'MILD_DECELERATING': 10, 'DECELERATING': 0, 'NONE': 15
         }.get(accel_signal, 15)
+        # Continuous adjustment to reduce static-bin overfitting
+        accel_mm = _safe_float(deep.get('flow_acceleration_mm', 0))
+        flow_accel += max(-10, min(15, accel_mm * 8))
+
         # Bonus: check if MM velocity is strongly positive
         vel_mm = deep.get('flow_velocity_mm', 0)
         if vel_mm > 1.0 and flow_accel >= 55:
             flow_accel = min(100, flow_accel + 15)
+        flow_accel = max(0, min(100, flow_accel))
         factors['flow_acceleration'] = flow_accel
         weights['flow_acceleration'] = 0.20
 
@@ -3051,11 +3119,12 @@ class BandarmologyAnalyzer:
         bandar_cost = deep.get('bandar_avg_cost', 0)
         if current_price > 0 and bandar_cost > 0:
             pct_diff = (current_price - bandar_cost) / bandar_cost
-            if -0.03 <= pct_diff <= 0.05:
+            thresholds = self._get_dynamic_price_diff_thresholds(deep)
+            if thresholds['near_low'] <= pct_diff <= thresholds['near_high']:
                 price_ready = max(price_ready, 95)  # Near cost = best
-            elif -0.08 <= pct_diff < -0.03:
+            elif (thresholds['discount_low'] * 0.8) <= pct_diff < thresholds['near_low']:
                 price_ready = max(price_ready, 80)  # Below cost = discount
-            elif 0.05 < pct_diff <= 0.12:
+            elif thresholds['near_high'] < pct_diff <= (thresholds['slightly_above_high'] * 1.2):
                 price_ready = max(price_ready, 60)  # Slightly above
         factors['price_zona_siap'] = price_ready
         weights['price_zona_siap'] = 0.15
@@ -3148,17 +3217,35 @@ class BandarmologyAnalyzer:
 
         score = round(score)
 
+        # Heuristic confidence calibration (explicitly non-out-of-sample validated)
+        data_freshness = _safe_float(deep.get('data_freshness', 1.0))
+        heuristic_confidence = max(
+            0.35,
+            min(
+                self.PUMP_TOMORROW_MAX_HEURISTIC_CONFIDENCE,
+                (score / 100) * 0.9 * data_freshness,
+            ),
+        )
+        effective_score = score * heuristic_confidence
+
         # Determine signal
-        if score >= 75:
+        if effective_score >= 58:
             signal = 'STRONG_PUMP'
-        elif score >= 55:
+        elif effective_score >= 43:
             signal = 'LIKELY_PUMP'
-        elif score >= 40:
+        elif effective_score >= 30:
             signal = 'POSSIBLE_PUMP'
-        elif score >= 25:
+        elif effective_score >= 18:
             signal = 'LOW_CHANCE'
         else:
             signal = 'UNLIKELY'
+
+        factors['heuristic_confidence'] = round(heuristic_confidence, 3)
+        factors['effective_score'] = round(effective_score, 1)
+        factors['validation_note'] = (
+            'Rule-based heuristic signal; belum tervalidasi out-of-sample.'
+        )
+        factors['signal_is_predictive'] = False
 
         return score, signal, factors
 
@@ -4127,6 +4214,7 @@ class BandarmologyAnalyzer:
             'prev_phase': '',
             'phase_transition': 'NONE',
             'score_trend': 'NONE',
+            'historical_confidence_adjustment_raw': 0,
         }
 
         if not previous_deep:
@@ -4193,6 +4281,29 @@ class BandarmologyAnalyzer:
             else:
                 result['score_trend'] = 'STABLE'
 
+        trend_adj_map = {
+            'STRONG_IMPROVING': 12,
+            'IMPROVING': 6,
+            'STABLE': 0,
+            'DECLINING': -6,
+            'STRONG_DECLINING': -12,
+            'NONE': 0,
+        }
+        phase_adj_map = {
+            'ACCUMULATION_TO_HOLDING': 4,
+            'DISTRIBUTION_TO_ACCUMULATION': 8,
+            'HOLDING_TO_ACCUMULATION': 5,
+            'ACCUMULATION_TO_DISTRIBUTION': -10,
+            'HOLDING_TO_DISTRIBUTION': -8,
+            'DISTRIBUTION_TO_HOLDING': 3,
+            'NONE': 0,
+        }
+
+        result['historical_confidence_adjustment_raw'] = (
+            trend_adj_map.get(result['score_trend'], 0)
+            + phase_adj_map.get(result['phase_transition'], 0)
+        )
+
         return result
 
     def enrich_results_with_deep(
@@ -4217,7 +4328,7 @@ class BandarmologyAnalyzer:
                 r['deep_score'] = round(deep.get('deep_score', 0), 1)
                 r['deep_trade_type'] = deep.get('deep_trade_type', '')
                 r['combined_score'] = round(r.get('total_score', 0) + deep.get('deep_score', 0), 1)
-                r['max_combined_score'] = 250  # 100 base + 150 deep
+                r['max_combined_score'] = self.MAX_COMBINED_SCORE
 
                 # Inventory summary
                 r['inv_accum_brokers'] = deep.get('inv_accum_brokers', 0)
@@ -4312,6 +4423,10 @@ class BandarmologyAnalyzer:
                 r['prev_phase'] = deep.get('prev_phase', '')
                 r['phase_transition'] = deep.get('phase_transition', 'NONE')
                 r['score_trend'] = deep.get('score_trend', 'NONE')
+                r['confidence_score_base'] = deep.get('confidence_score_base', 0)
+                r['confidence_score_final'] = deep.get('confidence_score_final', 0)
+                r['historical_confidence_weight'] = deep.get('historical_confidence_weight', 0)
+                r['historical_confidence_adjustment'] = deep.get('historical_confidence_adjustment', 0)
 
                 # Flow velocity/acceleration
                 r['flow_velocity_mm'] = deep.get('flow_velocity_mm', 0)
@@ -4330,6 +4445,8 @@ class BandarmologyAnalyzer:
                 r['pump_tomorrow_score'] = deep.get('pump_tomorrow_score', 0)
                 r['pump_tomorrow_signal'] = deep.get('pump_tomorrow_signal', 'NONE')
                 r['pump_tomorrow_factors'] = deep.get('pump_tomorrow_factors', {})
+                r['pump_tomorrow_signal_type'] = deep.get('pump_tomorrow_signal_type', 'HEURISTIC_RULE_BASED')
+                r['pump_tomorrow_confidence'] = deep.get('pump_tomorrow_confidence', 0)
 
                 # Data freshness (Improvement 7)
                 r['data_freshness'] = deep.get('data_freshness', 1.0)
@@ -4352,7 +4469,7 @@ class BandarmologyAnalyzer:
             else:
                 r['deep_score'] = 0
                 r['combined_score'] = r.get('total_score', 0)
-                r['max_combined_score'] = 250
+                r['max_combined_score'] = self.MAX_COMBINED_SCORE
                 r['has_deep'] = False
 
         # Re-sort by combined score

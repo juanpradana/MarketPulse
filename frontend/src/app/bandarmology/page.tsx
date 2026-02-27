@@ -36,6 +36,8 @@ const TRADE_TYPE_CONFIG: Record<string, { label: string; color: string; bg: stri
     '—': { label: '—', color: 'text-zinc-600', bg: 'bg-transparent' },
 };
 
+const MAX_COMBINED_SCORE = 250;
+
 const CONFLUENCE_CONFIG: Record<string, { label: string; color: string }> = {
     'TRIPLE': { label: '●●●', color: 'text-yellow-400' },
     'DOUBLE': { label: '●●○', color: 'text-emerald-400' },
@@ -694,7 +696,7 @@ export default function BandarmologyPage() {
 
                                             {/* Score (combined or base) */}
                                             <td className="px-1.5 py-1 border-r border-zinc-800/30">
-                                                <ScoreBar score={row.combined_score ?? row.total_score} max={row.max_combined_score ?? 100} />
+                                                <ScoreBar score={row.combined_score ?? row.total_score} max={row.max_combined_score ?? MAX_COMBINED_SCORE} />
                                             </td>
 
                                             {/* Deep Score */}
@@ -961,7 +963,7 @@ export default function BandarmologyPage() {
 
                                         {/* Score Bar */}
                                         <div className="flex items-center gap-2">
-                                            <ScoreBar score={row.combined_score ?? row.total_score} max={row.max_combined_score ?? 100} />
+                                            <ScoreBar score={row.combined_score ?? row.total_score} max={row.max_combined_score ?? MAX_COMBINED_SCORE} />
                                             {(row.deep_score ?? 0) > 0 && (
                                                 <span className={cn(
                                                     "text-xs font-bold tabular-nums shrink-0",
