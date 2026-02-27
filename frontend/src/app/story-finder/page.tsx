@@ -171,10 +171,12 @@ export default function StoryFinderPage() {
     const [selectedKeywords, setSelectedKeywords] = useState<string[]>(['right issue', 'akuisisi', 'dividen']);
     const [data, setData] = useState<StoryFinderResponse | null>(null);
     const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState<string | null>(null);
     const [customKeyword, setCustomKeyword] = useState('');
 
     const fetchStories = async () => {
         setLoading(true);
+        setFetchError(null);
         try {
             const params = new URLSearchParams({
                 keywords: selectedKeywords.join(','),
@@ -188,10 +190,12 @@ export default function StoryFinderPage() {
                 setData(result);
             } else {
                 setData({ stories: [], keyword_stats: {}, total: 0 });
+                setFetchError(`Gagal memuat data (HTTP ${response.status}). Coba lagi.`);
                 console.error('Story Finder API error:', response.status, response.statusText);
             }
         } catch (error) {
             setData({ stories: [], keyword_stats: {}, total: 0 });
+            setFetchError('Gagal terhubung ke server Story Finder. Coba lagi.');
             console.error('Story Finder fetch error:', error);
         } finally {
             setLoading(false);
@@ -320,6 +324,12 @@ export default function StoryFinderPage() {
                     <span className="text-zinc-500">
                         {selectedKeywords.length} keywords active
                     </span>
+                </div>
+            )}
+
+            {fetchError && (
+                <div className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm text-rose-300">
+                    {fetchError}
                 </div>
             )}
 

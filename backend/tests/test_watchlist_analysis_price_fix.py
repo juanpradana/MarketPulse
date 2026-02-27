@@ -4,6 +4,11 @@ import tempfile
 
 from db import DatabaseConnection, BandarmologyRepository
 from db.watchlist_repository import WatchlistRepository
+from routes.watchlist import (
+    AlphaHunterAnalysis,
+    BandarmologyAnalysis,
+    _calculate_combined_rating,
+)
 
 
 def _create_temp_db_path() -> str:
@@ -69,6 +74,26 @@ def test_watchlist_latest_price_uses_price_volume_schema():
             os.unlink(db_path)
         except OSError:
             pass
+
+
+def test_combined_rating_normalizes_bandarmology_250_scale_to_100():
+    alpha = AlphaHunterAnalysis(signal_score=80, has_signal=True)
+    bandar = BandarmologyAnalysis(combined_score=200, has_analysis=True)
+
+    rating = _calculate_combined_rating(alpha, bandar)
+
+    # 200/250 => 80. Avg(80, 80) => 80 => STRONG_BUY
+    assert rating == "STRONG_BUY"
+
+
+def test_combined_rating_uses_total_score_when_combined_missing():
+    alpha = AlphaHunterAnalysis(signal_score=50, has_signal=True)
+    bandar = BandarmologyAnalysis(total_score=60, combined_score=None, has_analysis=True)
+
+    rating = _calculate_combined_rating(alpha, bandar)
+
+    # Avg(50, 60) => 55 => BUY
+    assert rating == "BUY"
 
 
 def test_watchlist_latest_price_falls_back_to_neobdm_records():
