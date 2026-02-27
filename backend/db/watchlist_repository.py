@@ -253,12 +253,26 @@ class WatchlistRepository(BaseRepository):
         conn = self._get_conn()
         try:
             cursor = conn.cursor()
+            
+            # Check if list exists in metadata table
             cursor.execute(
                 """SELECT 1 FROM user_watchlist_lists
                    WHERE user_id = ? AND list_name = ?""",
                 (user_id, source_list)
             )
-            if not cursor.fetchone():
+            list_exists_in_metadata = cursor.fetchone() is not None
+            
+            # Also check if there are any tickers with this list name
+            cursor.execute(
+                """SELECT 1 FROM user_watchlist
+                   WHERE user_id = ? AND list_name = ?
+                   LIMIT 1""",
+                (user_id, source_list)
+            )
+            list_has_tickers = cursor.fetchone() is not None
+            
+            # If list doesn't exist anywhere, return False
+            if not list_exists_in_metadata and not list_has_tickers:
                 return False
 
             if target_list:
@@ -291,11 +305,13 @@ class WatchlistRepository(BaseRepository):
                     (user_id, source_list)
                 )
 
-            cursor.execute(
-                """DELETE FROM user_watchlist_lists
-                   WHERE user_id = ? AND list_name = ?""",
-                (user_id, source_list)
-            )
+            # Only delete from metadata if it exists there
+            if list_exists_in_metadata:
+                cursor.execute(
+                    """DELETE FROM user_watchlist_lists
+                       WHERE user_id = ? AND list_name = ?""",
+                    (user_id, source_list)
+                )
 
             cursor.execute(
                 """SELECT COUNT(*) FROM user_watchlist_lists WHERE user_id = ?""",
