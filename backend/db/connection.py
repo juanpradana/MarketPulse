@@ -569,6 +569,11 @@ class DatabaseConnection:
                 -- Volume context
                 volume_score INTEGER DEFAULT 0,
                 volume_signal TEXT,
+                volume_confirmation_multiplier REAL DEFAULT 1.0,
+                
+                -- Data source conflict
+                data_source_conflict INTEGER DEFAULT 0,
+                conflict_stats_json TEXT,
                 
                 -- MA cross
                 ma_cross_signal TEXT DEFAULT 'NONE',
@@ -739,6 +744,10 @@ class DatabaseConnection:
             # Volume context
             ("volume_score", "INTEGER DEFAULT 0"),
             ("volume_signal", "TEXT"),
+            ("volume_confirmation_multiplier", "REAL DEFAULT 1.0"),
+            # Data source conflict
+            ("data_source_conflict", "INTEGER DEFAULT 0"),
+            ("conflict_stats_json", "TEXT"),
             # MA cross
             ("ma_cross_signal", "TEXT DEFAULT 'NONE'"),
             ("ma_cross_score", "INTEGER DEFAULT 0"),

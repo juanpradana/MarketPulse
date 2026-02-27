@@ -908,19 +908,19 @@ class BandarmologyAnalyzer:
         total_score += acc_score
 
         # 7. Price Position vs MAs (10 pts)
+        # NeoBDM MA columns are boolean-like flags (v/x), not numeric MA values.
         ma_score = 0
         ma_above_count = 0
-        if price > 0:
-            if ma5 > 0 and price >= ma5:
-                ma_above_count += 1
-            if ma10 > 0 and price >= ma10:
-                ma_above_count += 1
-            if ma20 > 0 and price >= ma20:
-                ma_above_count += 1
-            if ma50 > 0 and price >= ma50:
-                ma_above_count += 1
-            if ma100 > 0 and price >= ma100:
-                ma_above_count += 1
+        if _is_flag_set(ref.get('ma5')):
+            ma_above_count += 1
+        if _is_flag_set(ref.get('ma10')):
+            ma_above_count += 1
+        if _is_flag_set(ref.get('ma20')):
+            ma_above_count += 1
+        if _is_flag_set(ref.get('ma50')):
+            ma_above_count += 1
+        if _is_flag_set(ref.get('ma100')):
+            ma_above_count += 1
 
         if ma_above_count >= 5:
             ma_score = 10

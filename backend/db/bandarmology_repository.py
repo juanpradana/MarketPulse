@@ -273,7 +273,8 @@ class BandarmologyRepository(BaseRepository):
                     accum_duration_days,
                     concentration_broker, concentration_pct, concentration_risk,
                     txn_smart_money_cum, txn_retail_cum_deep, smart_retail_divergence,
-                    volume_score, volume_signal,
+                    volume_score, volume_signal, volume_confirmation_multiplier,
+                    data_source_conflict, conflict_stats_json,
                     ma_cross_signal, ma_cross_score,
                     prev_deep_score, prev_phase, phase_transition, score_trend,
                     flow_velocity_mm, flow_velocity_foreign, flow_velocity_institution,
@@ -282,7 +283,7 @@ class BandarmologyRepository(BaseRepository):
                     pump_tomorrow_score, pump_tomorrow_signal, pump_tomorrow_factors_json,
                     deep_score, deep_trade_type, deep_signals_json
                 ) VALUES ({})
-            """.format(', '.join(['?'] * 87)), (
+            """.format(', '.join(['?'] * 90)), (
                 ticker.upper(), analysis_date,
                 data.get('inv_accum_brokers', 0),
                 data.get('inv_distrib_brokers', 0),
@@ -348,6 +349,9 @@ class BandarmologyRepository(BaseRepository):
                 data.get('smart_retail_divergence', 0),
                 data.get('volume_score', 0),
                 data.get('volume_signal', 'NONE'),
+                data.get('volume_confirmation_multiplier', 1.0),
+                1 if data.get('data_source_conflict', False) else 0,
+                json.dumps(data.get('conflict_stats')) if data.get('conflict_stats') is not None else None,
                 data.get('ma_cross_signal', 'NONE'),
                 data.get('ma_cross_score', 0),
                 data.get('prev_deep_score', 0),
@@ -412,6 +416,8 @@ class BandarmologyRepository(BaseRepository):
             d['breakout_factors'] = json.loads(d.get('breakout_factors_json') or '{}')
             d['important_dates'] = json.loads(d.get('important_dates_json') or '[]')
             d['pump_tomorrow_factors'] = json.loads(d.get('pump_tomorrow_factors_json') or '{}')
+            d['data_source_conflict'] = bool(d.get('data_source_conflict', 0))
+            d['conflict_stats'] = json.loads(d.get('conflict_stats_json') or 'null')
             return d
         finally:
             conn.close()
@@ -441,6 +447,8 @@ class BandarmologyRepository(BaseRepository):
             d['breakout_factors'] = json.loads(d.get('breakout_factors_json') or '{}')
             d['important_dates'] = json.loads(d.get('important_dates_json') or '[]')
             d['pump_tomorrow_factors'] = json.loads(d.get('pump_tomorrow_factors_json') or '{}')
+            d['data_source_conflict'] = bool(d.get('data_source_conflict', 0))
+            d['conflict_stats'] = json.loads(d.get('conflict_stats_json') or 'null')
             return d
         finally:
             conn.close()
@@ -470,6 +478,8 @@ class BandarmologyRepository(BaseRepository):
                 d['breakout_factors'] = json.loads(d.get('breakout_factors_json') or '{}')
                 d['important_dates'] = json.loads(d.get('important_dates_json') or '[]')
                 d['pump_tomorrow_factors'] = json.loads(d.get('pump_tomorrow_factors_json') or '{}')
+                d['data_source_conflict'] = bool(d.get('data_source_conflict', 0))
+                d['conflict_stats'] = json.loads(d.get('conflict_stats_json') or 'null')
                 result[d['ticker']] = d
             return result
         finally:
