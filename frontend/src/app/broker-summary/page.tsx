@@ -1119,7 +1119,7 @@ export default function BrokerSummaryPage() {
                                     )}
                                 </div>
 
-                                <ResponsiveContainer width="100%" height={500} minWidth={0}>
+                                <ResponsiveContainer width="100%" height={500} minWidth={0} minHeight={0}>
                                     <LineChart data={(() => {
                                         // Transform data: create shared dataset with all dates
                                         const allDates = new Set<string>();

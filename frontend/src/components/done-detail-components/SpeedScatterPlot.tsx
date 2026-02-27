@@ -92,7 +92,7 @@ export const SpeedScatterPlot: React.FC<SpeedScatterPlotProps> = ({
                 HIGH FREQ / BOTS
             </div>
 
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <ScatterChart
                     margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
                 >

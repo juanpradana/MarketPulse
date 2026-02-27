@@ -312,7 +312,7 @@ export default function Stage2VPACard({ ticker }: Stage2VPACardProps) {
                                     )}
                                 </div>
                                 <div className="h-32">
-                                    <ResponsiveContainer width="100%" height="100%">
+                                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                         <ComposedChart data={chartData}>
                                             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                                             <XAxis

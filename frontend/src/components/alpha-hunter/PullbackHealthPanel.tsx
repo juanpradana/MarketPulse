@@ -169,7 +169,7 @@ export default function PullbackHealthPanel({ ticker }: PullbackHealthPanelProps
                 {/* 1. Correlation Chart */}
                 <Card className="bg-slate-900 border-slate-800 p-4 h-[300px]">
                     <h4 className="text-slate-400 text-xs uppercase mb-4 font-bold tracking-wider">Price vs Volume Correlation</h4>
-                    <ResponsiveContainer width="100%" height="90%">
+                    <ResponsiveContainer width="100%" height="90%" minWidth={0} minHeight={0}>
                         <ComposedChart data={data.pullback.log}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                             <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickFormatter={(v) => v.substring(5)} />

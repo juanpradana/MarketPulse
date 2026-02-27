@@ -63,7 +63,7 @@ export function SignalGauge({ value, direction, label }: SignalGaugeProps) {
     return (
         <div className="relative w-full h-[120px] flex flex-col items-center justify-center">
             {/* Chart Layer */}
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <PieChart>
                     <Pie
                         data={data}

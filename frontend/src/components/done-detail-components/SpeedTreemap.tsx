@@ -127,7 +127,7 @@ export const SpeedTreemap: React.FC<SpeedTreemapProps> = ({
                 <div className="flex items-center gap-1"><div className="w-2 h-2 bg-red-600"></div> Fast</div>
             </div>
 
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <Treemap
                     data={data}
                     dataKey="size"

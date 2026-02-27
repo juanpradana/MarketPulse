@@ -271,7 +271,7 @@ export const SentimentChart = ({ ticker, startDate, endDate }: SentimentChartPro
                             <GripVertical className="w-4 h-4 text-zinc-700 animate-pulse" />
                             <span className="text-[8px] text-zinc-800 font-bold uppercase vertical-text tracking-widest">DRAG AXIS</span>
                         </div>
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                             <ComposedChart
                                 data={combinedData}
                                 syncId="marketSentiment"
@@ -343,7 +343,7 @@ export const SentimentChart = ({ ticker, startDate, endDate }: SentimentChartPro
 
                     {/* Sentiment Chart (Bottom Pane) */}
                     <div className="h-[30%] w-full border-t border-zinc-900">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                             <ComposedChart
                                 data={combinedData}
                                 syncId="marketSentiment"
