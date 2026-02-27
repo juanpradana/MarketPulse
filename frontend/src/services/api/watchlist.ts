@@ -276,11 +276,16 @@ export const watchlistApi = {
      * Delete watchlist collection
      */
     deleteList: async (listName: string, moveToList?: string): Promise<{ status: string; message: string }> => {
-        const url = new URL(`${API_BASE_URL}/api/watchlist/lists/${encodeURIComponent(listName)}`);
+        // Handle empty API_BASE_URL (relative URLs)
+        const baseUrl = API_BASE_URL || '';
+        const path = `/api/watchlist/lists/${encodeURIComponent(listName)}`;
+        const url = baseUrl ? `${baseUrl}${path}` : path;
+        
+        const fullUrl = new URL(url, typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8000');
         if (moveToList) {
-            url.searchParams.set('move_to_list', moveToList);
+            fullUrl.searchParams.set('move_to_list', moveToList);
         }
-        const response = await fetch(url.toString(), {
+        const response = await fetch(fullUrl.toString(), {
             method: 'DELETE'
         });
         if (!response.ok) {
