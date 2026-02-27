@@ -1,5 +1,77 @@
 # Refactoring Changelog
 
+## Version 2.4.0 - Market Summary Narrative Engine & Scheduler API (2026-02-27)
+
+### Overview
+Implemented real daily market summary generation with deterministic newsletter/narrative output, and exposed manual trigger API for operations/frontend integration.
+
+### Highlights
+- **Implemented** real `generate_market_summary()` pipeline in `backend/modules/scheduler.py`:
+  - Aggregates **top positive/negative news** from `news` sentiment data.
+  - Aggregates **unusual volume** candidates from `price_volume` scan.
+  - Aggregates **strong accumulation** candidates from latest hot signal engine.
+  - Builds `market_breadth` metrics and deterministic `narrative` (`headline`, `bullets`, `newsletter`).
+- **Added** manual endpoint: `POST /api/scheduler/manual/market-summary` in `backend/routes/scheduler.py`.
+- **Added** frontend API method and type support in `frontend/src/services/api/scheduler.ts` (`manualMarketSummary`, `MarketSummaryResponse`).
+- **Added** regression tests for:
+  - skipped behavior when all source sections are empty,
+  - success behavior with populated narrative payload.
+
+### Files Modified
+- `backend/modules/scheduler.py`
+- `backend/routes/scheduler.py`
+- `backend/tests/test_scheduler_bandarmology_refresh.py`
+- `frontend/src/services/api/scheduler.ts`
+
+---
+
+## Version 2.3.0 - Alpha Health Auto-Detect & Broker Stalker Live Frontend (2026-02-27)
+
+### Overview
+Closed major functional gaps by enabling automatic spike date detection in Alpha Hunter Health and migrating Broker Stalker frontend from dummy data to live API integration.
+
+### Highlights
+- **Alpha Hunter Health** (`backend/modules/alpha_hunter_health.py`):
+  - Implemented auto-detection of `spike_date` from volume/price behavior.
+  - Added spike source resolution order: `user_input` → `watchlist` → `auto_detected` → `fallback_last_14d`.
+  - Extended response payload with `spike_date` and `spike_source` metadata.
+- **Broker Stalker Frontend** (`frontend/src/app/broker-stalker/page.tsx`):
+  - Replaced hardcoded dummy dataset with live `brokerStalkerApi` calls.
+  - Added live flows for broker watchlist, portfolio, analysis, chart data, ledger, add/remove broker, and sync actions.
+  - Added loading and error states for better operational UX.
+- **Tests**:
+  - Added `backend/tests/test_alpha_hunter_health.py` covering auto-detect and spike-source resolution.
+
+### Files Modified
+- `backend/modules/alpha_hunter_health.py`
+- `backend/tests/test_alpha_hunter_health.py`
+- `frontend/src/app/broker-stalker/page.tsx`
+
+---
+
+## Version 2.2.0 - Scoring, Story Finder UX, and Reliability Fixes (2026-02-27)
+
+### Overview
+Stabilized analysis quality and UX by fixing scoring bias, hardening scheduler placeholder behavior, and improving Story Finder error handling.
+
+### Highlights
+- **Watchlist score normalization** (`backend/routes/watchlist.py`):
+  - Normalized Bandarmology `combined_score` (0-250) into 0-100 scale before combining with Alpha Hunter score.
+- **Scheduler placeholder guard** (`backend/modules/scheduler.py`):
+  - Market summary now returns `status: "skipped"` when no meaningful data exists (prevents false-positive success).
+- **Story Finder UX** (`frontend/src/app/story-finder/page.tsx`):
+  - Cleared stale data on non-OK/error responses.
+  - Added visible error banner and retry button (`Coba Lagi`).
+- **Regression tests**:
+  - Added/updated tests for scoring normalization and scheduler guard.
+
+### Files Modified
+- `backend/routes/watchlist.py`
+- `backend/modules/scheduler.py`
+- `backend/tests/test_watchlist_analysis_price_fix.py`
+- `backend/tests/test_scheduler_bandarmology_refresh.py`
+- `frontend/src/app/story-finder/page.tsx`
+
 ## Version 2.1.0 - Broker Stalker Feature & Critical Fixes (2026-02-05)
 
 ### Overview

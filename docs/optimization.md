@@ -32,7 +32,8 @@ Dokumen ini merinci rencana teknis untuk mengoptimalkan fitur yang sudah ada gun
 *   [x] **Database Indexing**: Memastikan index yang tepat pada kolom `timestamp`, `url`, dan `ticker`.
     *   *Goal*: Query pencarian data masif di bawah 10ms.
 *   [x] **Incremental Scraping (Early Exit)**: Berhenti melakukan scraping jika ditemukan 10 artikel berurutan yang sudah ada di database. (Optimasi Efisiensi)
-*   [ ] **File Clean-up Utility**: Skrip pembersihan otomatis untuk folder `downloads/` setelah dokumen berhasil di-ingest ke VectorDB.
+*   [x] **File Clean-up Utility**: Pembersihan otomatis data lama untuk `downloads/`, log file, dan raw done-detail via scheduler mingguan.
+    *   *Goal*: Menjaga ukuran storage tetap terkendali dan mengurangi noise data historis.
 
 ---
 
@@ -49,7 +50,7 @@ Dokumen ini merinci rencana teknis untuk mengoptimalkan fitur yang sudah ada gun
 | **P3** | **Asynchronous Scraper** | Backend | [DONE] |
 | **P3** | **Re-render Optimization** | Frontend | [DONE] |
 | **P4** | **Synced Charts** | Frontend | [PENDING] |
-| **P4** | **File Clean-up Utility** | Storage | [PENDING] |
+| **P4** | **File Clean-up Utility** | Storage | [DONE] |
 
 ---
-*Terakhir diperbarui: 2026-02-19*
+*Terakhir diperbarui: 2026-02-27*
