@@ -26,6 +26,7 @@ import StockDetailModal from '@/components/bandarmology/StockDetailModal';
 
 type SortDirection = 'asc' | 'desc';
 type SortConfig = { key: keyof BandarmologyItem; direction: SortDirection } | null;
+type StrategyPreset = 'NONE' | 'METHOD_1' | 'METHOD_2';
 
 const TRADE_TYPE_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
     'BOTH': { label: 'SWING + INTRA', color: 'text-yellow-300', bg: 'bg-yellow-500/20 border-yellow-500/30' },
@@ -98,6 +99,7 @@ export default function BandarmologyPage() {
     const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'total_score', direction: 'desc' });
     const [tradeTypeFilter, setTradeTypeFilter] = useState<string>("");
     const [minScoreFilter, setMinScoreFilter] = useState<number>(0);
+    const [strategyPreset, setStrategyPreset] = useState<StrategyPreset>('NONE');
     const [searchTicker, setSearchTicker] = useState<string>("");
     const [flagFilters, setFlagFilters] = useState<Record<string, boolean>>({});
     const [currentPage, setCurrentPage] = useState(1);
@@ -253,6 +255,41 @@ export default function BandarmologyPage() {
     const processedData = useMemo(() => {
         let result = [...data];
 
+        const getConfluenceCount = (row: BandarmologyItem): number => {
+            if (Array.isArray(row.positive_methods)) {
+                return row.positive_methods.length;
+            }
+            if (row.confluence_status === 'TRIPLE') return 3;
+            if (row.confluence_status === 'DOUBLE') return 2;
+            if (row.confluence_status === 'SINGLE') return 1;
+            return 0;
+        };
+
+        // Backtest strategy preset filter
+        if (strategyPreset === 'METHOD_1') {
+            result = result.filter((r) => (
+                (r.combined_score ?? r.total_score ?? 0) >= 160
+                && (r.deep_score ?? 0) >= 100
+                && (r.pump_tomorrow_score ?? 0) >= 80
+                && (r.breakout_probability ?? 0) >= 60
+            ));
+        } else if (strategyPreset === 'METHOD_2') {
+            result = result.filter((r) => {
+                const confl = getConfluenceCount(r);
+                const mmCum = r.txn_mm_cum ?? 0;
+                const fCum = r.txn_foreign_cum ?? 0;
+                return (
+                    (r.pump_tomorrow_score ?? 0) >= 80
+                    && (r.breakout_probability ?? 0) >= 66
+                    && confl >= 2
+                    && (r.d_0_mm ?? 0) > 0
+                    && (r.d_0_nr ?? 0) > 0
+                    && (r.d_0_ff ?? 0) > 0
+                    && (mmCum > 0 || fCum > 0)
+                );
+            });
+        }
+
         // Score filter
         if (minScoreFilter > 0) {
             result = result.filter(r => r.total_score >= minScoreFilter);
@@ -289,7 +326,7 @@ export default function BandarmologyPage() {
         }
 
         return result;
-    }, [data, minScoreFilter, tradeTypeFilter, searchTicker, flagFilters, sortConfig, compareValues]);
+    }, [data, strategyPreset, minScoreFilter, tradeTypeFilter, searchTicker, flagFilters, sortConfig, compareValues]);
 
     // Pagination
     const totalPages = Math.ceil(processedData.length / pageSize);
@@ -301,7 +338,7 @@ export default function BandarmologyPage() {
     // Reset page on filter change
     useEffect(() => {
         setCurrentPage(1);
-    }, [minScoreFilter, tradeTypeFilter, searchTicker, flagFilters, selectedDate]);
+    }, [strategyPreset, minScoreFilter, tradeTypeFilter, searchTicker, flagFilters, selectedDate]);
 
     const handleSort = (key: keyof BandarmologyItem) => {
         setSortConfig(prev => {
@@ -387,6 +424,48 @@ export default function BandarmologyPage() {
                             <h1 className="text-[16px] font-black tracking-tight text-zinc-100">
                                 BANDARMOLOGY
                             </h1>
+                        </div>
+
+                        {/* Strategy Preset */}
+                        <div className="space-y-0">
+                            <label className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider block">Strategy</label>
+                            <div className="flex gap-1">
+                                <button
+                                    onClick={() => setStrategyPreset('NONE')}
+                                    className={cn(
+                                        "px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border transition-all",
+                                        strategyPreset === 'NONE'
+                                            ? "bg-zinc-700/80 border-zinc-500/70 text-zinc-100"
+                                            : "bg-zinc-800/50 border-zinc-700/30 text-zinc-500 hover:text-zinc-300"
+                                    )}
+                                >
+                                    ALL
+                                </button>
+                                <button
+                                    onClick={() => setStrategyPreset('METHOD_1')}
+                                    className={cn(
+                                        "px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border transition-all",
+                                        strategyPreset === 'METHOD_1'
+                                            ? "bg-emerald-500/20 border-emerald-500/60 text-emerald-300"
+                                            : "bg-zinc-800/50 border-zinc-700/30 text-zinc-500 hover:text-zinc-300"
+                                    )}
+                                    title="Combined>=160, Deep>=100, Pump>=80, Breakout>=60"
+                                >
+                                    M1
+                                </button>
+                                <button
+                                    onClick={() => setStrategyPreset('METHOD_2')}
+                                    className={cn(
+                                        "px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border transition-all",
+                                        strategyPreset === 'METHOD_2'
+                                            ? "bg-cyan-500/20 border-cyan-500/60 text-cyan-300"
+                                            : "bg-zinc-800/50 border-zinc-700/30 text-zinc-500 hover:text-zinc-300"
+                                    )}
+                                    title="Pump>=80, Breakout>=66, CONFL>=2, D-0 MM/NR/FF > 0, (MM.CUM>0 OR F.CUM>0)"
+                                >
+                                    M2
+                                </button>
+                            </div>
                         </div>
                         <div className="hidden lg:block h-5 w-px bg-zinc-700" />
 
