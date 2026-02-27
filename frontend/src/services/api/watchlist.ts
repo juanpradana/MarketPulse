@@ -284,8 +284,15 @@ export const watchlistApi = {
             method: 'DELETE'
         });
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to delete watchlist');
+            let errorMsg = `Failed to delete watchlist (HTTP ${response.status})`;
+            try {
+                const error = await response.json();
+                errorMsg = error.detail || error.message || errorMsg;
+            } catch {
+                // If response is not JSON, use status text
+                errorMsg = response.statusText || errorMsg;
+            }
+            throw new Error(errorMsg);
         }
         return await response.json();
     },

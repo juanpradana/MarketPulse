@@ -243,8 +243,10 @@ export default function WatchlistPage() {
             setSelectedList('Default');
             await fetchWatchlists();
             await fetchWatchlist();
-        } catch (err) {
-            setError('Failed to delete watchlist');
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            setError(`Failed to delete watchlist: ${msg}`);
+            console.error('Delete watchlist error:', err);
         } finally {
             setDeletingList(false);
         }
