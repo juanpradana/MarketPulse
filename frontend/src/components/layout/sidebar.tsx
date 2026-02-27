@@ -22,7 +22,8 @@ import {
     Calculator,
     Menu,
     X,
-    Star
+    Star,
+    FileText
 } from 'lucide-react';
 import { ScraperControl } from './scraper-control';
 
@@ -53,10 +54,10 @@ const navGroups = [
         title: 'NeoBDM Analysis',
         items: [
             { icon: BarChart3, label: 'Market Summary', href: '/neobdm-summary' },
+            { icon: FileText, label: 'Daily Narrative', href: '/market-summary' },
             { icon: ArrowRightLeft, label: 'Broker Summary', href: '/broker-summary' },
             { icon: LineChart, label: 'Flow Tracker', href: '/neobdm-tracker' },
             { icon: ClipboardList, label: 'Done Detail', href: '/done-detail' },
-
         ]
     },
     {
