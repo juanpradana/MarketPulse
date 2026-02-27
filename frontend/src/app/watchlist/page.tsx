@@ -60,6 +60,8 @@ export default function WatchlistPage() {
     const [selectedList, setSelectedList] = useState('Default');
     const [newListName, setNewListName] = useState('');
     const [creatingList, setCreatingList] = useState(false);
+    const [deletingList, setDeletingList] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [newTicker, setNewTicker] = useState('');
@@ -225,6 +227,26 @@ export default function WatchlistPage() {
             setError('Failed to create watchlist');
         } finally {
             setCreatingList(false);
+        }
+    };
+
+    const handleDeleteWatchlist = async () => {
+        if (selectedList === 'Default') {
+            setError('Cannot delete the Default watchlist');
+            setShowDeleteConfirm(false);
+            return;
+        }
+        try {
+            setDeletingList(true);
+            await watchlistApi.deleteList(selectedList);
+            setShowDeleteConfirm(false);
+            setSelectedList('Default');
+            await fetchWatchlists();
+            await fetchWatchlist();
+        } catch (err) {
+            setError('Failed to delete watchlist');
+        } finally {
+            setDeletingList(false);
         }
     };
 
@@ -517,6 +539,16 @@ export default function WatchlistPage() {
                                 </option>
                             ))}
                         </select>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowDeleteConfirm(true)}
+                            disabled={selectedList === 'Default' || deletingList}
+                            className="h-9 px-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                            title="Delete current watchlist"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </Button>
                         <div className="flex-1 flex gap-2">
                             <Input
                                 placeholder="New list name"
@@ -773,6 +805,37 @@ export default function WatchlistPage() {
                     })}
                 </div>
             )}
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                <DialogContent className="w-full max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-red-600">
+                            <Trash2 className="w-5 h-5" />
+                            Delete Watchlist
+                        </DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete <strong>{selectedList}</strong>? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex gap-2 pt-4">
+                        <Button
+                            variant="outline"
+                            onClick={() => setShowDeleteConfirm(false)}
+                            className="flex-1"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleDeleteWatchlist}
+                            disabled={deletingList}
+                            className="flex-1 bg-red-600 hover:bg-red-700"
+                        >
+                            {deletingList ? 'Deleting...' : 'Delete'}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* Detail Modal */}
             <Dialog open={!!selectedItem} onOpenChange={() => setSelectedItem(null)}>

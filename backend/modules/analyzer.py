@@ -45,13 +45,13 @@ class SentimentEngine:
         if cuda_available:
             gpu_name = torch.cuda.get_device_name(0)
             gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-            print(f"[*] Initializing Sentiment Model on GPU ({gpu_name}, {gpu_mem:.1f} GB)...")
-            print(f"    -> FP16 Precision | Batch Size: {self.batch_size}")
+            logger.info(f"[*] Initializing Sentiment Model on GPU ({gpu_name}, {gpu_mem:.1f} GB)...")
+            logger.info(f"    -> FP16 Precision | Batch Size: {self.batch_size}")
         else:
-            print(f"[*] Initializing Sentiment Model on CPU...")
-            print(f"    -> Tip: Install PyTorch with CUDA for 10-50x faster inference")
-            print(f"       pip install torch --index-url https://download.pytorch.org/whl/cu121")
-            print(f"    -> Batch Size: {self.batch_size}")
+            logger.info(f"[*] Initializing Sentiment Model on CPU...")
+            logger.info(f"    -> Tip: Install PyTorch with CUDA for 10-50x faster inference")
+            logger.info(f"       pip install torch --index-url https://download.pytorch.org/whl/cu121")
+            logger.info(f"    -> Batch Size: {self.batch_size}")
 
         # Set HF_TOKEN from env if available (suppresses rate-limit warnings)
         hf_token = os.environ.get("HF_TOKEN")
@@ -76,7 +76,7 @@ class SentimentEngine:
                 multi_label=False,
                 hypothesis_template=config.HYPOTHESIS_TEMPLATE,
             )
-            print("[*] Sentiment Engine warm-up complete.")
+            logger.info("[*] Sentiment Engine warm-up complete.")
         except Exception as e:
             logger.warning(f"Warm-up failed (non-fatal): {e}")
 
@@ -119,11 +119,11 @@ class SentimentEngine:
                 with open(config.NEWS_DATA_FILE, 'r', encoding='utf-8') as f:
                     news_data = json.load(f)
             else:
-                print("[!] No news data found to analyze.")
+                logger.warning("[!] No news data found to analyze.")
                 return []
         
         total_articles = len(news_data)
-        print(f"[*] Starting Batch Analysis for {total_articles} articles...")
+        logger.info(f"[*] Starting Batch Analysis for {total_articles} articles...")
         start_time = time.time()
         
         # --- STAGE 1: PREPARE BATCHES ---
@@ -131,7 +131,7 @@ class SentimentEngine:
         all_chunks = []
         chunk_map = [] # Stores tuple (article_index, chunk_index_in_article)
         
-        print("    -> Preparing text chunks...")
+        logger.info("    -> Preparing text chunks...")
         for idx, article in enumerate(news_data):
             title = article.get('title', 'Unknown')
             text = article.get('clean_text', '')
@@ -143,12 +143,12 @@ class SentimentEngine:
                 chunk_map.append(idx)
         
         total_chunks = len(all_chunks)
-        print(f"    -> Generated {total_chunks} chunks from {total_articles} articles.")
+        logger.info(f"    -> Generated {total_chunks} chunks from {total_articles} articles.")
         
         # --- STAGE 2: BATCH INFERENCE ---
         batch_size = self.batch_size
         device_label = f"GPU (bs={batch_size})" if self.device == 0 else f"CPU (bs={batch_size})"
-        print(f"    -> Running Inference on {device_label}...")
+        logger.info(f"    -> Running Inference on {device_label}...")
         
         batch_results = []
         
@@ -166,7 +166,7 @@ class SentimentEngine:
             batch_results.extend(results)
 
         # --- STAGE 3: REASSEMBLE ---
-        print("    -> Reassembling results...")
+        logger.info("    -> Reassembling results...")
         
         # Temporary storage for article results: {article_idx: [results]}
         article_results_map = {i: [] for i in range(total_articles)}
@@ -214,7 +214,7 @@ class SentimentEngine:
             json.dump(analyzed_results, f, indent=4, ensure_ascii=False, cls=DateTimeEncoder)
             
         elapsed = time.time() - start_time
-        print(f"[*] Analysis complete in {elapsed:.2f}s.")
-        print(f"[*] Results saved to {config.ANALYZED_DATA_FILE}")
+        logger.info(f"[*] Analysis complete in {elapsed:.2f}s.")
+        logger.info(f"[*] Results saved to {config.ANALYZED_DATA_FILE}")
         
         return analyzed_results

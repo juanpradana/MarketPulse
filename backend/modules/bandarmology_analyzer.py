@@ -1838,8 +1838,30 @@ class BandarmologyAnalyzer:
             if deep['entry_price'] > 0 and deep['stop_loss'] > 0 and deep['target_price'] > 0:
                 risk = deep['entry_price'] - deep['stop_loss']
                 reward = deep['target_price'] - deep['entry_price']
-                if risk > 0:
-                    deep['risk_reward_ratio'] = round(reward / risk, 2)
+                
+                # Validate risk is positive (stop loss must be below entry)
+                if risk <= 0:
+                    signals['risk_warning_invalid_stop'] = (
+                        f"Stop loss ({deep['stop_loss']:.0f}) >= entry ({deep['entry_price']:.0f}). "
+                        "Risk invalid - check stop loss calculation."
+                    )
+                    deep['risk_reward_ratio'] = None
+                # Validate reward is positive (target must be above entry)
+                elif reward <= 0:
+                    signals['risk_warning_invalid_target'] = (
+                        f"Target ({deep['target_price']:.0f}) <= entry ({deep['entry_price']:.0f}). "
+                        "Reward invalid - check target calculation."
+                    )
+                    deep['risk_reward_ratio'] = None
+                else:
+                    rr_ratio = round(reward / risk, 2)
+                    deep['risk_reward_ratio'] = rr_ratio
+                    
+                    # Add signal for favorable/unfavorable R/R
+                    if rr_ratio >= 2.0:
+                        signals['risk_reward_favorable'] = f"Favorable R/R: {rr_ratio:.1f}:1 (>= 2:1 ideal)"
+                    elif rr_ratio < 1.0:
+                        signals['risk_reward_poor'] = f"Poor R/R: {rr_ratio:.1f}:1 (< 1:1 unfavorable)"
 
         # ---- CROSS-REFERENCE: Broker Summary ↔ Controlling Brokers (max 10 pts) ----
         if broker_summary_data and ctrl_result.get('controlling_brokers'):
@@ -2145,13 +2167,13 @@ class BandarmologyAnalyzer:
 
         if inst_accum >= 3:
             score += 6
-            signals['inv_inst_accum'] = f"{inst_accum} institutional/foreign brokers accumulating"
+            signals['inv_inst_accum_strong'] = f"{inst_accum} institutional/foreign brokers accumulating"
         elif inst_accum >= 2:
             score += 4
-            signals['inv_inst_accum'] = f"{inst_accum} institutional/foreign brokers accumulating"
+            signals['inv_inst_accum_moderate'] = f"{inst_accum} institutional/foreign brokers accumulating"
         elif inst_accum >= 1:
             score += 2
-            signals['inv_inst_accum'] = f"{inst_accum} institutional/foreign broker accumulating"
+            signals['inv_inst_accum_mild'] = f"{inst_accum} institutional/foreign broker accumulating"
 
         return min(score, 30), signals
 

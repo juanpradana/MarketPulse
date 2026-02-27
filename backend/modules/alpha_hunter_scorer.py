@@ -23,7 +23,17 @@ class AlphaHunterScorer:
         
         results = []
         for ticker in tickers:
-            # Skip if filtered by sector/mcap (TODO: implement filters)
+            # Apply sector filter if specified
+            if sector is not None:
+                ticker_sector = self.db.get_ticker_sector(ticker)
+                if ticker_sector is None or ticker_sector.upper() != sector.upper():
+                    continue
+            
+            # Apply market cap filter if specified
+            if mcap_min is not None:
+                mcap = self.db.get_market_cap(ticker)
+                if mcap is None or mcap < mcap_min:
+                    continue
             
             score_data = self.calculate_score(ticker)
             if score_data['total_score'] >= min_score:
@@ -55,7 +65,8 @@ class AlphaHunterScorer:
             
             vol_history = self.db.get_volume_history(ticker, start_date=start_date, end_date=end_date) or []
         except Exception as e:
-            print(f"[!] Error getting volume history for {ticker}: {e}")
+            import logging
+            logging.getLogger(__name__).error(f"Error getting volume history for {ticker}: {e}")
             vol_history = []
         
         if vol_history and len(vol_history) >= 21:
@@ -119,7 +130,8 @@ class AlphaHunterScorer:
                         is_sideways = True
                         sideways_days = 15
             except Exception as e:
-                print(f"[!] Error calculating compression for {ticker}: {e}")
+                import logging
+                logging.getLogger(__name__).error(f"Error calculating compression for {ticker}: {e}")
         
         score += compress_score
         breakdown['compression_score'] = compress_score
@@ -157,7 +169,8 @@ class AlphaHunterScorer:
                         flow_score = flow_score // 2 # Penalty for big outflow
                         
         except Exception as e:
-            print(f"Error calcing flow impact for {ticker}: {e}")
+            import logging
+            logging.getLogger(__name__).error(f"Error calculating flow impact for {ticker}: {e}")
             
         score += flow_score
         breakdown['flow_score'] = flow_score
