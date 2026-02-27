@@ -48,12 +48,12 @@ class BrokerStalkerRepository(BaseRepository):
         """
         conn = self._get_conn()
         try:
-            conn.execute(
+            cursor = conn.execute(
                 "DELETE FROM broker_stalker_watchlist WHERE broker_code = ?",
                 (broker_code.upper(),)
             )
             conn.commit()
-            return True
+            return cursor.rowcount > 0
         except Exception as e:
             print(f"[!] Error removing broker from watchlist: {e}")
             return False

@@ -33,6 +33,15 @@ def temp_db():
 @pytest.fixture
 def client():
     """Create a test client."""
+    cleanup_repo = BrokerStalkerRepository()
+    conn = cleanup_repo._get_conn()
+    try:
+        conn.execute("DELETE FROM broker_stalker_watchlist")
+        conn.execute("DELETE FROM broker_stalker_tracking")
+        conn.commit()
+    finally:
+        conn.close()
+
     return TestClient(app)
 
 
