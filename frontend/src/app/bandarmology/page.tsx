@@ -19,10 +19,19 @@ import {
     Loader2,
     CheckCircle2,
     Info,
-    Search
+    Search,
+    Settings2,
+    ChevronRight
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import StockDetailModal from '@/components/bandarmology/StockDetailModal';
+import {
+    FloatCell,
+    PowerCell,
+    VolumeCell,
+    EarningsCell
+} from '@/components/bandarmology/YahooFinanceCompactCells';
+import { YahooFinanceDetailPanel } from '@/components/bandarmology/YahooFinanceDetailPanel';
 
 type SortDirection = 'asc' | 'desc';
 type SortConfig = { key: keyof BandarmologyItem; direction: SortDirection } | null;
@@ -37,7 +46,7 @@ const TRADE_TYPE_CONFIG: Record<string, { label: string; color: string; bg: stri
     '—': { label: '—', color: 'text-zinc-600', bg: 'bg-transparent' },
 };
 
-const MAX_COMBINED_SCORE = 250;
+const MAX_COMBINED_SCORE = 285;
 
 const CONFLUENCE_CONFIG: Record<string, { label: string; color: string }> = {
     'TRIPLE': { label: '●●●', color: 'text-yellow-400' },
@@ -112,8 +121,28 @@ export default function BandarmologyPage() {
     const [manualDeepLoading, setManualDeepLoading] = useState(false);
     const [deepTopN, setDeepTopN] = useState<number>(30);
     const [deepConcurrency, setDeepConcurrency] = useState<number>(4);
+    const [columnMenuOpen, setColumnMenuOpen] = useState(false);
+    const columnMenuRef = useRef<HTMLDivElement>(null);
     const deepPollRef = useRef<NodeJS.Timeout | null>(null);
     const pageSize = 50;
+
+    // Column visibility state with localStorage persistence
+    const [visibleColumns, setVisibleColumns] = useState<{
+        float: boolean;
+        power: boolean;
+        volume: boolean;
+        earnings: boolean;
+    }>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('bandarmology_yahoo_columns');
+            if (saved) {
+                try {
+                    return JSON.parse(saved);
+                } catch { /* ignore */ }
+            }
+        }
+        return { float: true, power: true, volume: true, earnings: true };
+    });
 
     const loadData = async (dateOverride?: string) => {
         setLoading(true);
@@ -184,6 +213,24 @@ export default function BandarmologyPage() {
         return () => {
             if (deepPollRef.current) clearInterval(deepPollRef.current);
         };
+    }, []);
+
+    // Persist column visibility to localStorage
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('bandarmology_yahoo_columns', JSON.stringify(visibleColumns));
+        }
+    }, [visibleColumns]);
+
+    // Handle click outside to close column menu
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (columnMenuRef.current && !columnMenuRef.current.contains(event.target as Node)) {
+                setColumnMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     const handleManualDeep = async () => {
@@ -372,13 +419,21 @@ export default function BandarmologyPage() {
         if (processedData.length === 0) return;
         const headers = ['Symbol', 'Score', 'Type', 'Pinky', 'Crossing', 'Unusual', 'Likuid', 'Confluence',
             'Price', '%1d', 'MA>', 'W-4', 'W-3', 'W-2', 'W-1', 'D-0 MM', 'D-0 NR', 'D-0 FF',
-            'Inst Net', 'Foreign Net', 'Top Buyer', 'Top Seller'];
+            'Inst Net', 'Foreign Net', 'Top Buyer', 'Top Seller',
+            'Float %', 'Float Level', 'Power Score', 'Power Rating', 'Volume Ratio', 'Volume Signal', 'Days to Earnings'];
         const rows = processedData.map(r => [
             r.symbol, r.total_score, r.trade_type,
             r.pinky ? 'V' : '', r.crossing ? 'V' : '', r.unusual ? 'V' : '', r.likuid ? 'V' : '',
             r.confluence_status, r.price, r.pct_1d, r.ma_above_count,
             r.w_4, r.w_3, r.w_2, r.w_1, r.d_0_mm, r.d_0_nr, r.d_0_ff,
-            r.inst_net_lot, r.foreign_net_lot, r.top_buyer || '', r.top_seller || ''
+            r.inst_net_lot, r.foreign_net_lot, r.top_buyer || '', r.top_seller || '',
+            r.yahoo_finance?.float_control_pct ?? '',
+            r.yahoo_finance?.float_level ?? '',
+            r.yahoo_finance?.power_score ?? '',
+            r.yahoo_finance?.power_rating ?? '',
+            r.yahoo_finance?.volume_ratio ?? '',
+            r.yahoo_finance?.volume_signal ?? '',
+            r.yahoo_finance?.days_to_earnings ?? ''
         ]);
         const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
@@ -548,6 +603,57 @@ export default function BandarmologyPage() {
                                     {flag === 'likuid' ? 'LQ' : flag.slice(0, 2).toUpperCase()}
                                 </button>
                             ))}
+                        </div>
+
+                        <div className="hidden lg:block h-5 w-px bg-zinc-700" />
+
+                        {/* Column Toggle Dropdown */}
+                        <div className="relative" ref={columnMenuRef}>
+                            <button
+                                onClick={() => setColumnMenuOpen(!columnMenuOpen)}
+                                className={cn(
+                                    "flex items-center gap-1 px-2 py-1 rounded text-[9px] font-bold uppercase border transition-all",
+                                    columnMenuOpen || Object.values(visibleColumns).some(v => !v)
+                                        ? "bg-purple-500/20 border-purple-500/50 text-purple-300"
+                                        : "bg-zinc-800/50 border-zinc-700/30 text-zinc-500 hover:text-zinc-300"
+                                )}
+                                title="Toggle Yahoo Finance columns"
+                            >
+                                <Settings2 className="w-3 h-3" />
+                                Kolom YF
+                                {Object.values(visibleColumns).some(v => !v) && (
+                                    <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-purple-400" />
+                                )}
+                            </button>
+
+                            {columnMenuOpen && (
+                                <div className="absolute top-full left-0 mt-1 w-40 bg-zinc-800 border border-zinc-700 rounded-md shadow-lg z-50 py-1">
+                                    <div className="px-3 py-1 text-[9px] text-zinc-500 uppercase font-bold border-b border-zinc-700/50">
+                                        Yahoo Finance
+                                    </div>
+                                    {[
+                                        { key: 'float', label: 'Float Control', icon: '●' },
+                                        { key: 'power', label: 'Power Score', icon: '★' },
+                                        { key: 'volume', label: 'Volume', icon: '📊' },
+                                        { key: 'earnings', label: 'Earnings', icon: '📅' },
+                                    ].map(({ key, label, icon }) => (
+                                        <button
+                                            key={key}
+                                            onClick={() => setVisibleColumns(prev => ({ ...prev, [key]: !prev[key as keyof typeof prev] }))}
+                                            className="w-full flex items-center gap-2 px-3 py-1.5 text-[10px] text-zinc-300 hover:bg-zinc-700/50 transition-colors"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={visibleColumns[key as keyof typeof visibleColumns]}
+                                                onChange={() => {}}
+                                                className="w-3 h-3 rounded border-zinc-600 bg-zinc-700 text-purple-500 focus:ring-purple-500/30"
+                                            />
+                                            <span>{icon}</span>
+                                            <span>{label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -744,7 +850,22 @@ export default function BandarmologyPage() {
                                 <th className="sticky top-0 z-20 w-[40px] border-r border-zinc-700/30 bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight" title="Volume Confirmation">VOL</th>
                                 <th className="sticky top-0 z-20 w-[35px] border-r border-zinc-700/30 bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight" title="Data Conflict Warning">⚠️</th>
                                 <th className="sticky top-0 z-20 w-[40px] border-r border-zinc-700/30 bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight">TOP B</th>
-                                <th className="sticky top-0 z-20 w-[40px] bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight">TOP S</th>
+                                <th className="sticky top-0 z-20 w-[40px] border-r border-zinc-700/30 bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight">TOP S</th>
+                                {/* Yahoo Finance Columns */}
+                                {visibleColumns.float && (
+                                    <th className="sticky top-0 z-20 w-[70px] border-r border-zinc-700/30 bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight" title="Float Control %">FLOAT</th>
+                                )}
+                                {visibleColumns.power && (
+                                    <th className="sticky top-0 z-20 w-[70px] border-r border-zinc-700/30 bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight" title="Bandar Power Score">POWER</th>
+                                )}
+                                {visibleColumns.volume && (
+                                    <th className="sticky top-0 z-20 w-[70px] border-r border-zinc-700/30 bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight" title="Volume Ratio">VOL</th>
+                                )}
+                                {visibleColumns.earnings && (
+                                    <th className="sticky top-0 z-20 w-[60px] bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight" title="Days to Earnings">EARN</th>
+                                )}
+                                {/* Expand column */}
+                                <th className="sticky top-0 z-20 w-[30px] bg-[#1a1f2b] px-1 py-2 text-center text-[10px] font-bold uppercase tracking-tight"></th>
                             </tr>
                         </thead>
 
@@ -757,7 +878,8 @@ export default function BandarmologyPage() {
                                     const conflConfig = CONFLUENCE_CONFIG[row.confluence_status] || CONFLUENCE_CONFIG['NONE'];
 
                                     return (
-                                        <tr key={row.symbol} className="hover:bg-zinc-800/40 transition-colors group h-[32px]">
+                                        <React.Fragment key={row.symbol}>
+                                        <tr className="hover:bg-zinc-800/40 transition-colors group h-[32px]">
                                             {/* Rank */}
                                             <td className="px-1.5 py-1 text-center text-zinc-600 text-[10px] border-r border-zinc-800/30 font-mono">
                                                 {rank}
@@ -987,15 +1109,70 @@ export default function BandarmologyPage() {
                                             <td className="px-1 py-1 text-center border-r border-zinc-800/30">
                                                 <span className="text-emerald-400 font-bold text-[10px]">{row.top_buyer || '—'}</span>
                                             </td>
-                                            <td className="px-1 py-1 text-center">
+                                            <td className="px-1 py-1 text-center border-r border-zinc-800/30">
                                                 <span className="text-red-400 font-bold text-[10px]">{row.top_seller || '—'}</span>
                                             </td>
+
+                                            {/* Yahoo Finance Cells */}
+                                            {visibleColumns.float && (
+                                                <td className="px-1 py-1 text-center border-r border-zinc-800/30">
+                                                    <FloatCell data={row.yahoo_finance} />
+                                                </td>
+                                            )}
+                                            {visibleColumns.power && (
+                                                <td className="px-1 py-1 text-center border-r border-zinc-800/30">
+                                                    <PowerCell data={row.yahoo_finance} />
+                                                </td>
+                                            )}
+                                            {visibleColumns.volume && (
+                                                <td className="px-1 py-1 text-center border-r border-zinc-800/30">
+                                                    <VolumeCell data={row.yahoo_finance} />
+                                                </td>
+                                            )}
+                                            {visibleColumns.earnings && (
+                                                <td className="px-1 py-1 text-center border-r border-zinc-800/30">
+                                                    <EarningsCell data={row.yahoo_finance} />
+                                                </td>
+                                            )}
+
+                                            {/* Expand Row Toggle */}
+                                            <td className="px-1 py-1 text-center">
+                                                <button
+                                                    onClick={() => setExpandedRow(expandedRow === row.symbol ? null : row.symbol)}
+                                                    className={cn(
+                                                        "p-0.5 rounded transition-colors",
+                                                        expandedRow === row.symbol
+                                                            ? "bg-purple-500/30 text-purple-300"
+                                                            : "text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800"
+                                                    )}
+                                                    title={expandedRow === row.symbol ? "Collapse" : "Expand Yahoo Finance details"}
+                                                >
+                                                    <ChevronRight className={cn(
+                                                        "w-4 h-4 transition-transform",
+                                                        expandedRow === row.symbol && "rotate-90"
+                                                    )} />
+                                                </button>
+                                            </td>
                                         </tr>
+
+                                        {expandedRow === row.symbol && (
+                                            <tr className="bg-zinc-900/50">
+                                                <td
+                                                    colSpan={31 + (visibleColumns.float ? 1 : 0) + (visibleColumns.power ? 1 : 0) + (visibleColumns.volume ? 1 : 0) + (visibleColumns.earnings ? 1 : 0)}
+                                                    className="px-4 py-0 border-b border-zinc-800/30"
+                                                >
+                                                    <div className="py-3">
+                                                        <YahooFinanceDetailPanel data={row.yahoo_finance} />
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                        </React.Fragment>
                                     );
                                 })
                             ) : (
                                 <tr>
-                                    <td colSpan={31} className="px-4 py-32 text-center text-zinc-600 italic">
+                                    <td colSpan={31 + (visibleColumns.float ? 1 : 0) + (visibleColumns.power ? 1 : 0) + (visibleColumns.volume ? 1 : 0) + (visibleColumns.earnings ? 1 : 0)} className="px-4 py-32 text-center text-zinc-600 italic">
                                         <div className="flex flex-col items-center gap-2">
                                             <AlertCircle className="w-6 h-6 opacity-20" />
                                             <span>{data.length === 0 ? "No data available. Run a Full Sync on Market Summary first." : "No stocks match your filter criteria."}</span>
@@ -1130,6 +1307,37 @@ export default function BandarmologyPage() {
                                                 <span className="text-red-400 font-bold">{row.top_seller || '—'}</span>
                                             </div>
                                         </div>
+
+                                        {/* Yahoo Finance Data */}
+                                        {(visibleColumns.float || visibleColumns.power || visibleColumns.volume || visibleColumns.earnings) &&
+                                         (row.yahoo_finance?.float_control_pct || row.yahoo_finance?.power_score || row.yahoo_finance?.volume_ratio || row.yahoo_finance?.days_to_earnings) && (
+                                            <div className="flex flex-wrap gap-2 text-xs border-t border-zinc-800/50 pt-2">
+                                                {visibleColumns.float && row.yahoo_finance?.float_control_pct != null && (
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-[10px] text-zinc-500">Float:</span>
+                                                        <FloatCell data={row.yahoo_finance} />
+                                                    </div>
+                                                )}
+                                                {visibleColumns.power && row.yahoo_finance?.power_score != null && (
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-[10px] text-zinc-500">Power:</span>
+                                                        <PowerCell data={row.yahoo_finance} />
+                                                    </div>
+                                                )}
+                                                {visibleColumns.volume && row.yahoo_finance?.volume_ratio != null && (
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-[10px] text-zinc-500">Vol:</span>
+                                                        <VolumeCell data={row.yahoo_finance} />
+                                                    </div>
+                                                )}
+                                                {visibleColumns.earnings && row.yahoo_finance?.days_to_earnings != null && (
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-[10px] text-zinc-500">Earn:</span>
+                                                        <EarningsCell data={row.yahoo_finance} />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })

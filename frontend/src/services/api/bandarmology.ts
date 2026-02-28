@@ -233,6 +233,9 @@ export interface BandarmologyItem {
 
     // Signals
     deep_signals?: DeepSignals;
+
+    // Yahoo Finance Enhanced Data (for screening table)
+    yahoo_finance?: YahooFinanceScreeningData;
 }
 
 export interface ImportantDateAnalysis {
@@ -540,7 +543,19 @@ export interface DeepAnalysisStatus {
     date?: string;
 }
 
-// Yahoo Finance Enhanced Interfaces
+// Yahoo Finance Enhanced Interfaces for Screening
+export interface YahooFinanceScreeningData {
+    ticker: string;
+    float_control_pct: number | null;
+    float_level: 'WEAK' | 'MODERATE' | 'STRONG' | 'DOMINANT' | null;
+    power_score: number | null;
+    power_rating: 'EXCELLENT' | 'GOOD' | 'MODERATE' | 'POOR' | null;
+    volume_ratio: number | null;
+    volume_signal: 'ACCUMULATION' | 'DISTRIBUTION' | 'NORMAL' | null;
+    days_to_earnings: number | null;
+    earnings_signal: string | null;
+}
+
 export interface FloatAnalysisData {
     ticker: string;
     shares_outstanding: number;

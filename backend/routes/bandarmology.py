@@ -246,7 +246,8 @@ async def get_bandarmology_screening(
     date: Optional[str] = Query(None, description="Analysis date (YYYY-MM-DD). None = latest."),
     min_score: int = Query(0, ge=0, le=100, description="Minimum score filter"),
     trade_type: Optional[str] = Query(None, description="Filter by trade type: SWING, INTRADAY, BOTH, WATCH"),
-    include_deep: bool = Query(True, description="Include deep analysis data if available")
+    include_deep: bool = Query(True, description="Include deep analysis data if available"),
+    include_yahoo_finance: bool = Query(True, description="Include Yahoo Finance enhanced data")
 ):
     """
     Get bandarmology screening results with optional deep analysis enrichment.
@@ -300,6 +301,15 @@ async def get_bandarmology_screening(
                 results = [r for r in results if r['trade_type'] in ("INTRADAY", "BOTH")]
             elif trade_type_upper == "WATCH":
                 results = [r for r in results if r['trade_type'] == "WATCH"]
+
+        # Enrich with Yahoo Finance data if requested
+        if include_yahoo_finance:
+            try:
+                from modules.bandarmology_screening_enhanced import get_screening_enhanced
+                screening_enhanced = get_screening_enhanced()
+                results = screening_enhanced.get_screening_with_yahoo_finance(results, include_yahoo=True)
+            except Exception as e:
+                logger.warning(f"Failed to load Yahoo Finance data: {e}")
 
         return sanitize_data({
             "date": actual_date,
