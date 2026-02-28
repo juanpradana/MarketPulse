@@ -1,6 +1,6 @@
 ﻿# 🚀 MarketPulse
 
-**Version 2.2.0** - Next-Gen Investment Intelligence Platform untuk Analisis Saham Indonesia
+**Version 2.5.0** - Next-Gen Investment Intelligence Platform untuk Analisis Saham Indonesia
 
 ## 🎯 Overview
 MarketPulse adalah full-stack investment intelligence platform untuk analisis ekuitas Indonesia. Menggabungkan news sentiment, NeoBDM fund flow data, broker tracking, price-volume analytics, dan workflow-driven screening (Alpha Hunter).
@@ -11,6 +11,7 @@ MarketPulse adalah full-stack investment intelligence platform untuk analisis ek
 - 📊 **Price & Volume Analytics** - Anomaly detection dan scoring
 - 🎯 **Alpha Hunter** - Multi-stage screening workflow
 - 🎯 **Bandarmology** - Deep analysis scoring dan trade classification
+- 💎 **Yahoo Finance Enhanced** - Float analysis, volume anomaly, bandar power, earnings calendar
 - 🧮 **Adimology** - Broker power calculator berbasis fraksi
 - ⭐ **My Watchlist** - Personal watchlist dengan trigger deep analysis
 - 🔎 **Story Finder** - Pencarian corporate action story berbasis keyword
@@ -197,7 +198,47 @@ What you see:
 - Flow impact scoring (value traded vs market cap).
 - Market-wide anomaly scans.
 
-### 8) Alpha Hunter Lab
+### 8) Bandarmology
+UI route: `/bandarmology`
+Purpose: Deep broker behavior analysis dengan comprehensive scoring system untuk deteksi pola bandar/whale.
+Data sources: `neobdm_records`, `bandarmology_deep_cache`, `bandarmology_inventory`, `bandarmology_txn_chart`, Yahoo Finance (yfinance).
+
+Key endpoints:
+- `GET /api/bandarmology` - Screening results with base scores
+- `GET /api/bandarmology/{ticker}/detail` - Deep analysis detail
+- `POST /api/bandarmology/deep-analyze` - Trigger deep analysis batch
+- `GET /api/bandarmology/watchlist-alerts` - Phase transition alerts
+- `GET /api/bandarmology/float-analysis/{ticker}` - Float shares analysis
+- `GET /api/bandarmology/volume-metrics/{ticker}` - Volume anomaly detection
+- `GET /api/bandarmology/power-scores` - Bandar power rankings
+- `GET /api/bandarmology/earnings-calendar/{ticker}` - Earnings dengan pattern detection
+
+Deep Analysis Scoring (11 original + 3 new Yahoo Finance mechanisms = 185 pts max):
+- **Mechanism 1-11** (150 pts): Inventory analysis, transaction chart, broker summary cross-reference, multi-day consistency, breakout probability, MA cross, historical comparison, flow velocity, important dates, entry/target price, pump tomorrow prediction
+- **Mechanism 12** (15 pts): Float Analysis - % of float controlled by bandar (WEAK/MODERATE/STRONG/DOMINANT)
+- **Mechanism 13** (10 pts): Volume Anomaly - volume spike vs average dengan ACCUMULATION/DISTRIBUTION signals
+- **Mechanism 14** (10 pts): Earnings Timing - pre-earnings accumulation pattern detection
+
+Yahoo Finance Enhanced Features:
+- **Float Analysis**: bandar_float_pct, control level badges, 7-day cache
+- **Bandar Power Score**: Composite 0-100 (EXCELLENT/GOOD/MODERATE/POOR) dari 5 komponen:
+  - Float component (25%): Smaller float = higher score
+  - Volume component (20%): Increasing volume trend
+  - Beta component (20%): High beta preference
+  - Position component (20%): 52W range position (sweet spot 30-60%)
+  - Institutional component (15%): Smart money following
+- **Volume Metrics**: current vs avg_10d ratio, spike detection, signal classification
+- **Earnings Calendar**: Upcoming earnings, pre-earnings accumulation detection, historical surprise analysis
+
+What you see:
+- Base screening dengan pinky/crossing/unusual/likuid flags
+- Deep analysis scores (0-185) dengan confluence status
+- Controlling brokers table dengan status (buying/selling/distributing)
+- Breakout probability factors dan pump tomorrow prediction
+- Entry/target/stop loss price levels dengan R:R ratio
+- **Yahoo Finance Enhanced section**: Float control, bandar power, volume anomaly, earnings timing
+
+### 9) Alpha Hunter Lab
 UI route: `/alpha-hunter`
 Purpose: Multi-stage screening workflow with watchlist-driven investigation.
 Data sources: `neobdm_records`, `price_volume`, `alpha_hunter_watchlist`, `alpha_hunter_tracking`, and Done Detail data.
@@ -216,7 +257,7 @@ Stages overview:
 - Stage 3: Smart vs retail net-flow checks with dominance/consistency and floor price safety (broker summary + broker 5% list).
 - Stage 4: Supply analysis with retail inventory (50% rule), imposter recurrence, and one-click detection from Done Detail data.
 
-### 9) Done Detail
+### 10) Done Detail
 UI route: `/done-detail`
 Purpose: Paste-based trade analysis for broker behavior and transaction dynamics.
 Data sources: `done_detail_records` and `done_detail_synthesis`.
@@ -241,7 +282,7 @@ What you see:
 - Sankey and inventory views for buy/sell distribution.
 - Cached synthesis for fast range analysis.
 
-### 10) Broker Stalker
+### 11) Broker Stalker
 UI route: `/broker-stalker`
 Purpose: Broker surveillance (watchlist broker, portfolio, activity chart, execution ledger).
 Status: Backend API sudah aktif; halaman frontend saat ini masih menggunakan dummy/static dataset.
@@ -258,7 +299,7 @@ Key endpoints:
 - `GET /api/broker-stalker/ticker/{ticker}/activity`
 - `GET /api/broker-stalker/power-level/{broker_code}`
 
-### 11) Watchlist
+### 12) Watchlist
 UI route: `/watchlist`
 Purpose: Daftar personal ticker dengan integrasi Alpha Hunter + Bandarmology.
 Key endpoints:
@@ -270,7 +311,7 @@ Key endpoints:
 - `POST /api/watchlist/analyze-missing`
 - `GET /api/watchlist/analyze-status`
 
-### 12) Story Finder
+### 13) Story Finder
 UI route: `/story-finder`
 Purpose: Menemukan berita corporate action berdasar keyword dan alias.
 Key endpoints:

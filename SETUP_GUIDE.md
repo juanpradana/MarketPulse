@@ -211,18 +211,19 @@ Buka browser dan akses:
 {
   "status": "online",
   "message": "Financial Sentiment Analysis & Market Intelligence API is running",
-  "version": "2.2.0",
+  "version": "2.5.0",
   "features": {
     "dashboard": "Market statistics and sentiment correlation",
     "news": "News aggregation with AI insights",
     "disclosures": "IDX disclosures and RAG chat",
     "neobdm": "Market maker and fund flow analysis",
-    "bandarmology": "Deep scoring and trade classification",
+    "bandarmology": "Deep scoring and trade classification with Yahoo Finance enhancement",
     "watchlist": "Personal ticker watchlist with integrated analysis",
     "done_detail": "Done detail visualization and broker flow",
     "broker_stalker": "Broker activity tracking and analysis",
     "scrapers": "Automated data collection",
-    "scheduler": "Background job scheduler and manual trigger endpoints"
+    "scheduler": "Background job scheduler and manual trigger endpoints",
+    "yahoo_finance": "Float analysis, volume anomaly, bandar power, earnings calendar"
   }
 }
 ```

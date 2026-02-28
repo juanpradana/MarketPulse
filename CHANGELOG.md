@@ -1,5 +1,86 @@
 # Refactoring Changelog
 
+## Version 2.5.0 - Yahoo Finance Enhancement for Bandar Detection (2026-02-28)
+
+### Overview
+Enhanced bandar/whale detection accuracy by integrating 100+ Yahoo Finance data fields including float shares, volume metrics, beta, and earnings calendar. Added 4 new scoring mechanisms to the deep analysis pipeline.
+
+### Highlights
+- **Float Analysis Integration** (`backend/modules/yahoo_finance_enhanced.py`):
+  - Fetch float shares and outstanding shares from Yahoo Finance
+  - Calculate bandar control percentage: `bandar_lots * 100 / float_shares`
+  - Control levels: WEAK (<5%), MODERATE (5-10%), STRONG (10-20%), DOMINANT (>20%)
+  - Scoring: 0/5/10/15 points based on control level (Mechanism #12)
+  - 7-day caching to avoid rate limits
+
+- **Volume Anomaly Detector** (`backend/modules/volume_analyzer.py`):
+  - Volume ratio: current_volume / avg_10d_volume
+  - Signal classification: ACCUMULATION (volume spike + price up), DISTRIBUTION (volume spike + price down), NORMAL
+  - Thresholds: 2x = spike, 3x = strong spike
+  - Scoring: +10 pts (strong accum), +7 pts (moderate accum), -5 pts (distribution) (Mechanism #13)
+
+- **Bandar Power Calculator** (`backend/modules/bandar_power_calculator.py`):
+  - Composite 0-100 score with EXCELLENT (80+)/GOOD (65+)/MODERATE (50+)/POOR (<50) ratings
+  - 5 weighted components:
+    - Float: 25% - smaller float = easier to control
+    - Volume: 20% - increasing volume trend
+    - Beta: 20% - prefer high beta for momentum
+    - Position: 20% - 52W range position (sweet spot 30-60%)
+    - Institutional: 15% - following smart money flow
+  - New table: `bandar_power_scores` with component breakdown
+
+- **Earnings Calendar Integration** (`backend/modules/earnings_tracker.py`):
+  - Fetch upcoming earnings dates from Yahoo Finance
+  - Pre-earnings accumulation pattern detection (7-14 days before)
+  - Historical earnings surprise analysis
+  - Scoring: +10 pts for pre-earnings accumulation detected (Mechanism #14)
+  - New table: `earnings_calendar`
+
+### Database Schema Updates
+- **New Tables**:
+  - `stock_float_data` - cached float shares, outstanding shares, float ratio
+  - `bandar_power_scores` - composite scores with 5 component breakdowns
+  - `earnings_calendar` - earnings dates, EPS estimates, surprises
+- **Modified Tables**:
+  - `bandarmology_deep_cache` - added `bandar_float_pct`, `float_control_level`, `days_to_earnings`, `earnings_signal`
+  - `volume_daily_records` - added `avg_volume_10d`, `avg_volume_3m`, `volume_ratio`, `volume_signal`
+
+### API Endpoints Added
+- `GET /api/bandarmology/float-analysis/{ticker}` - Float data and control metrics
+- `GET /api/bandarmology/volume-metrics/{ticker}` - Volume anomaly detection
+- `GET /api/bandarmology/power-scores` - Top ranked stocks by power score
+- `GET /api/bandarmology/power-scores/{ticker}` - Detailed power score breakdown
+- `GET /api/bandarmology/earnings-calendar` - Upcoming earnings dates
+- `GET /api/bandarmology/earnings-calendar/{ticker}` - Ticker earnings with pattern detection
+- `GET /api/bandarmology/pre-earnings-opportunities` - Accumulation + earnings opportunities
+
+### Frontend Updates
+- **StockDetailModal** (`frontend/src/components/bandarmology/StockDetailModal.tsx`):
+  - New "Yahoo Finance Enhanced" section with visual indicators
+  - Float Control display with color-coded badges (DOMINANT=red, STRONG=orange, MODERATE=yellow)
+  - Bandar Power Score with component breakdown
+  - Volume Anomaly indicators
+  - Earnings Timing alerts
+
+### Scoring System Update
+- **DEEP_MAX_SCORE**: 150 → 185 (+35 from 3 new mechanisms)
+- **MAX_COMBINED_SCORE**: 250 → 285
+
+### Files Modified
+- `backend/db/connection.py` - Schema updates
+- `backend/modules/bandarmology_analyzer.py` - New scoring mechanisms
+- `backend/routes/bandarmology.py` - New endpoints
+- `frontend/src/services/api/bandarmology.ts` - New interfaces and API methods
+- `frontend/src/components/bandarmology/StockDetailModal.tsx` - UI enhancements
+
+### New Files
+- `backend/modules/yahoo_finance_enhanced.py` (546 lines)
+- `backend/modules/volume_analyzer.py` (437 lines)
+- `backend/modules/bandar_power_calculator.py` (497 lines)
+- `backend/modules/earnings_tracker.py` (524 lines)
+
+---
+
 ## Version 2.4.0 - Market Summary Narrative Engine & Scheduler API (2026-02-27)
 
 ### Overview
