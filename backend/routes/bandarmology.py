@@ -1042,7 +1042,7 @@ async def get_stock_detail(
             detail.update({
                 "deep_score": deep_cache.get('deep_score', 0),
                 "combined_score": base_result.get('total_score', 0) + deep_cache.get('deep_score', 0),
-                "max_combined_score": 250,
+                "max_combined_score": 285,  # 100 base + 185 deep (updated with Yahoo Finance enhancements)
                 "deep_trade_type": deep_cache.get('deep_trade_type', '—'),
                 "deep_signals": deep_cache.get('deep_signals', {}),
 
@@ -1170,6 +1170,25 @@ async def get_stock_detail(
                 # Conflict warning (Improvement 5)
                 "conflict_stats": deep_cache.get('conflict_stats', None),
                 "data_source_conflict": deep_cache.get('data_source_conflict', False),
+
+                # Yahoo Finance Enhanced Features
+                # Float analysis
+                "bandar_float_pct": deep_cache.get('bandar_float_pct', 0),
+                "float_control_level": deep_cache.get('float_control_level'),
+                "float_score": deep_cache.get('float_score', 0),
+
+                # Volume anomaly
+                "volume_anomaly_score": deep_cache.get('volume_anomaly_score', 0),
+
+                # Bandar power
+                "bandar_power_score": deep_cache.get('bandar_power_score'),
+                "bandar_power_rating": deep_cache.get('bandar_power_rating'),
+                "bandar_power_components": deep_cache.get('bandar_power_components', {}),
+
+                # Earnings timing
+                "earnings_score": deep_cache.get('earnings_score', 0),
+                "days_to_earnings": deep_cache.get('days_to_earnings'),
+                "earnings_signal": deep_cache.get('earnings_signal'),
             })
         else:
             detail.update({
@@ -1209,6 +1228,250 @@ async def get_stock_detail(
 
     except Exception as e:
         logger.error(f"Stock detail error for {ticker}: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+
+@router.get("/bandarmology/float-analysis/{ticker}")
+async def get_float_analysis(
+    ticker: str,
+    force_refresh: bool = Query(False, description="Force refresh from Yahoo Finance")
+):
+    """
+    Get float analysis for a specific ticker.
+
+    Returns float shares, outstanding shares, and bandar control percentage.
+    """
+    try:
+        from modules.yahoo_finance_enhanced import get_yahoo_finance_enhanced
+
+        yf_enhanced = get_yahoo_finance_enhanced()
+
+        # Fetch float data
+        float_data = yf_enhanced.fetch_float_data(ticker.upper(), force_refresh)
+
+        if not float_data:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"Float data not available for {ticker}"}
+            )
+
+        return sanitize_data(float_data)
+
+    except Exception as e:
+        logger.error(f"Float analysis error for {ticker}: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+
+@router.get("/bandarmology/volume-metrics/{ticker}")
+async def get_volume_metrics(
+    ticker: str,
+    force_refresh: bool = Query(False, description="Force refresh from Yahoo Finance")
+):
+    """
+    Get volume metrics for anomaly detection.
+
+    Returns current volume, averages, volume ratio, and signal classification.
+    """
+    try:
+        from modules.volume_analyzer import get_volume_analyzer
+
+        volume_analyzer = get_volume_analyzer()
+
+        # Force refresh if requested
+        if force_refresh:
+            volume_analyzer.yf_enhanced.fetch_volume_metrics(ticker.upper(), force_refresh=True)
+
+        metrics = volume_analyzer.calculate_volume_metrics(ticker.upper())
+
+        if not metrics:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"Volume metrics not available for {ticker}"}
+            )
+
+        return sanitize_data(metrics)
+
+    except Exception as e:
+        logger.error(f"Volume metrics error for {ticker}: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+
+@router.get("/bandarmology/power-scores")
+async def get_bandar_power_scores(
+    limit: int = Query(50, description="Maximum number of results"),
+    min_rating: Optional[str] = Query(None, description="Minimum rating filter (EXCELLENT, GOOD, MODERATE, POOR)")
+):
+    """
+    Get stocks ranked by Bandar Power Score.
+
+    Composite scoring based on float, volume, beta, position, and institutional flow.
+    """
+    try:
+        from modules.bandar_power_calculator import get_bandar_power_calculator
+
+        calculator = get_bandar_power_calculator()
+        scores = calculator.get_top_scores(limit=limit, min_rating=min_rating)
+
+        return {
+            "scores": sanitize_data(scores),
+            "count": len(scores),
+            "max_score": 100,
+            "rating_thresholds": {
+                "EXCELLENT": 80,
+                "GOOD": 65,
+                "MODERATE": 50,
+                "POOR": 0
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Power scores error: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+
+@router.get("/bandarmology/power-scores/{ticker}")
+async def get_bandar_power_detail(
+    ticker: str,
+    force_refresh: bool = Query(False, description="Force recalculation")
+):
+    """
+    Get detailed Bandar Power Score for a specific ticker.
+
+    Includes component breakdown and metadata.
+    """
+    try:
+        from modules.bandar_power_calculator import get_bandar_power_calculator
+
+        calculator = get_bandar_power_calculator()
+        result = calculator.calculate_score(ticker.upper(), force_refresh=force_refresh)
+
+        if not result:
+            return JSONResponse(
+                status_code=404,
+                content={"error": f"Bandar power score not available for {ticker}"}
+            )
+
+        return sanitize_data(result)
+
+    except Exception as e:
+        logger.error(f"Bandar power detail error for {ticker}: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+
+@router.get("/bandarmology/earnings-calendar")
+async def get_earnings_calendar(
+    days: int = Query(30, description="Number of days to look ahead"),
+    ticker: Optional[str] = Query(None, description="Specific ticker or all")
+):
+    """
+    Get earnings calendar for upcoming earnings dates.
+
+    Useful for detecting pre-earnings accumulation patterns.
+    """
+    try:
+        from modules.earnings_tracker import get_earnings_tracker
+
+        tracker = get_earnings_tracker()
+
+        if ticker:
+            earnings = tracker.fetch_upcoming_earnings(ticker.upper(), days_ahead=days)
+        else:
+            earnings = tracker._get_all_cached_earnings(days_ahead=days)
+
+        return {
+            "earnings": sanitize_data(earnings),
+            "count": len(earnings),
+            "days_ahead": days
+        }
+
+    except Exception as e:
+        logger.error(f"Earnings calendar error: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+
+@router.get("/bandarmology/earnings-calendar/{ticker}")
+async def get_ticker_earnings(
+    ticker: str,
+    days: int = Query(30, description="Number of days to look ahead"),
+    force_refresh: bool = Query(False, description="Force refresh from Yahoo Finance")
+):
+    """
+    Get earnings data for a specific ticker including pattern detection.
+    """
+    try:
+        from modules.earnings_tracker import get_earnings_tracker
+
+        tracker = get_earnings_tracker()
+
+        # Fetch upcoming earnings
+        earnings = tracker.fetch_upcoming_earnings(
+            ticker.upper(),
+            days_ahead=days,
+            force_refresh=force_refresh
+        )
+
+        # Detect pre-earnings pattern
+        pattern = tracker.detect_pre_earnings_pattern(ticker.upper())
+
+        # Get earnings history
+        history = tracker._get_earnings_history(ticker.upper())
+
+        return sanitize_data({
+            "ticker": ticker.upper(),
+            "upcoming_earnings": earnings,
+            "earnings_history": history[:8],  # Last 8 quarters
+            "pattern_detection": pattern
+        })
+
+    except Exception as e:
+        logger.error(f"Ticker earnings error for {ticker}: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+
+@router.get("/bandarmology/pre-earnings-opportunities")
+async def get_pre_earnings_opportunities(
+    min_confidence: int = Query(60, description="Minimum confidence threshold")
+):
+    """
+    Get list of tickers showing pre-earnings accumulation patterns.
+
+    Combines earnings calendar with bandar activity detection.
+    """
+    try:
+        from modules.earnings_tracker import get_earnings_tracker
+
+        tracker = get_earnings_tracker()
+        opportunities = tracker.get_pre_earnings_opportunities(min_confidence=min_confidence)
+
+        return {
+            "opportunities": sanitize_data(opportunities),
+            "count": len(opportunities),
+            "min_confidence": min_confidence
+        }
+
+    except Exception as e:
+        logger.error(f"Pre-earnings opportunities error: {e}")
         return JSONResponse(
             status_code=500,
             content={"error": str(e)}

@@ -461,6 +461,31 @@ export interface StockDetailResponse {
     } | null;
     data_source_conflict?: boolean;
 
+    // Yahoo Finance Enhanced Features
+    // Float analysis
+    bandar_float_pct?: number;
+    float_control_level?: 'WEAK' | 'MODERATE' | 'STRONG' | 'DOMINANT';
+    float_score?: number;
+
+    // Volume anomaly
+    volume_anomaly_score?: number;
+
+    // Bandar power
+    bandar_power_score?: number;
+    bandar_power_rating?: 'EXCELLENT' | 'GOOD' | 'MODERATE' | 'POOR';
+    bandar_power_components?: {
+        float: number;
+        volume: number;
+        beta: number;
+        position: number;
+        institutional: number;
+    };
+
+    // Earnings timing
+    earnings_score?: number;
+    days_to_earnings?: number;
+    earnings_signal?: string;
+
     // Detail data
     inventory_brokers: InvBrokerDetail[];
     txn_chart: Record<string, unknown> | null;
@@ -513,6 +538,87 @@ export interface DeepAnalysisStatus {
     fresh_tickers?: string[];
     errors: string[];
     date?: string;
+}
+
+// Yahoo Finance Enhanced Interfaces
+export interface FloatAnalysisData {
+    ticker: string;
+    shares_outstanding: number;
+    float_shares: number;
+    float_ratio: number;
+    cached_at: string;
+    source: string;
+}
+
+export interface BandarControlData extends FloatAnalysisData {
+    bandar_lots: number;
+    bandar_shares: number;
+    bandar_float_pct: number;
+    control_level: 'WEAK' | 'MODERATE' | 'STRONG' | 'DOMINANT';
+}
+
+export interface VolumeMetrics {
+    ticker: string;
+    current_volume: number;
+    avg_volume_10d: number;
+    avg_volume_3m: number;
+    volume_ratio: number;
+    is_spike: boolean;
+    is_strong_spike: boolean;
+    price_change: number;
+    signal: 'ACCUMULATION' | 'DISTRIBUTION' | 'NORMAL';
+    confidence: number;
+    signal_description: string;
+    calculated_at: string;
+}
+
+export interface BandarPowerScore {
+    ticker: string;
+    score: number;
+    rating: 'EXCELLENT' | 'GOOD' | 'MODERATE' | 'POOR';
+    calculated_at: string;
+}
+
+export interface BandarPowerDetail extends BandarPowerScore {
+    components: {
+        float: number;
+        volume: number;
+        beta: number;
+        position: number;
+        institutional: number;
+    };
+    metadata: {
+        market_cap: number;
+        float_shares: number;
+        beta: number;
+        position_52w_pct: number;
+        foreign_flow_trend: string;
+        volume_ratio: number;
+    };
+}
+
+export interface EarningsEvent {
+    ticker: string;
+    earnings_date: string;
+    days_until: number;
+    fiscal_quarter: string;
+    eps_estimate?: number;
+    eps_actual?: number;
+    surprise_pct?: number;
+}
+
+export interface PreEarningsPattern {
+    ticker: string;
+    signal: string;
+    confidence: number;
+    days_until: number;
+    earnings_date: string;
+    bandar_activity: {
+        deep_score: number;
+        phase: string;
+        mm_flow: number;
+    };
+    message: string;
 }
 
 /**
@@ -644,6 +750,115 @@ export const bandarmologyApi = {
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.error || 'Failed to fetch watchlist alerts');
+        }
+        return await response.json();
+    },
+
+    /**
+     * Get float analysis for a ticker
+     */
+    getFloatAnalysis: async (ticker: string, forceRefresh?: boolean): Promise<BandarControlData> => {
+        const params = buildParams({ force_refresh: forceRefresh });
+        const response = await fetch(`${API_BASE_URL}/api/bandarmology/float-analysis/${ticker}?${params}`);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to fetch float analysis');
+        }
+        return await response.json();
+    },
+
+    /**
+     * Get volume metrics for anomaly detection
+     */
+    getVolumeMetrics: async (ticker: string, forceRefresh?: boolean): Promise<VolumeMetrics> => {
+        const params = buildParams({ force_refresh: forceRefresh });
+        const response = await fetch(`${API_BASE_URL}/api/bandarmology/volume-metrics/${ticker}?${params}`);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to fetch volume metrics');
+        }
+        return await response.json();
+    },
+
+    /**
+     * Get Bandar Power Score rankings
+     */
+    getBandarPowerScores: async (limit: number = 50, minRating?: string): Promise<{
+        scores: BandarPowerScore[];
+        count: number;
+        max_score: number;
+        rating_thresholds: Record<string, number>;
+    }> => {
+        const params = buildParams({ limit: limit.toString(), min_rating: minRating });
+        const response = await fetch(`${API_BASE_URL}/api/bandarmology/power-scores?${params}`);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to fetch power scores');
+        }
+        return await response.json();
+    },
+
+    /**
+     * Get detailed Bandar Power Score for a ticker
+     */
+    getBandarPowerDetail: async (ticker: string, forceRefresh?: boolean): Promise<BandarPowerDetail> => {
+        const params = buildParams({ force_refresh: forceRefresh });
+        const response = await fetch(`${API_BASE_URL}/api/bandarmology/power-scores/${ticker}?${params}`);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to fetch bandar power detail');
+        }
+        return await response.json();
+    },
+
+    /**
+     * Get earnings calendar
+     */
+    getEarningsCalendar: async (days?: number, ticker?: string): Promise<{
+        earnings: EarningsEvent[];
+        count: number;
+        days_ahead: number;
+    }> => {
+        const params = buildParams({ days: days?.toString(), ticker });
+        const response = await fetch(`${API_BASE_URL}/api/bandarmology/earnings-calendar?${params}`);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to fetch earnings calendar');
+        }
+        return await response.json();
+    },
+
+    /**
+     * Get earnings data for a specific ticker
+     */
+    getTickerEarnings: async (ticker: string, days?: number, forceRefresh?: boolean): Promise<{
+        ticker: string;
+        upcoming_earnings: EarningsEvent[];
+        earnings_history: EarningsEvent[];
+        pattern_detection: PreEarningsPattern;
+    }> => {
+        const params = buildParams({ days: days?.toString(), force_refresh: forceRefresh });
+        const response = await fetch(`${API_BASE_URL}/api/bandarmology/earnings-calendar/${ticker}?${params}`);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to fetch ticker earnings');
+        }
+        return await response.json();
+    },
+
+    /**
+     * Get pre-earnings opportunities with accumulation patterns
+     */
+    getPreEarningsOpportunities: async (minConfidence: number = 60): Promise<{
+        opportunities: PreEarningsPattern[];
+        count: number;
+        min_confidence: number;
+    }> => {
+        const params = buildParams({ min_confidence: minConfidence.toString() });
+        const response = await fetch(`${API_BASE_URL}/api/bandarmology/pre-earnings-opportunities?${params}`);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to fetch pre-earnings opportunities');
         }
         return await response.json();
     },

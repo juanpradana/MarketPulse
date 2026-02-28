@@ -609,6 +609,55 @@ class DatabaseConnection:
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_band_deep_lookup ON bandarmology_deep_cache(ticker, analysis_date);")
 
+        # Stock Float Data (from Yahoo Finance)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS stock_float_data (
+                ticker TEXT PRIMARY KEY,
+                shares_outstanding REAL,
+                float_shares REAL,
+                float_ratio REAL,
+                cached_at DATETIME,
+                source TEXT DEFAULT 'yfinance'
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_float_data_cached ON stock_float_data(cached_at);")
+
+        # Bandar Power Scores (composite metric for bandar attractiveness)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS bandar_power_scores (
+                ticker TEXT PRIMARY KEY,
+                score INTEGER,
+                rating TEXT,
+                float_component INTEGER,
+                volume_component INTEGER,
+                beta_component INTEGER,
+                position_component INTEGER,
+                institutional_component INTEGER,
+                calculated_at DATETIME,
+                UNIQUE(ticker)
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_power_scores_calculated ON bandar_power_scores(calculated_at);")
+
+        # Earnings Calendar (from Yahoo Finance)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS earnings_calendar (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticker TEXT NOT NULL,
+                earnings_date DATE,
+                fiscal_quarter TEXT,
+                eps_estimate REAL,
+                revenue_estimate REAL,
+                eps_actual REAL,
+                revenue_actual REAL,
+                surprise_pct REAL,
+                fetched_at DATETIME,
+                UNIQUE(ticker, fiscal_quarter)
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_earnings_ticker ON earnings_calendar(ticker);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_earnings_date ON earnings_calendar(earnings_date);")
+
         # User watchlist for personalized ticker tracking
         conn.execute("""
             CREATE TABLE IF NOT EXISTS user_watchlist (
@@ -771,6 +820,12 @@ class DatabaseConnection:
             ("pump_tomorrow_score", "INTEGER DEFAULT 0"),
             ("pump_tomorrow_signal", "TEXT DEFAULT 'NONE'"),
             ("pump_tomorrow_factors_json", "TEXT"),
+            # Float analysis
+            ("bandar_float_pct", "REAL DEFAULT 0"),
+            ("float_control_level", "TEXT"),
+            # Earnings calendar
+            ("days_to_earnings", "INTEGER"),
+            ("earnings_signal", "TEXT"),
         ]
         
         # Migration: Add new columns to neobdm_records
@@ -782,6 +837,19 @@ class DatabaseConnection:
         for col_name, col_type in neobdm_new_columns:
             try:
                 conn.execute(f"ALTER TABLE neobdm_records ADD COLUMN {col_name} {col_type}")
+            except Exception:
+                pass
+
+        # Migration: Add volume anomaly columns to volume_daily_records
+        volume_anomaly_columns = [
+            ("avg_volume_10d", "REAL"),
+            ("avg_volume_3m", "REAL"),
+            ("volume_ratio", "REAL"),
+            ("volume_signal", "TEXT"),
+        ]
+        for col_name, col_type in volume_anomaly_columns:
+            try:
+                conn.execute(f"ALTER TABLE volume_daily_records ADD COLUMN {col_name} {col_type}")
             except Exception:
                 pass
         

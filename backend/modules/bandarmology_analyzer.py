@@ -16,6 +16,10 @@ from datetime import datetime
 import numpy as np
 
 import config
+from modules.yahoo_finance_enhanced import get_yahoo_finance_enhanced
+from modules.volume_analyzer import get_volume_analyzer
+from modules.bandar_power_calculator import get_bandar_power_calculator
+from modules.earnings_tracker import get_earnings_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +92,9 @@ class BandarmologyAnalyzer:
 
     # Score system constants (single source of truth)
     BASE_MAX_SCORE = 100
-    DEEP_MAX_SCORE = 150
+    # Deep max updated with new Yahoo Finance mechanisms:
+    # 11 mechanisms (original) + float(15) + volume_anomaly(10) + bandar_power(0, composite) + earnings(10)
+    DEEP_MAX_SCORE = 185
     MAX_COMBINED_SCORE = BASE_MAX_SCORE + DEEP_MAX_SCORE
 
     # Transparency constants
@@ -1979,6 +1985,95 @@ class BandarmologyAnalyzer:
                 deep['historical_freshness'] = freshness
                 if freshness < 1.0:
                     deep['historical_warning'] = f"Previous analysis is {freshness:.0%} fresh ({prev_date})"
+
+        # ---- YAHOO FINANCE ENHANCED SCORING ----
+        # Initialize Yahoo Finance enhanced modules
+        yf_enhanced = get_yahoo_finance_enhanced(self.db_path)
+        volume_analyzer = get_volume_analyzer(self.db_path)
+        power_calculator = get_bandar_power_calculator(self.db_path)
+        earnings_tracker = get_earnings_tracker(self.db_path)
+
+        # ---- MECHANISM 12: FLOAT ANALYSIS (max 15 pts) ----
+        try:
+            bandar_lot = deep.get('bandar_total_lot', 0) or 0
+            float_control = yf_enhanced.calculate_bandar_control(ticker, bandar_lot)
+
+            if float_control:
+                deep['bandar_float_pct'] = round(float_control['bandar_float_pct'], 2)
+                deep['float_control_level'] = float_control['control_level']
+
+                # Get score based on control level
+                float_score = yf_enhanced.get_control_level_score(float_control['control_level'])
+                deep_score += float_score
+
+                # Add signals
+                if float_control['control_level'] == 'DOMINANT':
+                    signals['float_dominant_control'] = f"Bandar controls {float_control['bandar_float_pct']:.1f}% of float ({float_control['bandar_lots']:,.0f} lots) - DOMINANT"
+                elif float_control['control_level'] == 'STRONG':
+                    signals['float_strong_control'] = f"Bandar controls {float_control['bandar_float_pct']:.1f}% of float ({float_control['bandar_lots']:,.0f} lots) - STRONG"
+                elif float_control['control_level'] == 'MODERATE':
+                    signals['float_moderate_control'] = f"Bandar controls {float_control['bandar_float_pct']:.1f}% of float ({float_control['bandar_lots']:,.0f} lots) - MODERATE"
+
+                deep['float_score'] = float_score
+        except Exception as e:
+            logger.warning(f"Error calculating float analysis for {ticker}: {e}")
+
+        # ---- MECHANISM 13: VOLUME ANOMALY (max 10 pts) ----
+        try:
+            vol_score = volume_analyzer.get_volume_score(ticker)
+            deep_score += vol_score
+            deep['volume_anomaly_score'] = vol_score
+
+            # Get detailed metrics for signals
+            vol_metrics = volume_analyzer.calculate_volume_metrics(ticker)
+            if vol_metrics:
+                vol_signal = vol_metrics.get('signal', 'NORMAL')
+                vol_ratio = vol_metrics.get('volume_ratio', 1.0)
+
+                if vol_signal == 'ACCUMULATION' and vol_score >= 7:
+                    signals['volume_anomaly_accumulation'] = f"Volume {vol_ratio:.1f}x avg with positive price - ACCUMULATION CONFIRMED (+{vol_score} pts)"
+                elif vol_signal == 'DISTRIBUTION':
+                    signals['volume_anomaly_distribution'] = f"Volume {vol_ratio:.1f}x avg with negative price - DISTRIBUTION WARNING ({vol_score} pts)"
+        except Exception as e:
+            logger.warning(f"Error calculating volume anomaly for {ticker}: {e}")
+
+        # ---- BANDAR POWER SCORE (composite metric, stored but not added to deep_score) ----
+        try:
+            power_result = power_calculator.calculate_score(ticker)
+            if power_result:
+                deep['bandar_power_score'] = power_result['score']
+                deep['bandar_power_rating'] = power_result['rating']
+                deep['bandar_power_components'] = power_result.get('components', {})
+
+                # Add signal for excellent/good ratings
+                if power_result['rating'] in ('EXCELLENT', 'GOOD'):
+                    signals[f"bandar_power_{power_result['rating'].lower()}"] = (
+                        f"Bandar Power Score: {power_result['score']}/100 ({power_result['rating']}) - "
+                        f"Highly attractive for bandar accumulation"
+                    )
+        except Exception as e:
+            logger.warning(f"Error calculating bandar power score for {ticker}: {e}")
+
+        # ---- MECHANISM 14: EARNINGS TIMING (max 10 pts) ----
+        try:
+            earnings_score = earnings_tracker.get_earnings_score(ticker)
+            if earnings_score > 0:
+                deep_score += earnings_score
+                deep['earnings_score'] = earnings_score
+
+                # Get pattern details for signals
+                pattern = earnings_tracker.detect_pre_earnings_pattern(ticker)
+                if pattern:
+                    deep['days_to_earnings'] = pattern.get('days_until')
+                    deep['earnings_signal'] = pattern.get('signal')
+
+                    signal = pattern.get('signal', '')
+                    if signal == 'PRE_EARNINGS_ACCUM':
+                        signals['earnings_pre_accum'] = f"Pre-earnings accumulation detected ({pattern.get('days_until')} days to earnings) +{earnings_score} pts"
+                    elif signal == 'PRE_EARNINGS_WATCH':
+                        signals['earnings_watch'] = f"Pre-earnings pattern forming ({pattern.get('days_until')} days to earnings)"
+        except Exception as e:
+            logger.warning(f"Error calculating earnings timing for {ticker}: {e}")
 
         # ---- FINAL CONFIDENCE SCORE (transparent weighting) ----
         # Base confidence uses coordination score from controlling broker analysis.

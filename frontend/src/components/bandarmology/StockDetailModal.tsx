@@ -257,6 +257,33 @@ function generateChatText(data: StockDetailResponse): string {
             const arrow = data.score_trend.includes('IMPROVING') ? '↑' : '↓';
             extras.push(`${arrow} Score: ${data.prev_deep_score} → ${data.deep_score} (${data.score_trend.replace('_', ' ')})`);
         }
+        // Yahoo Finance Enhanced Features
+        const yahooExtras: string[] = [];
+        if ((data.bandar_float_pct ?? 0) > 0) {
+            const floatEmoji = data.float_control_level === 'DOMINANT' ? '🔴' :
+                              data.float_control_level === 'STRONG' ? '🟠' :
+                              data.float_control_level === 'MODERATE' ? '🟡' : '⚪';
+            yahooExtras.push(`${floatEmoji} Float Control: ${data.bandar_float_pct!.toFixed(1)}% (${data.float_control_level})`);
+        }
+        if ((data.bandar_power_score ?? 0) > 0) {
+            const powerEmoji = data.bandar_power_rating === 'EXCELLENT' ? '⭐⭐⭐' :
+                               data.bandar_power_rating === 'GOOD' ? '⭐⭐' :
+                               data.bandar_power_rating === 'MODERATE' ? '⭐' : '⚪';
+            yahooExtras.push(`${powerEmoji} Bandar Power: ${data.bandar_power_score}/100 (${data.bandar_power_rating})`);
+        }
+        if ((data.volume_anomaly_score ?? 0) !== 0) {
+            const volEmoji = (data.volume_anomaly_score ?? 0) > 0 ? '📈' : '📉';
+            yahooExtras.push(`${volEmoji} Volume Anomaly: ${data.volume_anomaly_score! > 0 ? '+' : ''}${data.volume_anomaly_score} pts`);
+        }
+        if ((data.earnings_score ?? 0) > 0 && data.days_to_earnings) {
+            yahooExtras.push(`📅 Pre-Earnings: ${data.days_to_earnings} days, +${data.earnings_score} pts`);
+        }
+        if (yahooExtras.length > 0) {
+            lines.push(`💎 *YAHOO FINANCE ENHANCED*`);
+            yahooExtras.forEach(e => lines.push(`  ${e}`));
+            lines.push('');
+        }
+
         if (extras.length > 0) {
             lines.push(`🔍 *ANALISIS LANJUTAN*`);
             extras.forEach(e => lines.push(`  ${e}`));
@@ -1493,6 +1520,124 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                             </div>
                                         )}
                                     </div>
+
+                                    {/* Yahoo Finance Enhanced Features Section */}
+                                    {(data.bandar_float_pct || data.bandar_power_score || data.volume_anomaly_score || data.days_to_earnings) && (
+                                        <div className="mb-4 p-3 bg-indigo-500/10 rounded-lg border border-indigo-500/20">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <BarChart3 className="w-4 h-4 text-indigo-400" />
+                                                <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Yahoo Finance Enhanced</span>
+                                            </div>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                {/* Float Analysis */}
+                                                {(data.bandar_float_pct ?? 0) > 0 && (
+                                                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px] bg-zinc-800/50 border-zinc-700/30">
+                                                        <div className={cn(
+                                                            "w-3 h-3 rounded-full flex-shrink-0",
+                                                            data.float_control_level === 'DOMINANT' ? 'bg-red-500' :
+                                                            data.float_control_level === 'STRONG' ? 'bg-orange-500' :
+                                                            data.float_control_level === 'MODERATE' ? 'bg-yellow-500' : 'bg-zinc-500'
+                                                        )} />
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="text-[8px] text-zinc-500 font-bold uppercase">Float Control</div>
+                                                            <div className={cn(
+                                                                "font-black",
+                                                                data.float_control_level === 'DOMINANT' ? 'text-red-400' :
+                                                                data.float_control_level === 'STRONG' ? 'text-orange-400' :
+                                                                data.float_control_level === 'MODERATE' ? 'text-yellow-400' : 'text-zinc-400'
+                                                            )}>
+                                                                {data.bandar_float_pct!.toFixed(1)}% of float
+                                                                <span className="text-zinc-500 font-normal ml-1">({data.float_control_level})</span>
+                                                            </div>
+                                                            {data.float_score ? (
+                                                                <div className="text-[9px] text-zinc-500">
+                                                                    +{data.float_score} pts
+                                                                </div>
+                                                            ) : null}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Bandar Power Score */}
+                                                {(data.bandar_power_score ?? 0) > 0 && (
+                                                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px] bg-zinc-800/50 border-zinc-700/30">
+                                                        <div className={cn(
+                                                            "w-3 h-3 rounded-full flex-shrink-0",
+                                                            data.bandar_power_rating === 'EXCELLENT' ? 'bg-emerald-500' :
+                                                            data.bandar_power_rating === 'GOOD' ? 'bg-cyan-500' :
+                                                            data.bandar_power_rating === 'MODERATE' ? 'bg-yellow-500' : 'bg-zinc-500'
+                                                        )} />
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="text-[8px] text-zinc-500 font-bold uppercase">Bandar Power</div>
+                                                            <div className={cn(
+                                                                "font-black",
+                                                                data.bandar_power_rating === 'EXCELLENT' ? 'text-emerald-400' :
+                                                                data.bandar_power_rating === 'GOOD' ? 'text-cyan-400' :
+                                                                data.bandar_power_rating === 'MODERATE' ? 'text-yellow-400' : 'text-zinc-400'
+                                                            )}>
+                                                                {data.bandar_power_score}/100
+                                                                <span className="text-zinc-500 font-normal ml-1">({data.bandar_power_rating})</span>
+                                                            </div>
+                                                            {data.bandar_power_components && (
+                                                                <div className="text-[9px] text-zinc-500 truncate">
+                                                                    F:{data.bandar_power_components.float} V:{data.bandar_power_components.volume} B:{data.bandar_power_components.beta} P:{data.bandar_power_components.position} I:{data.bandar_power_components.institutional}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Volume Anomaly */}
+                                                {(data.volume_anomaly_score ?? 0) !== 0 && (
+                                                    <div className={cn(
+                                                        "flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px]",
+                                                        (data.volume_anomaly_score ?? 0) > 0
+                                                            ? 'bg-emerald-500/10 border-emerald-500/20'
+                                                            : 'bg-red-500/10 border-red-500/20'
+                                                    )}>
+                                                        {(data.volume_anomaly_score ?? 0) > 0 ? (
+                                                            <TrendingUp className="w-3.5 h-3.5 flex-shrink-0 text-emerald-400" />
+                                                        ) : (
+                                                            <TrendingDown className="w-3.5 h-3.5 flex-shrink-0 text-red-400" />
+                                                        )}
+                                                        <div>
+                                                            <div className="text-[8px] text-zinc-500 font-bold uppercase">Volume Anomaly</div>
+                                                            <div className={cn(
+                                                                "font-black",
+                                                                (data.volume_anomaly_score ?? 0) > 0 ? 'text-emerald-400' : 'text-red-400'
+                                                            )}>
+                                                                {(data.volume_anomaly_score ?? 0) > 0 ? '+' : ''}{data.volume_anomaly_score} pts
+                                                                <span className="text-zinc-500 font-normal ml-1">
+                                                                    {(data.volume_anomaly_score ?? 0) > 0 ? 'Accumulation detected' : 'Distribution warning'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Earnings Timing */}
+                                                {(data.earnings_score ?? 0) > 0 && data.days_to_earnings && (
+                                                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px] bg-amber-500/10 border-amber-500/20">
+                                                        <Activity className="w-3.5 h-3.5 flex-shrink-0 text-amber-400" />
+                                                        <div>
+                                                            <div className="text-[8px] text-zinc-500 font-bold uppercase">Earnings Timing</div>
+                                                            <div className="text-amber-400 font-black">
+                                                                {data.days_to_earnings} days to earnings
+                                                                <span className="text-zinc-500 font-normal ml-1">(+{data.earnings_score} pts)</span>
+                                                            </div>
+                                                            {data.earnings_signal && (
+                                                                <div className="text-[9px] text-zinc-500">
+                                                                    {data.earnings_signal === 'PRE_EARNINGS_ACCUM' ? 'Pre-earnings accumulation pattern' :
+                                                                     data.earnings_signal === 'PRE_EARNINGS_WATCH' ? 'Monitor for accumulation' :
+                                                                     data.earnings_signal}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Broker table */}
                                     <div className="overflow-x-auto -mx-2 px-2">
