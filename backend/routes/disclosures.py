@@ -114,15 +114,10 @@ async def run_sync_disclosures():
         # 2. Add missing files from downloads to DB
         scan_result = sync_filesystem_with_db()
         
-        # 3. Trigger Indexing for any pending/downloaded docs
-        proc_result = {"processed": 0, "success": 0, "failed": 0}
-        try:
-            from idx_processor import IDXProcessor
-            processor = IDXProcessor()
-            proc_result = processor.run_processor()
-        except Exception as proc_err:
-            logging.warning(f"IDX Processor error (non-fatal): {proc_err}")
-            proc_result["error"] = str(proc_err)
+        # 3. RAG PDF Processing - DISABLED (too heavy for current hardware)
+        # PDFs are still downloaded but not indexed for AI chat
+        proc_result = {"processed": 0, "success": 0, "failed": 0, "status": "skipped", "reason": "RAG processing disabled"}
+        logging.info("RAG PDF processing is disabled - PDFs downloaded but not indexed")
         
         return {
             "sync_result": sync_result,

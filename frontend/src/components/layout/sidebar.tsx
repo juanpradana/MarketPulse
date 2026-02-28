@@ -66,12 +66,13 @@ const navGroups = [
             { icon: CandlestickChart, label: 'Price & Volume', href: '/price-volume' },
         ]
     },
-    {
-        title: 'Intelligence',
-        items: [
-            { icon: MessageSquare, label: 'RAG Chat', href: '/rag-chat' },
-        ]
-    }
+    // RAG Chat disabled - too heavy for current hardware
+    // {
+    //     title: 'Intelligence',
+    //     items: [
+    //         { icon: MessageSquare, label: 'RAG Chat', href: '/rag-chat' },
+    //     ]
+    // }
 ];
 
 interface SidebarProps {

@@ -777,7 +777,7 @@ python server.py
 | Done Detail | `app/done-detail/` | ✅ Complete - Trade data analysis |
 | Dashboard | `app/dashboard/` | ✅ Complete - Market overview |
 | News Library | `app/news-library/` | ✅ Complete - News aggregation + AI summaries |
-| RAG Chat | `app/rag-chat/` | ✅ Complete - Single-document AI chat |
+| RAG Chat | `app/rag-chat/` | ⛔ DISABLED - Too heavy for current hardware |
 | Broker Summary | `app/broker-summary/` | ✅ Complete - Broker activity summary |
 | **Adimology** | `app/adimology/` | ✅ Complete - Broker power calculator |
 | **Broker Stalker** | `app/broker-stalker/` | ✅ Complete - Frontend + Backend full |
@@ -815,9 +815,10 @@ Based on `docs/future_development.md` and `docs/optimization.md`, these features
   - *Current*: `components/dashboard/ticker-cloud.tsx` (basic word cloud)
   - *Needed*: Color mapping based on sentiment scores (green=positive, red=negative)
 
-- [ ] **Multi-Document RAG** - RAG only works on single document currently
-  - *Current*: `rag_client.py` queries per document
-  - *Needed*: Cross-document querying with ChromaDB metadata filtering
+- [ ] **Multi-Document RAG** - ⛔ DISABLED (RAG entirely disabled)
+  - *Reason*: PDF processing too heavy for current hardware
+  - *Current*: `rag_client.py` not used - menu hidden from sidebar
+  - *Note*: Feature may be re-enabled with better hardware or cloud processing
 
 - [ ] **Market Summary Newsletter** - No automated report generation
   - *Location to add*: `backend/modules/newsletter.py`
@@ -870,7 +871,10 @@ All core features have been implemented. Project is ready for active trading use
 - [x] Done Detail - Trade data analysis
 - [x] Dashboard - Market overview
 - [x] News Library - News aggregation + AI summaries
-- [x] RAG Chat - Single-document AI chat
+- [ ] **RAG Chat** - ⛔ DISABLED
+  - *Reason*: PDF processing too heavy for current hardware (192 PDFs caused timeout/crash)
+  - *Status*: Menu hidden, backend processing skipped
+  - *Note*: PDFs still downloaded from IDX but NOT indexed for AI chat
 - [x] Broker Summary - Broker activity summary
 - [x] Adimology - Broker power calculator
 - [x] Broker Stalker - Full frontend + backend

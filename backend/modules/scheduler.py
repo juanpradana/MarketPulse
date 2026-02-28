@@ -227,24 +227,11 @@ def run_idx_disclosure_fetch(days: int = 1, skip_processing: bool = False):
             logger.info(f"[Scheduler] IDX disclosures: {result['fetched']} fetched, "
                        f"{result['downloaded']} downloaded, {result['skipped']} skipped")
 
-            # 2. Trigger RAG indexing only if AI available and new downloads exist
-            if result["downloaded"] > 0 and not skip_processing:
-                logger.info("[Scheduler] Triggering disclosure sync for RAG indexing...")
-                try:
-                    from modules.sync_utils import sync_disclosures_with_filesystem
-                    sync_result = sync_disclosures_with_filesystem()
-                    logger.info(f"[Scheduler] Sync complete: {sync_result}")
-
-                    # 3. Run processor for any pending docs
-                    from idx_processor import IDXProcessor
-                    processor = IDXProcessor()
-                    proc_result = processor.run_processor()
-                    logger.info(f"[Scheduler] Processor: {proc_result}")
-                except Exception as proc_err:
-                    logger.warning(f"[Scheduler] Processing error (non-fatal): {proc_err}")
-            elif result["downloaded"] > 0 and skip_processing:
-                logger.info(f"[Scheduler] Skipped RAG indexing for {result['downloaded']} new PDFs (AI unavailable)")
-                logger.info("[Scheduler] PDFs saved and will be processed when AI is available")
+            # 2. RAG indexing - DISABLED (too heavy for current hardware)
+            # PDFs are still downloaded but not processed for AI chat
+            if result["downloaded"] > 0:
+                logger.info(f"[Scheduler] Downloaded {result['downloaded']} PDFs - RAG indexing skipped (disabled)")
+                logger.info("[Scheduler] PDFs saved to downloads folder but NOT indexed for AI chat")
         else:
             logger.warning(f"[Scheduler] IDX disclosure fetch: {result['status']}")
 
