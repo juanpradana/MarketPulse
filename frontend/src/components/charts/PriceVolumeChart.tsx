@@ -65,6 +65,12 @@ export const PriceVolumeChart: React.FC<PriceVolumeChartProps> = ({
         const volumeContainer = volumeChartRef.current;
         const { width } = priceContainer.getBoundingClientRect();
 
+        // Responsive chart heights based on screen width
+        const isMobile = width < 640;
+        const priceHeight = isMobile ? 280 : 350;
+        const volumeHeight = isMobile ? 100 : 150;
+        const mcapHeight = isMobile ? 80 : 120;
+
         // Common chart options
         const commonOptions = {
             layout: {
@@ -109,7 +115,7 @@ export const PriceVolumeChart: React.FC<PriceVolumeChartProps> = ({
         const priceChart = createChart(priceContainer, {
             ...commonOptions,
             width,
-            height: 350,
+            height: priceHeight,
         });
         priceChartApiRef.current = priceChart;
 
@@ -177,7 +183,7 @@ export const PriceVolumeChart: React.FC<PriceVolumeChartProps> = ({
         const volumeChart = createChart(volumeContainer, {
             ...commonOptions,
             width,
-            height: 150,
+            height: volumeHeight,
             timeScale: {
                 ...commonOptions.timeScale,
                 visible: true,
@@ -222,7 +228,7 @@ export const PriceVolumeChart: React.FC<PriceVolumeChartProps> = ({
             mcapChart = createChart(mcapChartRef.current, {
                 ...commonOptions,
                 width,
-                height: 120,
+                height: mcapHeight,
                 timeScale: {
                     ...commonOptions.timeScale,
                     visible: true,

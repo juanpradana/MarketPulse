@@ -91,7 +91,7 @@ export const ScraperControl = ({ isCollapsed }: { isCollapsed: boolean }) => {
                         <select
                             value={source}
                             onChange={(e) => setSource(e.target.value)}
-                            className="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 text-xs rounded-lg p-2 outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 text-xs rounded-lg p-2.5 sm:p-2 outline-none focus:ring-1 focus:ring-blue-500 min-h-[44px]"
                         >
                             <option value="EmitenNews">EmitenNews</option>
                             <option value="CNBC Indonesia">CNBC Indonesia</option>
@@ -110,19 +110,19 @@ export const ScraperControl = ({ isCollapsed }: { isCollapsed: boolean }) => {
                                     placeholder="e.g. BBRI"
                                     value={scrapeTicker}
                                     onChange={(e) => setScrapeTicker(e.target.value.toUpperCase())}
-                                    className="h-8 bg-zinc-950 border-zinc-800 text-xs"
+                                    className="h-11 sm:h-8 bg-zinc-950 border-zinc-800 text-sm sm:text-xs"
                                 />
                             </div>
                             {scrapeTicker && (
-                                <div className="flex items-center gap-2 px-1">
+                                <div className="flex items-center gap-3 px-1">
                                     <input
                                         type="checkbox"
                                         id="allHistory"
                                         checked={scrapeAllHistory}
                                         onChange={(e) => setScrapeAllHistory(e.target.checked)}
-                                        className="rounded border-zinc-800 bg-zinc-950 text-blue-500 w-3 h-3"
+                                        className="rounded border-zinc-800 bg-zinc-950 text-blue-500 w-5 h-5 sm:w-3 sm:h-3"
                                     />
-                                    <label htmlFor="allHistory" className="text-[10px] text-zinc-400">Scrape All History</label>
+                                    <label htmlFor="allHistory" className="text-xs sm:text-[10px] text-zinc-400">Scrape All History</label>
                                 </div>
                             )}
                         </>
@@ -130,21 +130,21 @@ export const ScraperControl = ({ isCollapsed }: { isCollapsed: boolean }) => {
 
                     <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">Dari:</label>
+                            <label className="text-xs sm:text-[10px] font-bold text-zinc-500 uppercase tracking-tight">Dari:</label>
                             <input
                                 type="date"
                                 value={startDate}
                                 onChange={(e) => setStartDate(e.target.value)}
-                                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 text-[10px] rounded p-1.5 outline-none [color-scheme:dark]"
+                                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 text-xs sm:text-[10px] rounded p-2 sm:p-1.5 outline-none [color-scheme:dark] min-h-[44px]"
                             />
                         </div>
                         <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">Sampai:</label>
+                            <label className="text-xs sm:text-[10px] font-bold text-zinc-500 uppercase tracking-tight">Sampai:</label>
                             <input
                                 type="date"
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
-                                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 text-[10px] rounded p-1.5 outline-none [color-scheme:dark]"
+                                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 text-xs sm:text-[10px] rounded p-2 sm:p-1.5 outline-none [color-scheme:dark] min-h-[44px]"
                             />
                         </div>
                     </div>

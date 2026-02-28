@@ -690,28 +690,28 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                 <button
                                     onClick={handleCopyChat}
                                     className={cn(
-                                        "flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold transition-all",
+                                        "flex items-center gap-1.5 px-3 py-2 sm:px-2.5 sm:py-1 rounded text-xs sm:text-[10px] font-bold transition-all min-h-[44px] sm:min-h-0",
                                         copied
                                             ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300"
                                             : "bg-zinc-700/50 border border-zinc-600/30 text-zinc-300 hover:bg-zinc-600/50 hover:text-white"
                                     )}
                                     title="Copy insight ke clipboard untuk dikirim via chat"
                                 >
-                                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                                    {copied ? <Check className="w-4 h-4 sm:w-3.5 sm:h-3.5" /> : <Copy className="w-4 h-4 sm:w-3.5 sm:h-3.5" />}
                                     {copied ? 'Copied!' : 'Copy Chat'}
                                 </button>
                                 <button
                                     onClick={handleDownloadPdf}
-                                    className="flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold bg-zinc-700/50 border border-zinc-600/30 text-zinc-300 hover:bg-zinc-600/50 hover:text-white transition-all"
+                                    className="flex items-center gap-1.5 px-3 py-2 sm:px-2.5 sm:py-1 rounded text-xs sm:text-[10px] font-bold bg-zinc-700/50 border border-zinc-600/30 text-zinc-300 hover:bg-zinc-600/50 hover:text-white transition-all min-h-[44px] sm:min-h-0"
                                     title="Download laporan PDF"
                                 >
-                                    <FileDown className="w-3.5 h-3.5" />
+                                    <FileDown className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                                     PDF
                                 </button>
                             </>
                         )}
-                        <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200 transition-colors p-1 rounded hover:bg-zinc-700/50">
-                            <X className="w-5 h-5" />
+                        <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200 transition-colors p-2 rounded hover:bg-zinc-700/50 min-h-[44px] min-w-[44px] flex items-center justify-center">
+                            <X className="w-6 h-6 sm:w-5 sm:h-5" />
                         </button>
                     </div>
                 </div>

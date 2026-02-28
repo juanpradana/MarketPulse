@@ -332,27 +332,27 @@ export default function AdimologyPage() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-violet-500/20 shrink-0">
                         <Calculator className="w-6 h-6 text-white" />
                     </div>
-                    <div>
-                        <h1 className="text-2xl font-black tracking-tight text-zinc-100">ADIMOLOGY</h1>
-                        <p className="text-[10px] text-zinc-500 tracking-wide">Analisis Daya Investasi — Broker Power Calculator</p>
+                    <div className="min-w-0">
+                        <h1 className="text-xl sm:text-2xl font-black tracking-tight text-zinc-100">ADIMOLOGY</h1>
+                        <p className="text-[10px] text-zinc-500 tracking-wide truncate">Analisis Daya Investasi — Broker Power Calculator</p>
                     </div>
                 </div>
             </div>
 
             {/* Main Grid */}
-            <div className="grid grid-cols-12 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
                 {/* ─── Left: Input Form ─── */}
-                <div className="col-span-4 space-y-4">
+                <div className="lg:col-span-4 space-y-4">
                     <div className="bg-zinc-900/30 border border-zinc-800/40 rounded-2xl p-5 space-y-4">
                         <div className="flex items-center gap-2 text-zinc-400 mb-1">
                             <Layers className="w-4 h-4" />
                             <span className="text-xs font-bold uppercase tracking-wider">Input Data</span>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <InputField
                                 label="Emiten"
                                 value={emiten}
@@ -371,7 +371,7 @@ export default function AdimologyPage() {
                             />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <InputField
                                 label="Buy Lot"
                                 value={buyLot}
@@ -392,7 +392,7 @@ export default function AdimologyPage() {
 
                         <div className="h-px bg-zinc-800/50" />
 
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <InputField
                                 label="ARB"
                                 value={arb}
@@ -481,7 +481,7 @@ export default function AdimologyPage() {
                 </div>
 
                 {/* ─── Right: Results ─── */}
-                <div className="col-span-8 space-y-4">
+                <div className="lg:col-span-8 space-y-4">
                     {/* Power & Targets */}
                     {result ? (
                         <>
@@ -705,7 +705,7 @@ export default function AdimologyPage() {
                             </div>
                         </>
                     ) : (
-                        <div className="col-span-8 flex items-center justify-center h-96 bg-zinc-900/20 border border-zinc-800/30 rounded-2xl">
+                        <div className="lg:col-span-8 flex items-center justify-center h-96 bg-zinc-900/20 border border-zinc-800/30 rounded-2xl">
                             <div className="text-center space-y-3">
                                 <Calculator className="w-12 h-12 text-zinc-700 mx-auto" />
                                 <div className="text-zinc-500 text-sm font-bold">Masukkan data untuk mulai kalkulasi</div>

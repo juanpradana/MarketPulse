@@ -22,6 +22,10 @@ export function MarketCapChart({ data, ticker }: MarketCapChartProps) {
             chartRef.current = null;
         }
 
+        // Responsive height based on screen width
+        const isMobile = chartContainerRef.current.clientWidth < 640;
+        const chartHeight = isMobile ? 160 : 200;
+
         // Create chart
         const chart = createChart(chartContainerRef.current, {
             layout: {
@@ -33,7 +37,7 @@ export function MarketCapChart({ data, ticker }: MarketCapChartProps) {
                 horzLines: { color: 'rgba(42, 46, 57, 0.5)' },
             },
             width: chartContainerRef.current.clientWidth,
-            height: 200,
+            height: chartHeight,
             rightPriceScale: {
                 borderVisible: false,
             },

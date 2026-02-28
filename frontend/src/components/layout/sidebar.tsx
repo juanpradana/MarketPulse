@@ -106,8 +106,8 @@ export const Sidebar = ({ mobile }: SidebarProps) => {
                 {/* Mobile Header */}
                 <header className="fixed top-0 left-0 right-0 h-14 bg-[#09090b]/95 backdrop-blur-md border-b border-zinc-800/40 z-50 flex items-center justify-between px-4">
                     <Link href="/dashboard" className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center shrink-0 shadow-lg shadow-purple-500/20">
-                            <TrendingUp className="w-5 h-5 text-white" />
+                        <div className="w-10 h-10 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center shrink-0 shadow-lg shadow-purple-500/20">
+                            <TrendingUp className="w-6 h-6 sm:w-5 sm:h-5 text-white" />
                         </div>
                         <span className="text-lg font-black tracking-tighter text-zinc-100 italic">
                             MarketPulse
@@ -115,10 +115,10 @@ export const Sidebar = ({ mobile }: SidebarProps) => {
                     </Link>
                     <button
                         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                        className="p-2 rounded-lg bg-zinc-800/50 hover:bg-zinc-700 text-zinc-300 transition-colors"
+                        className="p-3 sm:p-2 rounded-lg bg-zinc-800/50 hover:bg-zinc-700 text-zinc-300 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                         aria-label="Toggle menu"
                     >
-                        {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                        {isMobileMenuOpen ? <X className="w-6 h-6 sm:w-5 sm:h-5" /> : <Menu className="w-6 h-6 sm:w-5 sm:h-5" />}
                     </button>
                 </header>
 
@@ -151,21 +151,21 @@ export const Sidebar = ({ mobile }: SidebarProps) => {
                                                 key={item.href}
                                                 href={item.href}
                                                 className={cn(
-                                                    "flex items-center gap-3 px-3 py-3 rounded-lg transition-all whitespace-nowrap border border-transparent",
+                                                    "flex items-center gap-3 px-3 py-4 sm:py-3 rounded-lg transition-all whitespace-nowrap border border-transparent min-h-[52px]",
                                                     isActive
                                                         ? "bg-blue-500/10 text-blue-400 border-blue-500/20 font-bold shadow-sm"
                                                         : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200"
                                                 )}
                                             >
                                                 <item.icon className={cn(
-                                                    "w-5 h-5 shrink-0",
+                                                    "w-6 h-6 sm:w-5 sm:h-5 shrink-0",
                                                     isActive ? "text-blue-500" : "text-zinc-500"
                                                 )} />
-                                                <span className="text-sm tracking-tight">
+                                                <span className="text-base sm:text-sm tracking-tight">
                                                     {item.label}
                                                 </span>
                                                 {isActive && (
-                                                    <div className="ml-auto w-1 h-3 rounded-full bg-blue-500" />
+                                                    <div className="ml-auto w-1.5 h-4 sm:w-1 sm:h-3 rounded-full bg-blue-500" />
                                                 )}
                                             </Link>
                                         );
