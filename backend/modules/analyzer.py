@@ -49,9 +49,39 @@ class SentimentEngine:
             logger.info(f"    -> FP16 Precision | Batch Size: {self.batch_size}")
         else:
             logger.info(f"[*] Initializing Sentiment Model on CPU...")
-            logger.info(f"    -> Tip: Install PyTorch with CUDA for 10-50x faster inference")
-            logger.info(f"       pip install torch --index-url https://download.pytorch.org/whl/cu121")
             logger.info(f"    -> Batch Size: {self.batch_size}")
+
+            # Check if GPU is available in system but PyTorch can't use it
+            import subprocess
+            try:
+                result = subprocess.run(
+                    ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    gpu_name = result.stdout.strip().split('\n')[0]
+                    logger.warning("=" * 70)
+                    logger.warning("GPU DETECTED IN SYSTEM BUT PYTORCH CANNOT USE CUDA!")
+                    logger.warning(f"  Detected GPU: {gpu_name}")
+                    logger.warning("  PyTorch Version: " + torch.__version__)
+                    if "+cpu" in torch.__version__:
+                        logger.warning("  Issue: PyTorch is CPU-only build!")
+                    else:
+                        logger.warning("  Issue: CUDA driver/toolkit mismatch")
+                    logger.warning("-" * 70)
+                    logger.warning("TO FIX (run in terminal):")
+                    logger.warning("  cd E:/py/MarketPulse/backend")
+                    logger.warning("  . venv/Scripts/activate")
+                    logger.warning("  pip uninstall torch -y")
+                    logger.warning("  pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cu121")
+                    logger.warning("=" * 70)
+            except Exception:
+                pass  # nvidia-smi not available, no GPU in system
+
+            logger.info(f"    -> Tip: Install PyTorch with CUDA for 10-50x faster inference")
+            logger.info(f"       Run: python scripts/diagnose_gpu.py for diagnostics")
 
         # Set HF_TOKEN from env if available (suppresses rate-limit warnings)
         hf_token = os.environ.get("HF_TOKEN")

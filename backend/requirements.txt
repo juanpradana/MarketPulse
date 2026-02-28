@@ -23,9 +23,24 @@ wordcloud
 pytest
 pytest-asyncio
 plotly
-# For GPU acceleration (NVIDIA): pip install torch --index-url https://download.pytorch.org/whl/cu121
-# For CPU-only: pip install torch
-torch
+# ============================================================================
+# PyTorch Installation - CHOOSE ONE:
+# ============================================================================
+#
+# Option 1: GPU (NVIDIA CUDA 12.1) - RECOMMENDED for GTX 1050 Ti
+#   Run: pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cu121
+#   This enables 10-50x faster sentiment analysis on GPU
+#
+# Option 2: CPU-only (slower, no GPU required)
+#   Run: pip install torch==2.5.1
+#   Use this if you don't have an NVIDIA GPU
+#
+# Current configuration (GPU version):
+torch==2.5.1 --index-url https://download.pytorch.org/whl/cu121
+#
+# To verify GPU is working after installation:
+#   python -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
+# ============================================================================
 transformers
 trafilatura
 pytz
