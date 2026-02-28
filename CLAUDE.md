@@ -1,6 +1,8 @@
 # CLAUDE.md - MarketPulse Architecture & Development Guide
 
 > **IMPORTANT**: This document serves as the canonical reference for understanding MarketPulse's frontend-backend architecture. Preserve this knowledge for all future development work.
+>
+> **Current Version**: 2.2.0 | **Last Updated**: 2026-02-28
 
 ---
 
@@ -67,7 +69,8 @@
 | **Database** | SQLite | Primary relational storage |
 | **Vector DB** | ChromaDB | RAG embeddings storage |
 | **AI/ML** | Ollama (LLaMA 3.2) | Local LLM inference |
-| **Scraping** | Playwright | Browser automation |
+| **Scraping** | HTTP API (httpx) + Playwright fallback | NeoBDM API integration |
+| **HTTP Client** | httpx (Async) | High-performance API calls |
 
 ---
 
@@ -81,8 +84,10 @@ frontend/src/
 │   ├── layout.tsx               # Root layout with providers
 │   ├── page.tsx                 # Home (redirects to /dashboard)
 │   ├── dashboard/               # Market Intelligence Dashboard
+│   ├── adimology/               # Broker power calculator (Analisis Daya Investasi)
 │   ├── alpha-hunter/            # Multi-stage screening workflow
-│   ├── bandarmology/            # Broker behavior analysis
+│   ├── bandarmology/            # Deep broker behavior analysis
+│   ├── broker-stalker/          # Broker surveillance & tracking
 │   ├── broker-summary/          # Broker activity summary
 │   ├── done-detail/             # Trade data analysis
 │   ├── neobdm-summary/          # Fund flow summary
@@ -90,6 +95,7 @@ frontend/src/
 │   ├── news-library/            # News aggregation
 │   ├── price-volume/            # Price-volume analytics
 │   ├── rag-chat/                # AI chat with disclosures
+│   ├── watchlist/               # Personal ticker watchlist
 │   └── ...
 │
 ├── components/
@@ -97,6 +103,7 @@ frontend/src/
 │   ├── bandarmology/            # Bandarmology components
 │   ├── charts/                  # Reusable chart components
 │   ├── dashboard/               # Dashboard-specific components
+│   ├── broker-stalker/          # Broker stalker components
 │   ├── done-detail-components/  # Done Detail analysis UI
 │   ├── layout/                  # Layout components (sidebar, etc.)
 │   ├── news-library/            # News feed components
@@ -281,9 +288,9 @@ backend/
 │   ├── analyzer.py              # Sentiment analysis engine
 │   ├── scraper_*.py             # News scrapers (CNBC, Emiten, etc.)
 │   ├── scraper_neobdm.py        # NeoBDM data scraper
-│   ├── bandarmology_analyzer.py # Bandarmology scoring engine
-│   ├── alpha_hunter_*.py        # Alpha Hunter analysis modules
-│   ├── neobdm_api_client.py     # NeoBDM API integration
+│   ├── bandarmology_analyzer.py # Bandarmology scoring engine (11 mechanisms)
+│   ├── neobdm_api_client.py     # NeoBDM HTTP API client (httpx)
+│   ├── scraper_neobdm.py        # Legacy NeoBDM scraper (reference)
 │   ├── broker_stalker_analyzer.py # Broker analysis
 │   └── ...
 │
@@ -483,17 +490,29 @@ CHROMA_DB_PATH=./chroma_db
 
 ### 6.3 Bandarmology
 
-**Purpose**: Deep broker behavior analysis with scoring system
+**Purpose**: Deep broker behavior analysis with comprehensive scoring system
 
 **Key Files**:
-- Frontend: `app/bandarmology/page.tsx`, `services/api/bandarmology.ts`
+- Frontend: `app/bandarmology/page.tsx`, `services/api/bandarmology.ts`, `components/bandarmology/StockDetailModal.tsx`
 - Backend: `routes/bandarmology.py`, `modules/bandarmology_analyzer.py`
 
 **Features**:
-- Base screening (Pinky, Crossing, Unusual flags)
-- Deep analysis with inventory/broker summary cross-reference
-- Entry/target price calculation
-- Pump tomorrow prediction
+- Base screening (Pinky, Crossing, Unusual, Likuid flags)
+- Deep analysis with 11 scoring mechanisms (max 150 pts):
+  1. Inventory Analysis (bandar controlling brokers detection)
+  2. Transaction Chart Analysis (MM/NR/F trends)
+  3. Broker Summary Cross-Reference
+  4. Multi-Day Broker Consistency
+  5. Breakout Probability (8 weighted factors)
+  6. MA Golden/Death Cross Detection
+  7. Historical Deep Analysis Comparison
+  8. Flow Velocity & Acceleration
+  9. Important Dates Broker Summary
+  10. Entry/Target Price Calculation
+  11. Pump Tomorrow Prediction
+- Stock Detail Modal dengan PDF export & Copy-to-Chat
+- Manual Deep Analysis trigger
+- Watchlist Alerts endpoint
 
 ### 6.4 Done Detail
 
@@ -511,16 +530,93 @@ CHROMA_DB_PATH=./chroma_db
 
 ### 6.5 NeoBDM Analysis
 
-**Purpose**: Fund flow tracking and market maker analysis
+**Purpose**: Fund flow tracking and market maker analysis via direct HTTP API
 
 **Key Files**:
 - Frontend: `app/neobdm-summary/page.tsx`, `app/neobdm-tracker/page.tsx`
-- Backend: `routes/neobdm.py`, `modules/scraper_neobdm.py`
+- Backend: `routes/neobdm.py`, `modules/neobdm_api_client.py`
+
+**API Optimization**:
+- **HTTP API Client** (`neobdm_api_client.py`): Direct API calls via httpx (~0.5s vs 60-120s Playwright)
+- **Endpoints Discovered**:
+  - Market Summary: `POST /django_plotly_dash/app/ms_app/_dash-update-component`
+  - Broker Summary: `POST /api/broker-summary` (HTML table)
+  - Inventory: `POST /django_plotly_dash/app/ia_app/_dash-update-component`
+  - Transaction Chart: `POST /django_plotly_dash/app/tc_app/_dash-update-component`
+- **Legacy Scraper**: `scraper_neobdm.py` kept as fallback reference
 
 **Endpoints**:
 - `GET /api/neobdm-summary`
 - `GET /api/neobdm-history`
 - `GET /api/neobdm-broker-summary`
+
+### 6.6 Adimology
+
+**Purpose**: Broker power calculator (Analisis Daya Investasi) untuk menghitung kemampuan broker menggerakkan harga
+
+**Key Files**:
+- Frontend: `app/adimology/page.tsx`
+- Backend: (calculations done client-side)
+
+**Core Formulas**:
+- **Fraksi**: IDX tick sizes (Rp1 <200, Rp2 200-500, Rp5 500-2000, Rp10 2000-5000, Rp25 >5000)
+- **Power Fraksi**: `floor(Buy Lot / Avg Bid Offer)` - how many ticks broker can move
+- **Target 5%**: `floor(Buy Avg * 1.05)`
+- **Target Realistis**: Target 5% + (power/2 to power) ticks
+
+**Features**:
+- Live auto-calculated results
+- Fraksi breakdown bar chart
+- Calculation history (localStorage, max 50 entries)
+- "Cara Kerja Adimology" explanation
+
+### 6.7 Broker Stalker
+
+**Purpose**: Advanced broker surveillance and tracking dengan portfolio analysis
+
+**Key Files**:
+- Frontend: `app/broker-stalker/page.tsx`
+- Backend: `routes/broker_stalker.py`, `modules/broker_stalker_analyzer.py`, `db/broker_stalker_repository.py`
+
+**Features**:
+- Broker watchlist management (add/remove brokers)
+- Portfolio tracking per broker
+- Daily execution ledger
+- Buy vs Sell volume charts
+- Cumulative net flow visualization
+- Power level calculation per broker
+- Sync 14D data button
+
+### 6.8 Watchlist (My Watchlist)
+
+**Purpose**: Personal ticker watchlist dengan integrasi analisis
+
+**Key Files**:
+- Frontend: `app/watchlist/page.tsx`
+- Backend: `routes/watchlist.py`, `db/watchlist_repository.py`
+
+**Features**:
+- Multiple named watchlists
+- Add/remove/move tickers between lists
+- View latest prices for watchlisted tickers
+- Quick links to Alpha Hunter & Bandarmology analysis
+- Trigger deep analysis dari watchlist
+- Filter by list name
+
+### 6.9 News Library
+
+**Purpose**: News aggregation dengan sentiment analysis dan AI summaries
+
+**Key Files**:
+- Frontend: `app/news-library/page.tsx`, `components/news-library/*`
+- Backend: `routes/news.py`, `modules/analyzer.py`
+
+**Features**:
+- News scraping from multiple sources (CNBC, Emiten, Bisnis, Investor, Bloomberg)
+- Sentiment labeling (Bullish/Bearish/Netral)
+- AI-powered brief news summary
+- Filter by ticker, date, sentiment, source
+- Brief news endpoint (3-5 bullet points)
 
 ---
 
@@ -676,13 +772,16 @@ python server.py
 | Feature | Location | Status |
 |---------|----------|--------|
 | Alpha Hunter | `app/alpha-hunter/` | ✅ Complete - 5-stage screening workflow |
-| Bandarmology | `app/bandarmology/` | ✅ Complete - Deep broker analysis |
-| NeoBDM Analysis | `app/neobdm-*` | ✅ Complete - Fund flow tracking |
+| Bandarmology | `app/bandarmology/` | ✅ Complete - 11 scoring mechanisms, 150pts max |
+| NeoBDM Analysis | `app/neobdm-*` | ✅ Complete - HTTP API client (0.5s response) |
 | Done Detail | `app/done-detail/` | ✅ Complete - Trade data analysis |
 | Dashboard | `app/dashboard/` | ✅ Complete - Market overview |
-| News Library | `app/news-library/` | ✅ Complete - News aggregation |
+| News Library | `app/news-library/` | ✅ Complete - News aggregation + AI summaries |
 | RAG Chat | `app/rag-chat/` | ✅ Complete - Single-document AI chat |
 | Broker Summary | `app/broker-summary/` | ✅ Complete - Broker activity summary |
+| **Adimology** | `app/adimology/` | ✅ Complete - Broker power calculator |
+| **Broker Stalker** | `app/broker-stalker/` | ✅ Complete - Frontend + Backend full |
+| **My Watchlist** | `app/watchlist/` | ✅ Complete - Personal watchlist with analysis |
 | Batch Scraping | `scripts/batch_scrape_neobdm.py` | ✅ Complete - Manual batch scraper |
 | SQL Optimization | `db/repositories` | ✅ Complete - SQL-level filtering |
 | **Scraper Scheduler** | `modules/scheduler.py` | ✅ Complete - APScheduler automation |
@@ -755,26 +854,39 @@ Based on `docs/future_development.md` and `docs/optimization.md`, these features
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Broker Stalker | ⚠️ Backend only | API exists but no frontend page |
 | API Pagination | ⚠️ Partial | Only on `/api/news`, not all endpoints |
-| useMemo/useCallback | ⚠️ Minimal | Only 9/104 files use optimization |
+| useMemo/useCallback | ⚠️ Minimal | Only ~9/100+ files use optimization |
 
 ### 📋 Implementation Checklist
 
-Before marking this project as "complete", implement:
+**Status: PRODUCTION READY** ✅
 
-**Must Have:**
-- [ ] Scraper Scheduler (APScheduler) - Critical for data freshness
-- [x] My Watchlist - Core user personalization feature
+All core features have been implemented. Project is ready for active trading use.
+
+**Completed Core Features:**
+- [x] Alpha Hunter - 5-stage screening workflow
+- [x] Bandarmology - 11 scoring mechanisms, deep analysis
+- [x] NeoBDM Analysis - HTTP API client (0.5s response time)
+- [x] Done Detail - Trade data analysis
+- [x] Dashboard - Market overview
+- [x] News Library - News aggregation + AI summaries
+- [x] RAG Chat - Single-document AI chat
+- [x] Broker Summary - Broker activity summary
+- [x] Adimology - Broker power calculator
+- [x] Broker Stalker - Full frontend + backend
+- [x] My Watchlist - Personal watchlist with analysis
+- [x] Scraper Scheduler - APScheduler automation
 - [x] Skeleton Loading - Better UX
+- [x] Asynchronous Scraping - ThreadPoolExecutor
+- [x] File Clean-up Utility - Weekly cleanup job
 
-**Nice to Have:**
-- [ ] Sentiment-Heatmap Cloud
-- [ ] Multi-Document RAG
-- [x] Asynchronous Scraping
-- [ ] Market Summary Newsletter
-- [ ] Knowledge Graph
-- [x] File Clean-up Utility
+**Potential Future Enhancements:**
+- [ ] Sentiment-Heatmap Cloud - Color-coded ticker cloud
+- [ ] Multi-Document RAG - Cross-document querying
+- [ ] Market Summary Newsletter - Automated reports
+- [ ] Knowledge Graph - Emiten relationship visualization
+- [ ] Synced Charts - Hover/selection sync
+- [ ] React Re-render Optimization - useMemo/useCallback profiling
 
 See `docs/future_development.md` and `docs/optimization.md` for detailed specifications.
 
@@ -801,8 +913,8 @@ See `docs/future_development.md` and `docs/optimization.md` for detailed specifi
 
 ---
 
-*Last Updated: 2026-02-15*
-*Version: 2.1.0*
+*Last Updated: 2026-02-28*
+*Version: 2.2.0*
 
 ---
 
