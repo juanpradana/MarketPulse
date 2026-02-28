@@ -24,6 +24,7 @@ import {
     ChevronRight
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
 import StockDetailModal from '@/components/bandarmology/StockDetailModal';
 import {
     FloatCell,
@@ -143,6 +144,7 @@ export default function BandarmologyPage() {
         }
         return { float: true, power: true, volume: true, earnings: true };
     });
+    const [forceDeepAnalyze, setForceDeepAnalyze] = useState(false);
 
     const loadData = async (dateOverride?: string) => {
         setLoading(true);
@@ -241,7 +243,8 @@ export default function BandarmologyPage() {
             await bandarmologyApi.triggerDeepAnalysisTickers(
                 manualTicker.trim(),
                 selectedDate || undefined,
-                deepConcurrency
+                deepConcurrency,
+                forceDeepAnalyze
             );
             setManualTicker('');
             startDeepPolling();
@@ -261,7 +264,8 @@ export default function BandarmologyPage() {
                 selectedDate || undefined,
                 deepTopN,
                 20,
-                deepConcurrency
+                deepConcurrency,
+                forceDeepAnalyze
             );
             startDeepPolling();
             const status = await bandarmologyApi.getDeepStatus();
@@ -711,6 +715,21 @@ export default function BandarmologyPage() {
                                     <option value={8}>8</option>
                                     <option value={12}>12</option>
                                 </select>
+                            </div>
+                            <div className="flex items-center gap-1 mt-3">
+                                <Checkbox
+                                    id="force-deep"
+                                    checked={forceDeepAnalyze}
+                                    onCheckedChange={(checked) => setForceDeepAnalyze(checked === true)}
+                                    disabled={deepStatus?.running ?? false}
+                                />
+                                <label
+                                    htmlFor="force-deep"
+                                    className="text-[10px] text-zinc-400 cursor-pointer select-none"
+                                    title="Paksa analisis ulang meskipun sudah ada cache"
+                                >
+                                    Force
+                                </label>
                             </div>
                             <button
                                 onClick={handleTriggerDeep}

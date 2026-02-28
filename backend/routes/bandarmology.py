@@ -352,7 +352,8 @@ async def trigger_deep_analysis(
     date: Optional[str] = Query(None, description="Analysis date"),
     top_n: int = Query(30, ge=5, le=500, description="Number of top stocks to deep analyze"),
     min_base_score: int = Query(20, ge=0, description="Minimum base score to qualify for deep analysis"),
-    concurrency: int = Query(4, ge=1, le=12, description="Parallel ticker workers for deep analysis")
+    concurrency: int = Query(4, ge=1, le=12, description="Parallel ticker workers for deep analysis"),
+    force: bool = Query(False, description="Force re-analysis even if cache exists")
 ):
     """
     Trigger deep analysis (inventory + transaction chart scraping) for top N stocks.
@@ -409,7 +410,7 @@ async def trigger_deep_analysis(
         # Launch background task
         background_tasks.add_task(
             _run_deep_analysis,
-            tickers, actual_date, results, concurrency
+            tickers, actual_date, results, concurrency, force
         )
 
         return {
@@ -436,6 +437,7 @@ async def trigger_deep_analysis_tickers(
     tickers: str = Query(..., description="Comma-separated ticker symbols to deep analyze"),
     date: Optional[str] = Query(None, description="Analysis date"),
     concurrency: int = Query(4, ge=1, le=12, description="Parallel ticker workers for deep analysis"),
+    force: bool = Query(False, description="Force re-analysis even if cache exists")
 ):
     """
     Trigger deep analysis for specific tickers (manual input).
@@ -490,7 +492,7 @@ async def trigger_deep_analysis_tickers(
 
         background_tasks.add_task(
             _run_deep_analysis,
-            ticker_list, actual_date, results, concurrency
+            ticker_list, actual_date, results, concurrency, force
         )
 
         return {
@@ -518,8 +520,9 @@ async def get_deep_analysis_status():
         return copy.deepcopy(_deep_analysis_status)
 
 
-async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: list, concurrency: int = 4):
+async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: list, concurrency: int = 4, force: bool = False):
     """Background task: scrape inventory + txn chart and run deep scoring."""
+    logger.info(f"_run_deep_analysis started: {len(tickers)} tickers, force={force}")
     from modules.neobdm_api_client import NeoBDMApiClient
     from modules.bandarmology_analyzer import BandarmologyAnalyzer
     from db.bandarmology_repository import BandarmologyRepository
@@ -544,15 +547,29 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
         from db.neobdm_repository import NeoBDMRepository
         neobdm_repo = NeoBDMRepository()
 
-        # Skip tickers that already have deep cache for analysis_date
+        # Skip tickers that already have deep cache for analysis_date (unless force=True)
         fresh_tickers = []
         tickers_to_process = []
-        for ticker in tickers:
-            existing = band_repo.get_deep_cache(ticker, analysis_date)
-            if existing:
-                fresh_tickers.append(ticker)
-            else:
-                tickers_to_process.append(ticker)
+
+        if force:
+            # Force mode: delete existing cache entries and process all tickers
+            deleted_count = 0
+            for ticker in tickers:
+                deleted = band_repo.delete_deep_cache(ticker, analysis_date)
+                if deleted:
+                    deleted_count += 1
+                    logger.info(f"Force mode: deleted cache for {ticker} on {analysis_date}")
+            tickers_to_process = tickers
+            logger.info(f"Force mode: cleared cache for {deleted_count}/{len(tickers)} tickers, all will be re-analyzed")
+        else:
+            # Normal mode: skip tickers that already have fresh cache
+            for ticker in tickers:
+                existing = band_repo.get_deep_cache(ticker, analysis_date)
+                if existing:
+                    fresh_tickers.append(ticker)
+                    logger.debug(f"Skipping {ticker} - already has fresh cache for {analysis_date}")
+                else:
+                    tickers_to_process.append(ticker)
 
         async with status_lock:
             _deep_analysis_status["fresh_tickers"] = fresh_tickers
@@ -561,6 +578,7 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
             _deep_analysis_status["progress"] = 0
             _deep_analysis_status["processed"] = 0
             _deep_analysis_status["failed"] = 0
+            logger.info(f"Status updated: total={len(tickers_to_process)}, fresh={len(fresh_tickers)}, force={force}")
 
         if not tickers_to_process:
             logger.info("Deep analysis skipped: all requested tickers already fresh for today")

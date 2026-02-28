@@ -485,6 +485,23 @@ class BandarmologyRepository(BaseRepository):
         finally:
             conn.close()
 
+    def delete_deep_cache(self, ticker: str, analysis_date: str) -> bool:
+        """Delete deep analysis cache for a specific ticker and date."""
+        conn = self._get_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                DELETE FROM bandarmology_deep_cache
+                WHERE UPPER(ticker) = UPPER(?) AND analysis_date = ?
+                """,
+                (ticker, analysis_date)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        finally:
+            conn.close()
+
     def get_stock_summary(self, ticker: str) -> dict:
         """
         Get summary analysis for a specific ticker from bandarmology data.

@@ -679,7 +679,8 @@ export const bandarmologyApi = {
         date?: string,
         topN: number = 30,
         minBaseScore: number = 20,
-        concurrency: number = 4
+        concurrency: number = 4,
+        force: boolean = false
     ): Promise<{
         message: string;
         tickers: string[];
@@ -694,6 +695,7 @@ export const bandarmologyApi = {
             top_n: topN.toString(),
             min_base_score: minBaseScore.toString(),
             concurrency: concurrency.toString(),
+            force: force.toString(),
         });
         const response = await fetch(`${API_BASE_URL}/api/bandarmology/deep-analyze?${params}`, {
             method: 'POST'
@@ -722,7 +724,8 @@ export const bandarmologyApi = {
     triggerDeepAnalysisTickers: async (
         tickers: string,
         date?: string,
-        concurrency: number = 4
+        concurrency: number = 4,
+        force: boolean = false
     ): Promise<{
         message: string;
         tickers: string[];
@@ -732,7 +735,7 @@ export const bandarmologyApi = {
         to_process: number;
         concurrency: number;
     }> => {
-        const params = buildParams({ tickers, date, concurrency: concurrency.toString() });
+        const params = buildParams({ tickers, date, concurrency: concurrency.toString(), force: force.toString() });
         const response = await fetch(`${API_BASE_URL}/api/bandarmology/deep-analyze-tickers?${params}`, {
             method: 'POST'
         });
