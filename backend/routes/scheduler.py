@@ -4,8 +4,11 @@ Scheduler Control API
 Endpoints for monitoring and controlling the background task scheduler.
 """
 
+import logging
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
+
+logger = logging.getLogger(__name__)
 
 from modules.scheduler import (
     start_scheduler,
@@ -16,7 +19,8 @@ from modules.scheduler import (
     run_neobdm_batch_scrape,
     run_evening_neobdm_bandarmology_pipeline,
     generate_market_summary,
-    cleanup_old_data
+    cleanup_old_data,
+    run_idx_disclosure_fetch
 )
 
 router = APIRouter(prefix="/api/scheduler", tags=["Scheduler"])
@@ -80,6 +84,7 @@ async def run_job(job_id: str) -> Dict[str, Any]:
     - neobdm_evening_pipeline: Run NeoBDM -> Bandarmology evening pipeline
     - market_summary: Generate market summary report
     - weekly_cleanup: Clean up old data
+    - idx_disclosure_fetch: Fetch IDX corporate disclosures
     """
     result = run_job_manually(job_id)
     if result["status"] == "error":
@@ -145,6 +150,36 @@ async def manual_cleanup() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/manual/idx-disclosures")
+async def manual_idx_disclosure_fetch(
+    days: int = 1,
+    skip_processing: bool = False
+) -> Dict[str, Any]:
+    """
+    Manually trigger IDX disclosure fetch.
+
+    Args:
+        days: Number of days to look back (default: 1)
+        skip_processing: Skip RAG indexing (use when AI unavailable)
+    """
+    try:
+        result = run_idx_disclosure_fetch(days=days, skip_processing=skip_processing)
+
+        if result.get("status") == "failed":
+            raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
+
+        return {
+            "status": "success",
+            "message": "IDX disclosure fetch triggered manually",
+            "ai_available": result.get("ollama_available"),
+            "processing_skipped": result.get("processing_skipped"),
+            "result": result
+        }
+    except Exception as e:
+        logger.error(f"Manual IDX disclosure fetch failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/schedule")
 async def get_schedule_config() -> Dict[str, Any]:
     """
@@ -169,14 +204,20 @@ async def get_schedule_config() -> Dict[str, Any]:
             {
                 "job_id": "market_summary",
                 "name": "Market Summary",
-                "frequency": "Daily at 20:00 WIB",
-                "description": "Generates daily market report"
+                "frequency": "Daily at 08:00, 12:00, 16:00, 20:00 WIB",
+                "description": "Generates market report 4x daily (24h news window)"
             },
             {
                 "job_id": "weekly_cleanup",
                 "name": "Weekly Data Cleanup",
                 "frequency": "Sunday at 00:00 WIB",
                 "description": "Cleans old Done Detail data and log files"
+            },
+            {
+                "job_id": "idx_disclosure_fetch",
+                "name": "IDX Disclosure Fetch",
+                "frequency": "Every 6 hours (4x per day)",
+                "description": "Fetches corporate disclosures from IDX website, downloads PDFs, and triggers RAG indexing"
             }
         ]
     }

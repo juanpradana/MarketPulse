@@ -189,6 +189,78 @@ def scrape_all_news():
     return results
 
 
+def _check_ollama_available():
+    """Check if Ollama server is reachable for RAG processing."""
+    try:
+        import urllib.request
+        req = urllib.request.Request("http://localhost:11434/api/tags", method="GET")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+
+def run_idx_disclosure_fetch(days: int = 1, skip_processing: bool = False):
+    """
+    Fetch IDX disclosures for recent days.
+    Runs every 6 hours (balanced frequency for IDX disclosures).
+
+    Args:
+        days: Number of days to look back (default: 1)
+        skip_processing: If True, skip RAG indexing (use when AI unavailable)
+    """
+    logger.info("[Scheduler] Starting IDX disclosure fetch...")
+
+    # Check AI availability upfront
+    ollama_available = _check_ollama_available()
+    if not ollama_available:
+        logger.warning("[Scheduler] Ollama not available - will download PDFs only, skip RAG indexing")
+        skip_processing = True
+
+    try:
+        from modules.scraper_idx import fetch_and_save_pipeline
+
+        # 1. Fetch and download PDFs (always run, no AI needed)
+        result = fetch_and_save_pipeline(days=days)
+
+        if result["status"] == "success":
+            logger.info(f"[Scheduler] IDX disclosures: {result['fetched']} fetched, "
+                       f"{result['downloaded']} downloaded, {result['skipped']} skipped")
+
+            # 2. Trigger RAG indexing only if AI available and new downloads exist
+            if result["downloaded"] > 0 and not skip_processing:
+                logger.info("[Scheduler] Triggering disclosure sync for RAG indexing...")
+                try:
+                    from modules.sync_utils import sync_disclosures_with_filesystem
+                    sync_result = sync_disclosures_with_filesystem()
+                    logger.info(f"[Scheduler] Sync complete: {sync_result}")
+
+                    # 3. Run processor for any pending docs
+                    from idx_processor import IDXProcessor
+                    processor = IDXProcessor()
+                    proc_result = processor.run_processor()
+                    logger.info(f"[Scheduler] Processor: {proc_result}")
+                except Exception as proc_err:
+                    logger.warning(f"[Scheduler] Processing error (non-fatal): {proc_err}")
+            elif result["downloaded"] > 0 and skip_processing:
+                logger.info(f"[Scheduler] Skipped RAG indexing for {result['downloaded']} new PDFs (AI unavailable)")
+                logger.info("[Scheduler] PDFs saved and will be processed when AI is available")
+        else:
+            logger.warning(f"[Scheduler] IDX disclosure fetch: {result['status']}")
+
+        return {
+            **result,
+            "ollama_available": ollama_available,
+            "processing_skipped": skip_processing
+        }
+
+    except Exception as e:
+        logger.error(f"[Scheduler] IDX disclosure fetch failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {"status": "failed", "error": str(e), "ollama_available": ollama_available}
+
+
 def run_neobdm_batch_scrape():
     """
     Scrape NeoBDM data for all tickers.
@@ -708,15 +780,27 @@ def setup_jobs():
     )
     logger.info("[Scheduler] Job added: evening NeoBDM + Bandarmology pipeline at 19:00 WIB (weekdays)")
 
-    # 5. Legacy Market Summary (news-based) - kept for reference
+    # 3. IDX Disclosure Fetch - Every 6 hours
+    # 4x per day: captures disclosures throughout the day without excessive API calls
+    scheduler.add_job(
+        run_idx_disclosure_fetch,
+        trigger=IntervalTrigger(hours=6),
+        id='idx_disclosure_fetch',
+        name='IDX Disclosure Fetch (Every 6 hours)',
+        replace_existing=True,
+        kwargs={'days': 1}  # Only fetch last 24 hours to minimize overlap
+    )
+    logger.info("[Scheduler] Job added: IDX disclosure fetch every 6 hours")
+
+    # 5. Market Summary - Every 4 hours at 08:00, 12:00, 16:00, 20:00 WIB (7 days/week)
     scheduler.add_job(
         generate_market_summary,
-        trigger=CronTrigger(day_of_week='mon-fri', hour=20, minute=0),
+        trigger=CronTrigger(hour='8,12,16,20', minute=0),
         id='market_summary',
-        name='Market Summary Generation (20:00 WIB, Weekdays)',
+        name='Market Summary Generation (08:00, 12:00, 16:00, 20:00 WIB, Daily)',
         replace_existing=True
     )
-    logger.info("[Scheduler] Job added: Market summary at 20:00 WIB (weekdays)")
+    logger.info("[Scheduler] Job added: Market summary at 08:00, 12:00, 16:00, 20:00 WIB (daily)")
 
     # 4. Data Cleanup - Weekly on Sunday at 00:00
     scheduler.add_job(
