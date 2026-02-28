@@ -949,3 +949,206 @@ See `docs/future_development.md` and `docs/optimization.md` for detailed specifi
 ---
 
 > **Remember**: This architecture was designed for maintainability, type safety, and developer productivity. Preserve these patterns for all future development.
+
+---
+
+## 15. Core Philosophy: The ICEBERG Protocol
+
+**I**nvestigate deeply, **C**ode exhaustively, **E**valuate thoroughly, **B**uild systematically, **E**xecute perfectly, **R**efactor continuously, **G**uard quality relentlessly.
+
+### 15.1 Universal Principles
+
+#### The Iceberg Principle
+Every request is the tip of the iceberg. Assume 90% is hidden beneath the surface.
+- **NEVER** assume isolation - code is interconnected
+- **ALWAYS** map blast radius before changes
+- **BETTER** to read 50 files and change 1, than read 1 and break 50
+
+#### The Three Gates of Quality
+- **Gate 1: Analysis** - Understand completely before acting
+- **Gate 2: Implementation** - Build with precision and patterns
+- **Gate 3: Verification** - Test, validate, document
+
+#### The Zero-Hallucination Mandate
+- **NEVER** guess API signatures or library behavior
+- **ALWAYS** verify through Context7, source code, or official docs
+- **WHEN UNSURE** - stop and ask, never assume
+
+#### The Symmetry Rule
+- **CONSISTENCY** across codebase is non-negotiable
+- **PATTERNS** established must be followed everywhere
+- **REFACTOR** all occurrences, never leave orphans
+
+#### The Memory Protocol
+- **CONTEXT7** for external libraries (detect → resolve → fetch)
+- **SEQUENTIAL_THINKING** for complex problem decomposition
+- **PLAYWRIGHT** for verification and discovery
+- **PROJECT_MEMORY** for architectural decisions
+
+### 15.2 Decision Matrix
+
+| Scenario | First Action | Second Action | Verification |
+|----------|--------------|---------------|--------------|
+| New feature | Sequential thinking | Context7 for unfamiliar libs | Playwright E2E |
+| Bug fix | Blast radius analysis | Root cause in dependencies | Regression test |
+| Integration | Service mapping | Contract definition | Integration test |
+| Refactor | Pattern identification | Symmetry analysis | Full test suite |
+| Reverse engineering | Network analysis | Documentation | Replay validation |
+
+### 15.3 Command Hierarchy
+
+1. **User explicit instruction** (highest authority)
+2. **Project-specific rules** (domain constraints)
+3. **Global rules** (universal standards)
+4. **Tool capabilities** (technical limits)
+
+### 15.4 Sequential Thinking Protocol (THINK Method)
+
+**T**otal comprehension - Understand the full scope
+**H**ierarchical decomposition - Break into ordered steps
+**I**nvestigation - Gather all context and dependencies
+**N**avigation - Execute with validation gates
+**K**nowledge capture - Document and verify
+
+#### Execution Protocol
+
+**Phase 1: EXPLORATION (Thoughts 1-3)**
+1. **Wild Search**: Broad regex patterns, find "cousin" code, check unexpected places
+2. **Infrastructure Scan**: package.json, tsconfig, Dockerfile, CI/CD, env files
+3. **Dependency Mapping**: Who calls this? Who does this call? Full call graph
+
+**Phase 2: ANALYSIS (Thoughts 4-6)**
+4. **Blast Radius**: Map every file potentially affected
+5. **Pattern Recognition**: Identify existing patterns to maintain symmetry
+6. **Constraint Identification**: Security, performance, compatibility limits
+
+**Phase 3: PLANNING (Thoughts 7-9)**
+7. **Strategy Selection**: Choose approach based on patterns and constraints
+8. **Step Sequencing**: Order operations with dependency awareness
+9. **Checkpoint Definition**: Validation gates between steps
+
+**Phase 4: EXECUTION (Thoughts 10+)**
+10. **Implementation**: Execute step-by-step with verification
+11. **Adaptation**: Adjust plan based on discovered complexity
+12. **Completion**: Final validation and documentation
+
+### 15.5 Context7 Documentation Protocol
+
+**NEVER** generate code for public libraries without Context7 verification.
+
+#### Detect → Resolve → Fetch Workflow
+
+**Step 1: RESOLVE** (for unknown libraries)
+```
+Tool: resolve-library-id
+Input: library name + task context
+Output: Context7-compatible library ID
+```
+
+**Step 2: FETCH**
+```
+Tool: query-docs
+Input: libraryId + specific API question
+Output: Up-to-date documentation and code examples
+```
+
+#### Critical Rules
+- Check if library is in package.json/requirements.txt before using
+- When Context7 returns "No documentation found" - STOP and inform user
+- Compare installed version with latest docs, note deprecations
+- Always cite: "Retrieved from Context7: [library] - [specific section]"
+
+### 15.6 Playwright MCP Protocol (SIA Loop)
+
+**S**napshot → **I**dentify → **A**ct
+
+1. **SNAPSHOT**: `browser_snapshot` for current state
+2. **IDENTIFY**: Parse for element `ref` IDs and accessibility info
+3. **ACT**: Execute with `ref` + human-readable description
+4. **VERIFY**: New snapshot to confirm state change
+
+#### Core Principle
+Your "eyes" are `browser_snapshot` - structured accessibility trees, not screenshots. **NEVER** use screenshots for automation decisions.
+
+### 15.7 Execution Standards: The VAULT Method
+
+**V**erify before action, **A**utomate testing, **U**se best practices, **L**everage tools, **T**rack changes
+
+#### Quality Gates
+
+**Gate 1: Code Quality**
+- TypeScript strict mode, Python type hints
+- Zero linting warnings (ESLint, Prettier, Black)
+- Strategic comments - complex logic only
+
+**Gate 2: Testing (PLAYWRIGHT MANDATORY)**
+- Unit tests for business logic (80%+ coverage)
+- Integration tests for APIs
+- **E2E tests with Playwright MCP** for critical user flows
+
+**Gate 3: Git Hygiene**
+```
+type(scope): description
+
+Types: feat, fix, docs, style, refactor, test, chore, perf, ci
+```
+
+**Gate 4: Security**
+- NEVER commit API keys, passwords, tokens
+- ALWAYS validate inputs (SQL injection, XSS prevention)
+- Use `.env.example` with dummy values
+
+**Gate 5: Performance**
+- Lazy loading for routes/components >100KB
+- Image optimization (WebP/AVIF)
+- Database indexes for query performance
+
+### 15.8 Universal Context Protocol (ICEBERG Method)
+
+Abandon "narrow" scoping. Adopt **wild, explorative, creative, exhaustive** analysis.
+
+#### I - Investigation (Deep Dive)
+- **Global Search**: Broad regex, find usages in unexpected places
+- **Follow Threads**: Import → Utility → All 50 files using that utility
+- **Creative Patterns**: Look for "cousin" code (UserTable → ProductTable → generic Table)
+
+#### C - Context Mapping (Blast Radius)
+- **Ancestry & Descendants**: Full call graph mapping
+- **Implicit Dependencies**: CI/CD, Docker, documentation, config files
+- **System Symmetry**: Refactor everywhere, no orphans
+
+#### E - Evaluation (Risk Assessment)
+- Impact Level: Low / Medium / High
+- Rollback Complexity: Easy / Migration / Breaking
+- Test Coverage requirements
+
+#### B - Boundary Setting
+- In Scope / Out of Scope / Dependencies
+
+#### E - Execution Preparation
+- Tool selection, checkpoint planning, contingency plans
+
+#### R - Review & Refinement
+- Code review, pattern check, documentation updates
+
+#### G - Guard & Grow
+- Testing, monitoring, knowledge capture
+
+### 15.9 Integration with Superpowers
+
+The following superpowers skills provide equivalent functionality:
+
+| Windsurf Concept | Superpowers Equivalent |
+|------------------|------------------------|
+| Sequential Thinking | `superpowers:writing-plans` |
+| Workflow Orchestrator | `superpowers:subagent-driven-development` |
+| Execution Standards | `superpowers:verification-before-completion` |
+| Bug Fixes | `superpowers:systematic-debugging` |
+| Code Review | `superpowers:receiving-code-review` |
+| Test Generation | `superpowers:test-driven-development` |
+
+**Usage Rule**: When a task matches a superpowers skill, invoke it with the `Skill` tool before proceeding.
+
+---
+
+*ICEBERG Protocol Version: 2.0 | Integrated: 2026-02-28*
