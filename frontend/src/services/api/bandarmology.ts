@@ -191,6 +191,8 @@ export interface BandarmologyItem {
     pump_tomorrow_score?: number;
     pump_tomorrow_signal?: string;
     pump_tomorrow_factors?: Record<string, number>;
+    pump_tomorrow_validation_note?: string;
+    pump_tomorrow_is_predictive?: boolean;
 
     // Data freshness (Improvement 7)
     data_freshness?: number;
@@ -424,6 +426,8 @@ export interface StockDetailResponse {
     pump_tomorrow_score?: number;
     pump_tomorrow_signal?: string;
     pump_tomorrow_factors?: Record<string, number>;
+    pump_tomorrow_validation_note?: string;
+    pump_tomorrow_is_predictive?: boolean;
 
     // Data freshness (Improvement 7)
     data_freshness?: number;

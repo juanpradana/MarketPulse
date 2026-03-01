@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { bandarmologyApi, StockDetailResponse } from '@/services/api/bandarmology';
 import {
-    X, TrendingUp, TrendingDown, Target, Shield, AlertTriangle,
+    X, TrendingUp, TrendingDown, Target, Shield, AlertTriangle, Info,
     ArrowUpRight, ArrowDownRight, Loader2, BarChart3, Users, DollarSign,
     Crosshair, Activity, Zap, FileDown, Copy, Check
 } from 'lucide-react';
@@ -601,7 +601,12 @@ function generatePdfHtml(data: StockDetailResponse): string {
             const color = val >= 70 ? '#059669' : val >= 40 ? '#d97706' : '#dc2626';
             html += `<div class="card"><div class="label">${key.replace(/_/g, ' ')}</div><div class="value" style="color:${color}">${val}</div><div class="bar-container"><div class="bar-fill" style="width:${val}%;background:${color}"></div></div></div>`;
         });
-        html += `</div></div>`;
+        html += `</div>`;
+        // Add validation note disclaimer if present
+        if (data.pump_tomorrow_validation_note) {
+            html += `<div style="margin-top:8px;padding:8px 12px;background:#27272a;border-radius:6px;border-left:3px solid #71717a;font-size:10px;color:#a1a1aa;">${data.pump_tomorrow_validation_note}</div>`;
+        }
+        html += `</div>`;
     }
 
     // Top Holders
@@ -1142,6 +1147,15 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                                     </div>
                                                 ))}
                                             </div>
+                                            {/* Validation note disclaimer */}
+                                            {data.pump_tomorrow_validation_note && (
+                                                <div className="mt-2 p-2 bg-zinc-800/50 rounded border border-zinc-700/30 flex items-start gap-2">
+                                                    <Info className="w-3 h-3 text-zinc-500 mt-0.5 flex-shrink-0" />
+                                                    <span className="text-[10px] text-zinc-400 leading-tight">
+                                                        {data.pump_tomorrow_validation_note}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 

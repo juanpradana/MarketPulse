@@ -1957,16 +1957,19 @@ class BandarmologyAnalyzer:
         deep['breakout_factors'] = bp_factors
 
         # ---- PUMP TOMORROW PREDICTION SCORE ----
-        pt_score, pt_signal, pt_factors = self._calculate_pump_tomorrow_score(
+        pt_score, pt_signal, pt_factors, pt_confidence = self._calculate_pump_tomorrow_score(
             deep, base_result, broker_summary_data
         )
         deep['pump_tomorrow_score'] = pt_score
         deep['pump_tomorrow_signal'] = pt_signal
         deep['pump_tomorrow_factors'] = pt_factors
         deep['pump_tomorrow_signal_type'] = 'HEURISTIC_RULE_BASED'
-        deep['pump_tomorrow_confidence'] = _safe_float(
-            pt_factors.get('heuristic_confidence', 0)
+        deep['pump_tomorrow_confidence'] = _safe_float(pt_confidence)
+        # Metadata displayed separately (not in factors dict to keep it numeric-only)
+        deep['pump_tomorrow_validation_note'] = (
+            'Rule-based heuristic signal; belum tervalidasi out-of-sample.'
         )
+        deep['pump_tomorrow_is_predictive'] = False
 
         # Enhanced classification
         deep['deep_trade_type'] = self._classify_deep_trade_type(
@@ -3359,12 +3362,10 @@ class BandarmologyAnalyzer:
 
         factors['heuristic_confidence'] = round(heuristic_confidence, 3)
         factors['effective_score'] = round(effective_score, 1)
-        factors['validation_note'] = (
-            'Rule-based heuristic signal; belum tervalidasi out-of-sample.'
-        )
-        factors['signal_is_predictive'] = False
+        # Note: validation_note and signal_is_predictive are returned separately
+        # to keep factors dict clean for numeric values only
 
-        return score, signal, factors
+        return score, signal, factors, heuristic_confidence
 
     def _classify_deep_trade_type(
         self, deep: Dict, base_result: Optional[Dict] = None

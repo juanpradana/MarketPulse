@@ -1186,6 +1186,8 @@ async def get_stock_detail(
                 "pump_tomorrow_score": deep_cache.get('pump_tomorrow_score', 0),
                 "pump_tomorrow_signal": deep_cache.get('pump_tomorrow_signal', 'NONE'),
                 "pump_tomorrow_factors": deep_cache.get('pump_tomorrow_factors', {}),
+                "pump_tomorrow_validation_note": deep_cache.get('pump_tomorrow_validation_note') or 'Rule-based heuristic signal; belum tervalidasi out-of-sample.',
+                "pump_tomorrow_is_predictive": deep_cache.get('pump_tomorrow_is_predictive', False),
 
                 # Data freshness (Improvement 7)
                 "data_freshness": deep_cache.get('data_freshness', 1.0),
