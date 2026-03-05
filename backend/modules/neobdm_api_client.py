@@ -30,6 +30,20 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
+# Load broker classification for isClean/isTektok detection
+# neobdm.tech removed ✓/✗ symbols from inventory broker names
+_BROKER_CLASSIFICATIONS = {}
+try:
+    _broker_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'brokers_idx.json')
+    if os.path.exists(_broker_file):
+        with open(_broker_file, 'r') as f:
+            _broker_data = json.load(f)
+            for b in _broker_data.get('brokers', []):
+                _BROKER_CLASSIFICATIONS[b['code']] = b.get('category', [])
+        logger.info(f"Loaded {len(_BROKER_CLASSIFICATIONS)} broker classifications")
+except Exception as e:
+    logger.warning(f"Could not load broker classifications: {e}")
+
 # Plotly binary dtype mapping
 PLOTLY_DTYPE_MAP = {
     'i1': ('b', 1),   # int8
@@ -213,8 +227,11 @@ class NeoBDMApiClient:
             dash_method = method_map.get(method, method)
             dash_period = period_map.get(period, period)
             
-            # Build summary options (compatible + ma)
-            summary_options = ['compatible', 'ma']
+            # Build summary options:
+            # 'detail' = includes pinky/crossing/unusual/likuid/suspend/special_notice columns
+            # 'compatible' = filter compatible stocks only
+            # 'moving_average' = includes >ma5/>ma10/>ma20/>ma50/>ma100/>ma200 columns
+            summary_options = ['detail', 'compatible', 'moving_average']
             
             payload = {
                 "output": "market-summary.children",
@@ -648,10 +665,23 @@ class NeoBDMApiClient:
                 last_val = y_data[-1] if y_data else 0
                 first_val = y_data[0] if y_data else 0
                 
+                # Detect isClean/isTektok:
+                # 1. Legacy: check for ✓/✗ symbols in trace name
+                # 2. Fallback: broker classification from brokers_idx.json
+                has_checkmark = '\u2713' in name
+                has_cross = '\u2717' in name
+                if has_checkmark or has_cross:
+                    is_clean = has_checkmark
+                    is_tektok = has_cross
+                else:
+                    broker_cats = _BROKER_CLASSIFICATIONS.get(code, [])
+                    is_clean = bool(broker_cats and ('institutional' in broker_cats or 'foreign' in broker_cats))
+                    is_tektok = False
+                
                 broker_entry = {
                     'code': code,
-                    'isClean': '\u2713' in name,
-                    'isTektok': '\u2717' in name,
+                    'isClean': is_clean,
+                    'isTektok': is_tektok,
                     'finalNetLot': last_val,
                     'startNetLot': first_val,
                     'isAccumulating': last_val > 0,
