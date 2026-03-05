@@ -536,6 +536,8 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
     api_client = NeoBDMApiClient()
     status_lock = _deep_analysis_status_lock
     db_write_lock = asyncio.Lock()
+    # Global rate limiter: only 1 broker summary API call at a time to avoid 429
+    broksum_rate_limiter = asyncio.Semaphore(1)
     try:
         login_ok = await api_client.login()
         if not login_ok:
@@ -634,7 +636,9 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                     # 3. Fetch Broker Summary via API (analysis_date + recent days)
                     broksum_data = None
                     try:
-                        raw_broksum = await api_client.get_broker_summary(ticker, analysis_date)
+                        async with broksum_rate_limiter:
+                            raw_broksum = await api_client.get_broker_summary(ticker, analysis_date)
+                            await asyncio.sleep(1.0)
                         if raw_broksum:
                             async with db_write_lock:
                                 neobdm_repo.save_broker_summary_batch(
@@ -647,8 +651,6 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                         logger.warning(f"Broker summary API failed for {ticker}: {e}")
                         async with status_lock:
                             _deep_analysis_status["errors"].append(f"{ticker} broksum: {str(e)[:80]}")
-
-                    await asyncio.sleep(0.2)
 
                     # 3b. Fetch broker summary for recent trading days (last 4 days before analysis_date)
                     recent_dates_fetched = []
@@ -668,7 +670,9 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                                 continue
                             # Fetch from API
                             try:
-                                raw_bs = await api_client.get_broker_summary(ticker, date_str)
+                                async with broksum_rate_limiter:
+                                    raw_bs = await api_client.get_broker_summary(ticker, date_str)
+                                    await asyncio.sleep(1.0)
                                 if raw_bs and (raw_bs.get('buy') or raw_bs.get('sell')):
                                     async with db_write_lock:
                                         neobdm_repo.save_broker_summary_batch(
@@ -677,7 +681,6 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                                             raw_bs.get('sell', [])
                                         )
                                     recent_dates_fetched.append(date_str)
-                                await asyncio.sleep(0.2)
                             except Exception as e2:
                                 logger.debug(f"Broksum fetch for {ticker} on {date_str}: {e2}")
                             if len(recent_dates_fetched) >= 4:
@@ -715,13 +718,15 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                                     continue
                                 # Fetch from API
                                 try:
-                                    raw_bs = await api_client.get_broker_summary(ticker, imp_date)
+                                    async with broksum_rate_limiter:
+                                        raw_bs = await api_client.get_broker_summary(ticker, imp_date)
+                                        await asyncio.sleep(1.0)
                                     if raw_bs and (raw_bs.get('buy') or raw_bs.get('sell')):
                                         async with db_write_lock:
                                             neobdm_repo.save_broker_summary_batch(
                                                 ticker, imp_date,
                                                 raw_bs.get('buy', []),
-                                                raw_bs.get('sell', [])
+                                                raw_bs.get('sell', []),
                                             )
                                         important_dates_data.append({
                                             'date': imp_date,
@@ -729,7 +734,6 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                                             'buy': raw_bs.get('buy', []),
                                             'sell': raw_bs.get('sell', []),
                                         })
-                                    await asyncio.sleep(0.2)
                                 except Exception as e2:
                                     logger.debug(f"Important date broksum for {ticker} on {imp_date}: {e2}")
                     except Exception as e:

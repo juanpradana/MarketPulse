@@ -414,18 +414,28 @@ class NeoBDMApiClient:
                 'csrfmiddlewaretoken': csrf,
             }
             
-            resp = await self.client.post(
-                f"{self.base_url}/api/broker-summary",
-                data=form_data,
-                headers={
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'X-CSRFToken': csrf,
-                    'Referer': f"{self.base_url}/broker_summary/",
-                }
-            )
+            # Retry with exponential backoff on 429 (rate limit)
+            max_retries = 4
+            resp = None
+            for attempt in range(max_retries):
+                resp = await self.client.post(
+                    f"{self.base_url}/api/broker-summary",
+                    data=form_data,
+                    headers={
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': csrf,
+                        'Referer': f"{self.base_url}/broker_summary/",
+                    }
+                )
+                if resp.status_code == 429:
+                    wait = 2 ** attempt + 1  # 2, 3, 5, 9 seconds
+                    logger.warning(f"Broker summary 429 for {ticker}/{date_str}, retry {attempt+1}/{max_retries} in {wait}s")
+                    await asyncio.sleep(wait)
+                    continue
+                break
             
             if resp.status_code != 200:
-                logger.error(f"Broker summary API returned {resp.status_code}")
+                logger.error(f"Broker summary API returned {resp.status_code} for {ticker}/{date_str}")
                 return None
             
             result = resp.json()
