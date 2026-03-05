@@ -103,6 +103,7 @@ class NeoBDMApiClient:
         self.client: Optional[httpx.AsyncClient] = None
         self._logged_in = False
         self._csrf_token: Optional[str] = None
+        self._broksum_csrf: Optional[str] = None  # Cached CSRF for broker summary
     
     async def _ensure_client(self):
         """Create HTTP client if not exists."""
@@ -393,8 +394,10 @@ class NeoBDMApiClient:
                 return None
         
         try:
-            # Get CSRF token from broker summary page
-            csrf = await self._get_csrf_for_page(f"{self.base_url}/broker_summary/")
+            # Use cached CSRF token, only fetch if not available
+            if not self._broksum_csrf:
+                self._broksum_csrf = await self._get_csrf_for_page(f"{self.base_url}/broker_summary/")
+            csrf = self._broksum_csrf
             if not csrf:
                 logger.error("Could not get CSRF token for broker summary")
                 return None
@@ -415,7 +418,7 @@ class NeoBDMApiClient:
             }
             
             # Retry with exponential backoff on 429 (rate limit)
-            max_retries = 4
+            max_retries = 5
             resp = None
             for attempt in range(max_retries):
                 resp = await self.client.post(
@@ -428,9 +431,16 @@ class NeoBDMApiClient:
                     }
                 )
                 if resp.status_code == 429:
-                    wait = 2 ** attempt + 1  # 2, 3, 5, 9 seconds
+                    wait = [5, 10, 20, 30, 45][attempt]  # Progressive backoff
                     logger.warning(f"Broker summary 429 for {ticker}/{date_str}, retry {attempt+1}/{max_retries} in {wait}s")
                     await asyncio.sleep(wait)
+                    continue
+                if resp.status_code == 403:
+                    # CSRF expired, refresh and retry once
+                    logger.warning(f"Broker summary 403 for {ticker}/{date_str}, refreshing CSRF")
+                    self._broksum_csrf = await self._get_csrf_for_page(f"{self.base_url}/broker_summary/")
+                    csrf = self._broksum_csrf
+                    form_data['csrfmiddlewaretoken'] = csrf
                     continue
                 break
             
@@ -549,7 +559,7 @@ class NeoBDMApiClient:
                         "error": str(e),
                     })
                 
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(2.0)
         
         return results
     

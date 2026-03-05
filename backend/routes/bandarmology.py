@@ -638,7 +638,7 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                     try:
                         async with broksum_rate_limiter:
                             raw_broksum = await api_client.get_broker_summary(ticker, analysis_date)
-                            await asyncio.sleep(1.0)
+                            await asyncio.sleep(2.0)
                         if raw_broksum:
                             async with db_write_lock:
                                 neobdm_repo.save_broker_summary_batch(
@@ -672,7 +672,7 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                             try:
                                 async with broksum_rate_limiter:
                                     raw_bs = await api_client.get_broker_summary(ticker, date_str)
-                                    await asyncio.sleep(1.0)
+                                    await asyncio.sleep(2.0)
                                 if raw_bs and (raw_bs.get('buy') or raw_bs.get('sell')):
                                     async with db_write_lock:
                                         neobdm_repo.save_broker_summary_batch(
@@ -720,7 +720,7 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                                 try:
                                     async with broksum_rate_limiter:
                                         raw_bs = await api_client.get_broker_summary(ticker, imp_date)
-                                        await asyncio.sleep(1.0)
+                                        await asyncio.sleep(2.0)
                                     if raw_bs and (raw_bs.get('buy') or raw_bs.get('sell')):
                                         async with db_write_lock:
                                             neobdm_repo.save_broker_summary_batch(
