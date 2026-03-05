@@ -848,23 +848,49 @@ class BandarmologyAnalyzer:
         scores = {}
         total_score = 0
 
-        # 1. Pinky Score (15 pts)
-        pinky_score = 15 if pinky else 0
+        # NOTE: neobdm.tech removed pinky/crossing/unusual/likuid columns as of March 2026.
+        # When these columns are unavailable (None), we assign neutral default scores
+        # so stocks aren't unfairly penalized. The raw flag values from ref are checked
+        # to distinguish "data says no" from "no data available".
+        _raw_pinky = ref.get('pinky')
+        _raw_crossing = ref.get('crossing')
+        _raw_unusual = ref.get('unusual')
+        _raw_likuid = ref.get('likuid')
+        _has_flag_data = any(
+            v is not None and str(v).strip().lower() not in ('', 'none', 'nan')
+            for v in [_raw_pinky, _raw_crossing, _raw_unusual, _raw_likuid]
+        )
+
+        # 1. Pinky Score (15 pts) - bonus for NOT being pinky
+        # If data unavailable, give benefit of doubt (assume not pinky)
+        if _has_flag_data:
+            pinky_score = 15 if not pinky else 0
+        else:
+            pinky_score = 15  # Default: assume not pinky
         scores['pinky'] = pinky_score
         total_score += pinky_score
 
-        # 2. Crossing Score (10 pts)
-        crossing_score = 10 if crossing else 0
+        # 2. Crossing Score (10 pts) - bonus for no distribution crossing
+        if _has_flag_data:
+            crossing_score = 10 if not crossing else 0
+        else:
+            crossing_score = 5  # Default: neutral (half score)
         scores['crossing'] = crossing_score
         total_score += crossing_score
 
         # 3. Unusual Volume Score (10 pts)
-        unusual_score = 10 if unusual else 0
+        if _has_flag_data:
+            unusual_score = 10 if unusual else 0
+        else:
+            unusual_score = 0  # Default: no bonus (unusual is a positive signal)
         scores['unusual'] = unusual_score
         total_score += unusual_score
 
         # 4. Liquidity Score (5 pts)
-        likuid_score = 5 if likuid else 0
+        if _has_flag_data:
+            likuid_score = 5 if likuid else 0
+        else:
+            likuid_score = 5  # Default: assume liquid (compatible filter already applied)
         scores['likuid'] = likuid_score
         total_score += likuid_score
 
@@ -915,27 +941,39 @@ class BandarmologyAnalyzer:
 
         # 7. Price Position vs MAs (10 pts)
         # NeoBDM MA columns are boolean-like flags (v/x), not numeric MA values.
+        # NOTE: neobdm.tech removed MA columns as of March 2026.
+        # When MA data is unavailable, assign neutral default score.
         ma_score = 0
         ma_above_count = 0
-        if _is_flag_set(ref.get('ma5')):
-            ma_above_count += 1
-        if _is_flag_set(ref.get('ma10')):
-            ma_above_count += 1
-        if _is_flag_set(ref.get('ma20')):
-            ma_above_count += 1
-        if _is_flag_set(ref.get('ma50')):
-            ma_above_count += 1
-        if _is_flag_set(ref.get('ma100')):
-            ma_above_count += 1
+        _ma_vals = [ref.get('ma5'), ref.get('ma10'), ref.get('ma20'), ref.get('ma50'), ref.get('ma100')]
+        _has_ma_data = any(
+            v is not None and str(v).strip().lower() not in ('', 'none', 'nan')
+            for v in _ma_vals
+        )
+        
+        if _has_ma_data:
+            if _is_flag_set(ref.get('ma5')):
+                ma_above_count += 1
+            if _is_flag_set(ref.get('ma10')):
+                ma_above_count += 1
+            if _is_flag_set(ref.get('ma20')):
+                ma_above_count += 1
+            if _is_flag_set(ref.get('ma50')):
+                ma_above_count += 1
+            if _is_flag_set(ref.get('ma100')):
+                ma_above_count += 1
 
-        if ma_above_count >= 5:
-            ma_score = 10
-        elif ma_above_count >= 4:
-            ma_score = 8
-        elif ma_above_count >= 3:
-            ma_score = 5
-        elif ma_above_count >= 2:
-            ma_score = 3
+            if ma_above_count >= 5:
+                ma_score = 10
+            elif ma_above_count >= 4:
+                ma_score = 8
+            elif ma_above_count >= 3:
+                ma_score = 5
+            elif ma_above_count >= 2:
+                ma_score = 3
+        else:
+            ma_score = 5  # Default: neutral (half score) when MA data unavailable
+            ma_above_count = 0  # Unknown
 
         scores['ma_position'] = ma_score
         total_score += ma_score
@@ -1045,29 +1083,38 @@ class BandarmologyAnalyzer:
         positive_weeks, d_0_mm, pct_1d, ma_above_count,
         w_1, w_2, c_3, c_5
     ) -> str:
-        """Classify whether a stock is suitable for swing, intraday, or both."""
+        """Classify whether a stock is suitable for swing, intraday, or both.
+        
+        NOTE: neobdm.tech removed pinky/crossing/unusual/likuid/MA columns as of
+        March 2026. Classification now relies more on flow data and accumulation
+        patterns when these flags are unavailable (always False).
+        """
         is_swing = False
         is_intraday = False
 
-        # SWING criteria: multi-week accumulation + institutional backing + above MAs
+        # SWING criteria: multi-week accumulation + institutional backing
         if (total_score >= 55 and positive_weeks >= 2 and ma_above_count >= 3):
             is_swing = True
         elif (total_score >= 45 and positive_weeks >= 3):
             is_swing = True
+        elif (positive_weeks >= 2 and (w_1 > 0 or w_2 > 0) and c_5 > 0):
+            is_swing = True
+        elif (c_5 > 0 and c_3 > 0 and (ma_above_count >= 3 or total_score >= 50)):
+            is_swing = True
         elif (pinky and positive_weeks >= 2 and (w_1 > 0 or w_2 > 0)):
-            is_swing = True
-        elif (c_5 > 0 and c_3 > 0 and ma_above_count >= 3):
-            is_swing = True
+            is_swing = True  # Legacy path for old data with pinky flag
 
-        # INTRADAY criteria: short-term signals (unusual volume, crossing, momentum)
+        # INTRADAY criteria: short-term signals (momentum, flow strength)
         if (unusual or crossing) and d_0_mm > 0:
-            is_intraday = True
+            is_intraday = True  # Legacy path for old data with flags
         elif total_score >= 50 and d_0_mm > 0 and pct_1d > 0:
             is_intraday = True
-        elif unusual and pct_1d > 0:
-            is_intraday = True
-        elif crossing and d_0_mm > 0:
-            is_intraday = True
+        elif d_0_mm > 50 and pct_1d > 0:
+            is_intraday = True  # Strong inflow + price up
+        elif d_0_mm > 100 and pct_1d > -1:
+            is_intraday = True  # Very strong inflow, price stable
+        elif (unusual and pct_1d > 0) or (crossing and d_0_mm > 0):
+            is_intraday = True  # Legacy paths
 
         if is_swing and is_intraday:
             return "BOTH"

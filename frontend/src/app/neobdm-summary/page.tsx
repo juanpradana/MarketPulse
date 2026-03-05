@@ -112,6 +112,17 @@ export default function NeoBDMSummaryPage() {
         if (data.length === 0) return [];
         const availableKeys = Object.keys(data[0]);
 
+        // Filter out columns where ALL values are null/undefined/empty
+        // (neobdm.tech removed pinky/crossing/likuid/unusual/suspend/special_notice/ma columns as of March 2026)
+        const hasData = (col: string) => {
+            const actualKey = availableKeys.find(key => key.toLowerCase() === col.toLowerCase());
+            if (!actualKey) return false;
+            return data.some(row => {
+                const val = (row as Record<string, unknown>)[actualKey];
+                return val !== null && val !== undefined && String(val).trim() !== '';
+            });
+        };
+
         const dailyOrder = [
             'symbol', 'pinky', 'crossing', 'unusual', 'likuid', 'suspend', 'special_notice',
             'w-4', 'w-3', 'w-2', 'w-1',
@@ -128,9 +139,7 @@ export default function NeoBDMSummaryPage() {
 
         const targetOrder = period === 'd' ? dailyOrder : cumulativeOrder;
 
-        return targetOrder.filter(targetCol =>
-            availableKeys.some(key => key.toLowerCase() === targetCol.toLowerCase())
-        ).map(targetCol => {
+        return targetOrder.filter(targetCol => hasData(targetCol)).map(targetCol => {
             const actualKey = availableKeys.find(key => key.toLowerCase() === targetCol.toLowerCase());
             return actualKey || targetCol;
         });
