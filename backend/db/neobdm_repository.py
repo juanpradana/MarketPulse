@@ -794,36 +794,22 @@ class NeoBDMRepository(BaseRepository):
                 df = pd.read_sql(query_data, conn, params=(scraped_at, method, period))
                 
                 # Convert to expected format
-                # NOTE: neobdm.tech removed pinky/crossing/likuid/unusual/suspend/
-                # special_notice/ma5-100 columns as of March 2026. These will be None
-                # for new data but may still exist in historical records.
-                def _safe_val(v):
-                    """Convert NaN/None to None for JSON safety."""
-                    if v is None:
-                        return None
-                    if isinstance(v, float) and (v != v):  # NaN check
-                        return None
-                    s = str(v).strip()
-                    if s.lower() in ('none', 'nan', ''):
-                        return None
-                    return v
-                
                 data_list = []
                 for _, row in df.iterrows():
                     item = {
                         "symbol": row['symbol'],
-                        "pinky": _safe_val(row.get('pinky')),
-                        "crossing": _safe_val(row.get('crossing')),
-                        "likuid": _safe_val(row.get('likuid')),
-                        "unusual": _safe_val(row.get('unusual')),
-                        "suspend": _safe_val(row.get('suspend')),
-                        "special_notice": _safe_val(row.get('special_notice')),
+                        "pinky": row.get('pinky'),
+                        "crossing": row.get('crossing'),
+                        "likuid": row.get('likuid'),
+                        "unusual": row.get('unusual'),
+                        "suspend": row.get('suspend'),
+                        "special_notice": row.get('special_notice'),
                         "price": row.get('price'),
-                        ">ma5": _safe_val(row.get('ma5')),
-                        ">ma10": _safe_val(row.get('ma10')),
-                        ">ma20": _safe_val(row.get('ma20')),
-                        ">ma50": _safe_val(row.get('ma50')),
-                        ">ma100": _safe_val(row.get('ma100'))
+                        ">ma5": row.get('ma5'),
+                        ">ma10": row.get('ma10'),
+                        ">ma20": row.get('ma20'),
+                        ">ma50": row.get('ma50'),
+                        ">ma100": row.get('ma100')
                     }
                     if period == 'd':
                         item.update({
@@ -1148,9 +1134,9 @@ class NeoBDMRepository(BaseRepository):
                         'price': self._parse_numeric(row['price']),
                         'pct_change': self._parse_numeric(row['pct_1d']), # Match frontend key
                         'change': self._parse_numeric(row['pct_1d']),     # Keep for compatibility
-                        'pinky': row['pinky'] if row['pinky'] and str(row['pinky']).strip() not in ('x', '0', '', 'None', 'none', 'nan') else None,
-                        'crossing': row['crossing'] if row['crossing'] and str(row['crossing']).strip() not in ('x', '0', '', 'None', 'none', 'nan') else None,
-                        'unusual': row['unusual'] if row['unusual'] and str(row['unusual']).strip() not in ('x', '0', '', 'None', 'none', 'nan') else None
+                        'pinky': row['pinky'] if row['pinky'] not in ('x', '0', '') else None,
+                        'crossing': row['crossing'] if row['crossing'] not in ('x', '0', '') else None,
+                        'unusual': row['unusual'] if row['unusual'] not in ('x', '0', '') else None
                     }
             
             # 3. Convert to sorted list
@@ -1257,26 +1243,20 @@ class NeoBDMRepository(BaseRepository):
         """
         Pre-filter: Only LIQUID stocks, exclude PINKY (repo risk).
         
-        NOTE: neobdm.tech removed likuid/pinky columns from Market Summary API
-        as of early March 2026. When these columns are NULL/empty (not available),
-        the stock is treated as eligible. Only filter when data is explicitly present.
-        
         Args:
             record: Stock record dictionary
         
         Returns:
             True if eligible for scoring
         """
-        likuid = str(record.get('likuid', '') or '').lower().strip()
-        pinky = str(record.get('pinky', '') or '').lower().strip()
+        likuid = str(record.get('likuid', '')).lower()
+        pinky = str(record.get('pinky', '')).lower()
         
-        # If likuid data is available and explicitly NOT liquid, exclude
-        # When likuid is empty/none (website no longer provides it), allow through
-        if likuid and likuid not in ('', 'none', 'nan'):
-            if likuid != 'v':
-                return False
+        # Must be liquid
+        if likuid != 'v':
+            return False
         
-        # If pinky data is available and explicitly IS pinky, exclude
+        # Must NOT be pinky (repo risk)
         if pinky == 'v':
             return False
         
@@ -1625,10 +1605,8 @@ class NeoBDMRepository(BaseRepository):
         score = 0
         
         # 1. Marker Score
-        # NOTE: neobdm.tech removed crossing/unusual columns as of March 2026
-        # These will be None/empty for new data, so safely handle nulls
-        crossing_val = str(record.get('crossing', '') or '').lower().strip()
-        unusual_val = str(record.get('unusual', '') or '').lower().strip()
+        crossing_val = str(record.get('crossing', '')).lower()
+        unusual_val = str(record.get('unusual', '')).lower()
         
         if crossing_val == 'v':
             score -= 40  # Distribution pressure
@@ -1831,9 +1809,9 @@ class NeoBDMRepository(BaseRepository):
                     scored_results.append({
                         # Basic fields
                         "symbol": clean_symbol,
-                        "pinky": record["pinky"] if record["pinky"] and str(record["pinky"]).strip() not in ('x','0','', 'None', 'none', 'nan') else None,
-                        "crossing": record["crossing"] if record["crossing"] and str(record["crossing"]).strip() not in ('x','0','', 'None', 'none', 'nan') else None,
-                        "unusual": record["unusual"] if record["unusual"] and str(record["unusual"]).strip() not in ('x','0','', 'None', 'none', 'nan') else None,
+                        "pinky": record["pinky"] if record["pinky"] not in ('x','0','') else None,
+                        "crossing": record["crossing"] if record["crossing"] not in ('x','0','') else None,
+                        "unusual": record["unusual"] if record["unusual"] not in ('x','0','') else None,
                         "flow": self._parse_numeric(record["d_0"]),
                         "price": self._parse_numeric(record["price"]),
                         "change": self._parse_numeric(record["pct_1d"]),
@@ -2149,13 +2127,12 @@ class NeoBDMRepository(BaseRepository):
                 conviction = "MEDIUM"
 
             # Build patterns list
-            # NOTE: neobdm.tech removed crossing/unusual/pinky columns as of March 2026
             patterns = []
-            if crossing and str(crossing).lower().strip() == 'v':
+            if crossing and str(crossing).lower() == 'v':
                 patterns.append("CROSSING_DISTRIBUTION")
-            if unusual and str(unusual).lower().strip() == 'v':
+            if unusual and str(unusual).lower() == 'v':
                 patterns.append("UNUSUAL_ACTIVITY")
-            if pinky and str(pinky).lower().strip() == 'v':
+            if pinky and str(pinky).lower() == 'v':
                 patterns.append("REPO_RISK")
 
             # Calculate momentum status
@@ -2171,9 +2148,9 @@ class NeoBDMRepository(BaseRepository):
 
             # Warning status
             warnings = []
-            if pinky and str(pinky).lower().strip() == 'v':
+            if pinky and str(pinky).lower() == 'v':
                 warnings.append("REPO_RISK")
-            if crossing and str(crossing).lower().strip() == 'v':
+            if crossing and str(crossing).lower() == 'v':
                 warnings.append("DISTRIBUTION_PRESSURE")
 
             return {

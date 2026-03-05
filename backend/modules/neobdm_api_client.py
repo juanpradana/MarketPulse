@@ -30,20 +30,6 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-# Load broker classification for isClean/isTektok detection
-# neobdm.tech no longer adds ✓/✗ symbols to broker names as of March 2026
-_BROKER_CLASSIFICATIONS = {}
-try:
-    _broker_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'brokers_idx.json')
-    if os.path.exists(_broker_file):
-        with open(_broker_file, 'r') as f:
-            _broker_data = json.load(f)
-            for b in _broker_data.get('brokers', []):
-                _BROKER_CLASSIFICATIONS[b['code']] = b.get('category', [])
-        logger.info(f"Loaded {len(_BROKER_CLASSIFICATIONS)} broker classifications")
-except Exception as e:
-    logger.warning(f"Could not load broker classifications: {e}")
-
 # Plotly binary dtype mapping
 PLOTLY_DTYPE_MAP = {
     'i1': ('b', 1),   # int8
@@ -654,7 +640,7 @@ class NeoBDMApiClient:
                 if not y_data:
                     continue
                 
-                # Clean broker code (remove checkmark/cross symbols if present)
+                # Clean broker code (remove checkmark/cross symbols)
                 code = name.replace('\u2713', '').replace('\u2717', '').strip()
                 if not code:
                     continue
@@ -662,26 +648,10 @@ class NeoBDMApiClient:
                 last_val = y_data[-1] if y_data else 0
                 first_val = y_data[0] if y_data else 0
                 
-                # Detect isClean/isTektok:
-                # 1. Check for legacy ✓/✗ symbols in trace name
-                # 2. Fall back to broker classification from brokers_idx.json
-                has_checkmark = '\u2713' in name
-                has_cross = '\u2717' in name
-                if has_checkmark or has_cross:
-                    is_clean = has_checkmark
-                    is_tektok = has_cross
-                else:
-                    # No symbols in name (new website format)
-                    # Classify based on known broker data
-                    broker_cats = _BROKER_CLASSIFICATIONS.get(code, [])
-                    # Institutional/foreign brokers are typically "clean"
-                    is_clean = bool(broker_cats and ('institutional' in broker_cats or 'foreign' in broker_cats))
-                    is_tektok = False  # Cannot determine from data alone
-                
                 broker_entry = {
                     'code': code,
-                    'isClean': is_clean,
-                    'isTektok': is_tektok,
+                    'isClean': '\u2713' in name,
+                    'isTektok': '\u2717' in name,
                     'finalNetLot': last_val,
                     'startNetLot': first_val,
                     'isAccumulating': last_val > 0,
