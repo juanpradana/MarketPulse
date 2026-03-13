@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { Loader2, Search, Filter, ExternalLink, TrendingUp } from 'lucide-react';
 import { useFilter } from '@/context/filter-context';
+import { newsApi } from '@/services/api/news';
 
 // Types
 interface StoryItem {
@@ -34,8 +35,6 @@ interface StoryFinderResponse {
     keyword_stats: Record<string, number>;
     total: number;
 }
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 // Default keywords
 const DEFAULT_KEYWORDS: KeywordInfo[] = [
@@ -178,21 +177,12 @@ export default function StoryFinderPage() {
         setLoading(true);
         setFetchError(null);
         try {
-            const params = new URLSearchParams({
-                keywords: selectedKeywords.join(','),
-                start_date: dateRange.start,
-                end_date: dateRange.end
-            });
-
-            const response = await fetch(`/api/story-finder?${params}`);
-            if (response.ok) {
-                const result = await response.json();
-                setData(result);
-            } else {
-                setData({ stories: [], keyword_stats: {}, total: 0 });
-                setFetchError(`Gagal memuat data (HTTP ${response.status}). Coba lagi.`);
-                console.error('Story Finder API error:', response.status, response.statusText);
-            }
+            const result = await newsApi.getStoryFinder(
+                selectedKeywords,
+                dateRange.start,
+                dateRange.end
+            );
+            setData(result);
         } catch (error) {
             setData({ stories: [], keyword_stats: {}, total: 0 });
             setFetchError('Gagal terhubung ke server Story Finder. Coba lagi.');

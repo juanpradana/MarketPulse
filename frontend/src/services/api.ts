@@ -25,6 +25,7 @@ import { brokerFiveApi } from './api/brokerFive';
 import { doneDetailApi } from './api/doneDetail';
 import { priceVolumeApi } from './api/priceVolume';
 import { bandarmologyApi } from './api/bandarmology';
+import { alphaHunterApi } from './api/alphaHunter';
 import {
     watchlistApi,
     type WatchlistItem,
@@ -65,6 +66,8 @@ export const api = {
     getSingleNewsBrief: newsApi.getSingleNewsBrief,
     getWordCloud: newsApi.getWordCloud,
     getTickerCounts: newsApi.getTickerCounts,
+    getStoryFinder: newsApi.getStoryFinder,
+    getStoryFinderKeywords: newsApi.getStoryFinderKeywords,
 
     // Disclosures & RAG APIs
     getDisclosures: disclosuresApi.getDisclosures,
@@ -120,5 +123,6 @@ export {
     doneDetailApi,
     priceVolumeApi,
     bandarmologyApi,
+    alphaHunterApi,
     watchlistApi
 };

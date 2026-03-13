@@ -1,17 +1,17 @@
 """Quick test for NeoBDM API Client."""
 import asyncio
-import sys
 import os
+import sys
 import time
+import pytest
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules.neobdm_api_client import NeoBDMApiClient
 
 
-async def test_all():
+async def _run_all():
     client = NeoBDMApiClient()
-    
     try:
         # 1. Test Login
         print("=" * 60)
@@ -22,7 +22,7 @@ async def test_all():
         if not ok:
             print("  FAILED - cannot continue")
             return
-        
+
         # 2. Test Market Summary
         print("\n" + "=" * 60)
         print("TEST 2: Market Summary (method=m, period=d)")
@@ -35,7 +35,7 @@ async def test_all():
             print(f"  Sample: {df.head(3).to_dict('records')}")
         else:
             print(f"  FAILED: No data ({elapsed:.2f}s)")
-        
+
         # 3. Test Broker Summary
         print("\n" + "=" * 60)
         print("TEST 3: Broker Summary (BBCA, 2026-02-12)")
@@ -50,7 +50,7 @@ async def test_all():
                 print(f"  Top sell: {bs['sell'][0]}")
         else:
             print(f"  FAILED: No data ({elapsed:.2f}s)")
-        
+
         # 4. Test Inventory
         print("\n" + "=" * 60)
         print("TEST 4: Inventory (BBCA)")
@@ -67,7 +67,7 @@ async def test_all():
                 print(f"  Sample broker: {b['code']} finalNetLot={b['finalNetLot']} pts={b['dataPoints']}")
         else:
             print(f"  FAILED: No data ({elapsed:.2f}s)")
-        
+
         # 5. Test Transaction Chart
         print("\n" + "=" * 60)
         print("TEST 5: Transaction Chart (BBCA)")
@@ -84,13 +84,21 @@ async def test_all():
                 print(f"  MM latest={mm['latest']}, start={mm['start']}")
         else:
             print(f"  FAILED: No data ({elapsed:.2f}s)")
-        
+
         print("\n" + "=" * 60)
         print("ALL TESTS COMPLETE")
-        
     finally:
         await client.close()
 
 
+@pytest.mark.network
+def test_all():
+    if os.getenv("ALLOW_NETWORK_TESTS") != "1":
+        pytest.skip("Network tests disabled. Set ALLOW_NETWORK_TESTS=1 to run.")
+    if not os.getenv("NEOBDM_EMAIL") or not os.getenv("NEOBDM_PASSWORD"):
+        pytest.skip("NEOBDM credentials not set.")
+    asyncio.run(_run_all())
+
+
 if __name__ == "__main__":
-    asyncio.run(test_all())
+    asyncio.run(_run_all())

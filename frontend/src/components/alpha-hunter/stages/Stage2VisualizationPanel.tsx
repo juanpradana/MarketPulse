@@ -12,6 +12,7 @@ import {
     Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { alphaHunterApi } from "@/services/api/alphaHunter";
 
 interface Stage2VisualizationProps {
     ticker: string;
@@ -153,15 +154,7 @@ export default function Stage2VisualizationPanel({ ticker }: Stage2Visualization
         setError(null);
 
         try {
-            const response = await fetch(
-                `/api/alpha-hunter/stage2/visualization/${ticker}`
-            );
-
-            if (!response.ok) {
-                throw new Error("Failed to fetch visualization data");
-            }
-
-            const result = await response.json();
+            const result = await alphaHunterApi.getStage2Visualization(ticker) as VisualizationData;
             setData(result);
         } catch (err) {
             setError(String(err));

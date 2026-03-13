@@ -1,6 +1,7 @@
 import asyncio
-import sys
 import os
+import sqlite3
+import pytest
 
 # Direct import assuming we're in the backend directory
 try:
@@ -12,7 +13,7 @@ except ImportError:
     sys.path.append(os.getcwd())
     from rag_client import rag_client
 
-async def test_recursive_retrieval():
+async def _run_recursive_retrieval():
     print("[*] Testing Recursive Retrieval...")
     
     db_path = os.path.join("data", "market_sentinel.db")
@@ -48,5 +49,12 @@ async def test_recursive_retrieval():
     print(response)
     print("-" * 50)
 
+
+@pytest.mark.live_api
+def test_recursive_retrieval():
+    if os.getenv("ALLOW_RAG_TESTS") != "1":
+        pytest.skip("RAG tests disabled. Set ALLOW_RAG_TESTS=1 to run.")
+    asyncio.run(_run_recursive_retrieval())
+
 if __name__ == "__main__":
-    asyncio.run(test_recursive_retrieval())
+    asyncio.run(_run_recursive_retrieval())

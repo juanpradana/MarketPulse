@@ -101,6 +101,58 @@ class BandarmologyAnalyzer:
     PUMP_TOMORROW_MAX_HEURISTIC_CONFIDENCE = 0.78
     HISTORICAL_CONFIDENCE_WEIGHT = 0.20
 
+    PROFILE_BALANCED = 'balanced'
+    PROFILE_SWING = 'swing'
+    PROFILE_DAYTRADE = 'daytrade'
+
+    _COMPONENT_MAX = {
+        'pinky': 15,
+        'crossing': 10,
+        'unusual': 10,
+        'likuid': 5,
+        'confluence': 20,
+        'accumulation': 15,
+        'ma_position': 10,
+        'momentum': 10,
+        'institutional': 5,
+    }
+
+    _PROFILE_WEIGHTS = {
+        PROFILE_BALANCED: {
+            'pinky': 1.0,
+            'crossing': 1.0,
+            'unusual': 1.0,
+            'likuid': 1.0,
+            'confluence': 1.0,
+            'accumulation': 1.0,
+            'ma_position': 1.0,
+            'momentum': 1.0,
+            'institutional': 1.0,
+        },
+        PROFILE_SWING: {
+            'pinky': 0.8,
+            'crossing': 0.7,
+            'unusual': 0.6,
+            'likuid': 1.0,
+            'confluence': 1.2,
+            'accumulation': 1.35,
+            'ma_position': 1.3,
+            'momentum': 0.7,
+            'institutional': 1.25,
+        },
+        PROFILE_DAYTRADE: {
+            'pinky': 0.8,
+            'crossing': 1.25,
+            'unusual': 1.35,
+            'likuid': 1.0,
+            'confluence': 1.1,
+            'accumulation': 0.7,
+            'ma_position': 0.65,
+            'momentum': 1.4,
+            'institutional': 0.7,
+        },
+    }
+
     def __init__(self, db_path: Optional[str] = None):
         self.db_path = db_path or os.path.join(config.DATA_DIR, "market_sentinel.db")
         self.broker_classes = _load_broker_classifications()
@@ -155,7 +207,7 @@ class BandarmologyAnalyzer:
             'above_high': 0.20 * regime_mult,
         }
 
-    def analyze(self, target_date: Optional[str] = None) -> List[Dict]:
+    def analyze(self, target_date: Optional[str] = None, profile: str = PROFILE_BALANCED) -> List[Dict]:
         """
         Run full bandarmology analysis.
 
@@ -165,6 +217,7 @@ class BandarmologyAnalyzer:
         Returns:
             List of scored stock dicts, sorted by score descending.
         """
+        profile = self._normalize_profile(profile)
         # Clear caches for fresh analysis
         self.clear_caches()
 
@@ -193,7 +246,7 @@ class BandarmologyAnalyzer:
                 continue
             try:
                 score_result = self._score_symbol(
-                    symbol, daily_data, cumulative_data, broker_stats
+                    symbol, daily_data, cumulative_data, broker_stats, profile
                 )
                 if score_result:
                     results.append(score_result)
@@ -781,7 +834,8 @@ class BandarmologyAnalyzer:
         symbol: str,
         daily_data: Dict[str, Dict[str, Dict]],
         cumulative_data: Dict[str, Dict[str, Dict]],
-        broker_stats: Dict[str, Dict]
+        broker_stats: Dict[str, Dict],
+        profile: str
     ) -> Optional[Dict]:
         """
         Score a single symbol based on bandarmology criteria.
@@ -970,8 +1024,10 @@ class BandarmologyAnalyzer:
         rel_multiplier, rel_context = self._calculate_relative_flow_score(
             symbol, daily_data, cumulative_data
         )
+        profile = self._normalize_profile(profile)
+        profile_score = self._apply_profile_weights(scores, profile)
         # Apply multiplier to total score
-        adjusted_total_score = int(total_score * rel_multiplier)
+        adjusted_total_score = int(profile_score * rel_multiplier)
 
         # Add context info to scores
         scores['relative_context'] = rel_context
@@ -984,7 +1040,7 @@ class BandarmologyAnalyzer:
         trade_type = self._classify_trade_type(
             classification_score, scores, pinky, crossing, unusual, likuid,
             positive_weeks, d_0_mm, pct_1d, ma_above_count,
-            w_1, w_2, c_3, c_5
+            w_1, w_2, c_3, c_5, profile
         )
 
         # --- Build result ---
@@ -992,6 +1048,8 @@ class BandarmologyAnalyzer:
             'symbol': symbol,
             'total_score': adjusted_total_score,
             'total_score_raw': total_score,
+            'total_score_profile': profile_score,
+            'score_profile': profile,
             'max_score': 100,
             'trade_type': trade_type,
             'pinky': pinky,
@@ -1043,31 +1101,51 @@ class BandarmologyAnalyzer:
     def _classify_trade_type(
         self, total_score, scores, pinky, crossing, unusual, likuid,
         positive_weeks, d_0_mm, pct_1d, ma_above_count,
-        w_1, w_2, c_3, c_5
+        w_1, w_2, c_3, c_5, profile: str = PROFILE_BALANCED
     ) -> str:
         """Classify whether a stock is suitable for swing, intraday, or both."""
+        profile = self._normalize_profile(profile)
         is_swing = False
         is_intraday = False
 
         # SWING criteria: multi-week accumulation + institutional backing + above MAs
-        if (total_score >= 55 and positive_weeks >= 2 and ma_above_count >= 3):
+        swing_confirm = scores.get('institutional', 0) >= 3 or (c_5 > 0 or c_3 > 0)
+        if (total_score >= 55 and positive_weeks >= 2 and ma_above_count >= 3 and swing_confirm):
             is_swing = True
         elif (total_score >= 45 and positive_weeks >= 3):
             is_swing = True
         elif (pinky and positive_weeks >= 2 and (w_1 > 0 or w_2 > 0)):
             is_swing = True
-        elif (c_5 > 0 and c_3 > 0 and ma_above_count >= 3):
+        elif (c_5 > 0 and c_3 > 0 and ma_above_count >= 3 and scores.get('momentum', 0) >= 5):
             is_swing = True
 
         # INTRADAY criteria: short-term signals (unusual volume, crossing, momentum)
-        if (unusual or crossing) and d_0_mm > 0:
+        if (unusual or crossing) and d_0_mm > 0 and pct_1d > -2:
             is_intraday = True
-        elif total_score >= 50 and d_0_mm > 0 and pct_1d > 0:
+        elif total_score >= 45 and d_0_mm > 0 and pct_1d > 0 and scores.get('momentum', 0) >= 5:
             is_intraday = True
-        elif unusual and pct_1d > 0:
+        elif unusual and pct_1d > 0 and d_0_mm > 0:
             is_intraday = True
         elif crossing and d_0_mm > 0:
             is_intraday = True
+
+        if profile == self.PROFILE_SWING:
+            if is_swing and is_intraday:
+                return "BOTH"
+            elif is_swing:
+                return "SWING"
+            elif total_score >= 30:
+                return "WATCH"
+            return "â€”"
+
+        if profile == self.PROFILE_DAYTRADE:
+            if is_swing and is_intraday:
+                return "BOTH"
+            elif is_intraday:
+                return "INTRADAY"
+            elif total_score >= 30:
+                return "WATCH"
+            return "â€”"
 
         if is_swing and is_intraday:
             return "BOTH"
@@ -1079,6 +1157,28 @@ class BandarmologyAnalyzer:
             return "WATCH"
         else:
             return "—"
+
+    def _normalize_profile(self, profile: Optional[str]) -> str:
+        if not profile:
+            return self.PROFILE_BALANCED
+        p = str(profile).strip().lower()
+        if p in ('swing', 's'):
+            return self.PROFILE_SWING
+        if p in ('daytrade', 'day', 'intraday', 'i'):
+            return self.PROFILE_DAYTRADE
+        return self.PROFILE_BALANCED
+
+    def _apply_profile_weights(self, scores: Dict, profile: str) -> int:
+        weights = self._PROFILE_WEIGHTS.get(profile, self._PROFILE_WEIGHTS[self.PROFILE_BALANCED])
+        weighted = 0.0
+        max_weighted = 0.0
+        for key, max_val in self._COMPONENT_MAX.items():
+            w = weights.get(key, 1.0)
+            weighted += _safe_float(scores.get(key, 0)) * w
+            max_weighted += max_val * w
+        if max_weighted <= 0:
+            return int(weighted)
+        return int(round((weighted / max_weighted) * 100))
 
     def get_available_dates(self) -> List[str]:
         """Get available analysis dates from neobdm_records."""

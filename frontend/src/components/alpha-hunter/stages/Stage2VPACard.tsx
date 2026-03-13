@@ -22,6 +22,7 @@ import { useAlphaHunter } from "../AlphaHunterContext";
 import StageCard from "./StageCard";
 import Stage2VisualizationPanel from "./Stage2VisualizationPanel";
 import { Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ComposedChart, Bar, CartesianGrid, ReferenceLine } from 'recharts';
+import { alphaHunterApi } from "@/services/api/alphaHunter";
 
 interface Stage2VPACardProps {
     ticker: string;
@@ -62,17 +63,11 @@ export default function Stage2VPACard({ ticker }: Stage2VPACardProps) {
             setCurrentStep("Fetching OHLCV data...");
             setProgress(30);
 
-            const response = await fetch(`/api/alpha-hunter/stage2/vpa/${ticker}`);
-
-            if (!response.ok) {
-                throw new Error("Failed to fetch VPA data");
-            }
-
             setCurrentStep("Calculating volume metrics...");
             setProgress(60);
             await new Promise(r => setTimeout(r, 300));
 
-            const data = await response.json();
+            const data = await alphaHunterApi.getStage2VPA(ticker);
 
             setCurrentStep("Analyzing pullback health...");
             setProgress(80);

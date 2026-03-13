@@ -31,7 +31,7 @@
 │  │   Next.js 16     │ ◄────────────────────────► │   FastAPI        │      │
 │  │   (Frontend)     │    CORS-enabled API        │   (Backend)      │      │
 │  │                  │    GZip compression        │                  │      │
-│  │  localhost:3000  │                          │  localhost:8000  │      │
+│  │  localhost:3001  │                          │  localhost:8000  │      │
 │  └──────────────────┘                            └────────┬─────────┘      │
 │           ▲                                               │                │
 │           │                                               ▼                │

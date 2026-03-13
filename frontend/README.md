@@ -10,7 +10,7 @@ npm run dev
 ```
 
 Default URL:
-- http://localhost:3000
+- http://localhost:3001
 
 Pastikan backend sudah berjalan di `http://localhost:8000`.
 

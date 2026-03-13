@@ -274,6 +274,11 @@ class BisnisScraper:
         except Exception as e:
             print(f"[-] Error fetching index page {page}: {e}")
             return []
+
+    def get_index_page(self, page=1):
+        """Backward-compatible wrapper for tests: return only URLs."""
+        items = self.get_index_page_with_dates(page=page)
+        return [url for url, _dt, _title in items]
     
     def get_article_detail(self, url, estimated_date=None):
         """

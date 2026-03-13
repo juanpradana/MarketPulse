@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, XCircle, AlertCircle, RefreshCw, TrendingUp, Users, Shield, ArrowRightLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { alphaHunterApi } from "@/services/api/alphaHunter";
 
 interface FlowData {
     ticker: string;
@@ -66,8 +67,7 @@ export default function SmartMoneyFlowPanel({ ticker, onStageComplete }: SmartMo
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            const res = await fetch(`/api/alpha-hunter/flow/${ticker}?days=${days}`);
-            const json = await res.json();
+            const json = await alphaHunterApi.getFlowAnalysis(ticker, days) as FlowData;
             setData(json);
         } catch (err) {
             console.error(err);
@@ -92,12 +92,7 @@ export default function SmartMoneyFlowPanel({ ticker, onStageComplete }: SmartMo
                 if (dates.length >= 7) break;
             }
 
-            const res = await fetch(`/api/alpha-hunter/scrape-broker/${ticker}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(dates)
-            });
-            const result = await res.json();
+            const result = await alphaHunterApi.scrapeBrokerDates(ticker, dates) as { scraped: number; failed: number };
             setScrapeStatus(`Scraped ${result.scraped} days, ${result.failed} failed`);
 
             // Refresh data after scrape

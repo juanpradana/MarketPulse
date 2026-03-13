@@ -22,6 +22,28 @@ export interface TickerCount {
     count: number;
 }
 
+export interface StoryFinderItem {
+    id: string;
+    date: string;
+    date_display: string;
+    ticker: string;
+    title: string;
+    matched_keywords: string[];
+    primary_category: string;
+    primary_icon: string;
+    highlight_positions: number[][];
+    sentiment_label: string;
+    sentiment_score: number;
+    source: string;
+    url: string;
+}
+
+export interface StoryFinderResponse {
+    stories: StoryFinderItem[];
+    keyword_stats: Record<string, number>;
+    total: number;
+}
+
 /**
  * News API client
  */
@@ -121,5 +143,33 @@ export const newsApi = {
         const response = await fetch(`${API_BASE_URL}/api/ticker-counts?${params}`);
         const data = await response.json();
         return data.counts || [];
+    },
+
+    /**
+     * Story Finder - corporate action keyword tracking
+     */
+    getStoryFinder: async (
+        keywords: string[],
+        startDate?: string,
+        endDate?: string,
+        ticker?: string
+    ): Promise<StoryFinderResponse> => {
+        const params = buildParams({
+            keywords: keywords.join(','),
+            start_date: startDate,
+            end_date: endDate,
+            ticker
+        });
+
+        const response = await fetch(`${API_BASE_URL}/api/story-finder?${params}`);
+        return await handleResponse(response, { stories: [], keyword_stats: {}, total: 0 });
+    },
+
+    /**
+     * Get available Story Finder keywords
+     */
+    getStoryFinderKeywords: async (): Promise<{ keywords: Array<{ keyword: string; category: string; icon: string }> }> => {
+        const response = await fetch(`${API_BASE_URL}/api/story-finder/keywords`);
+        return await handleResponse(response, { keywords: [] });
     },
 };

@@ -17,6 +17,7 @@ import json
 import base64
 import struct
 import asyncio
+import time
 import logging
 import numpy as np
 import pandas as pd
@@ -104,6 +105,7 @@ class NeoBDMApiClient:
         self._logged_in = False
         self._csrf_token: Optional[str] = None
         self._broksum_csrf: Optional[str] = None  # Cached CSRF for broker summary
+        self._broksum_rate_limited_until: float = 0.0
     
     async def _ensure_client(self):
         """Create HTTP client if not exists."""
@@ -232,14 +234,16 @@ class NeoBDMApiClient:
             # 'detail' = includes pinky/crossing/unusual/likuid/suspend/special_notice columns
             # 'compatible' = filter compatible stocks only
             # 'moving_average' = includes >ma5/>ma10/>ma20/>ma50/>ma100/>ma200 columns
-            summary_options = ['detail', 'compatible', 'moving_average']
+            # 'vol_change' = includes volume change columns
+            # Note: 'normalize' is intentionally excluded (unchecked in UI)
+            summary_options = ['detail', 'compatible', 'moving_average', 'vol_change']
             
             payload = {
                 "output": "market-summary.children",
                 "outputs": {"id": "market-summary", "property": "children"},
                 "inputs": [
                     {"id": "method", "property": "value", "value": dash_method},
-                    {"id": "index", "property": "value", "value": "ALL"},
+                    {"id": "index", "property": "value", "value": "All"},
                     {"id": "summary-mode", "property": "value", "value": dash_period},
                     {"id": "summary-options", "property": "value", "value": summary_options},
                     {"id": "user_id", "property": "value", "value": ""}
@@ -375,7 +379,7 @@ class NeoBDMApiClient:
     
     # ==================== BROKER SUMMARY ====================
     
-    async def get_broker_summary(self, ticker: str, date_str: str) -> Optional[Dict]:
+    async def get_broker_summary(self, ticker: str, date_str: str, *, fast_fail: bool = False) -> Optional[Dict]:
         """
         Fetch broker summary via API.
         
@@ -391,6 +395,13 @@ class NeoBDMApiClient:
         if not self._logged_in:
             login_ok = await self.login()
             if not login_ok:
+                return None
+
+        if fast_fail and self._broksum_rate_limited_until:
+            now = time.monotonic()
+            if now < self._broksum_rate_limited_until:
+                remaining = int(self._broksum_rate_limited_until - now)
+                logger.warning(f"Broker summary cooldown active ({remaining}s left), skipping {ticker}/{date_str}")
                 return None
         
         try:
@@ -431,8 +442,19 @@ class NeoBDMApiClient:
                     }
                 )
                 if resp.status_code == 429:
+                    if fast_fail:
+                        cooldown = 60
+                        self._broksum_rate_limited_until = time.monotonic() + cooldown
+                        logger.warning(
+                            f"Broker summary 429 for {ticker}/{date_str}; "
+                            f"fast-fail enabled, cooldown {cooldown}s"
+                        )
+                        return None
                     wait = [5, 10, 20, 30, 45][attempt]  # Progressive backoff
-                    logger.warning(f"Broker summary 429 for {ticker}/{date_str}, retry {attempt+1}/{max_retries} in {wait}s")
+                    logger.warning(
+                        f"Broker summary 429 for {ticker}/{date_str}, "
+                        f"retry {attempt+1}/{max_retries} in {wait}s"
+                    )
                     await asyncio.sleep(wait)
                     continue
                 if resp.status_code == 403:

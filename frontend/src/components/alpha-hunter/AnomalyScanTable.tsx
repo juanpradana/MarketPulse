@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RefreshCw, TrendingUp, Zap, Target, Flame, AlertTriangle, ArrowRightCircle, HelpCircle, ChevronDown, ChevronUp, Search } from "lucide-react";
+import { alphaHunterApi } from "@/services/api/alphaHunter";
 
 interface Pattern {
     name: string;
@@ -89,19 +90,15 @@ export default function AnomalyScanTable({ onAddToWatchlist, onAddToInvestigatio
         setIsLoading(true);
         setError(null);
         try {
-            let url = `/api/alpha-hunter/stage1/scan?min_score=${minScore}&min_flow=0&max_price_change=20&max_results=20`;
-
-            if (strengthFilter !== "all") {
-                url += `&strength_filter=${strengthFilter}`;
-            }
-
-            // Add price filter if value is set
-            if (priceValue && priceValue.trim() !== "") {
-                url += `&price_value=${priceValue}&price_operator=${priceOperator}`;
-            }
-
-            const res = await fetch(url);
-            const data: ScanResponse = await res.json();
+            const data = await alphaHunterApi.scanStage1({
+                min_score: Number(minScore),
+                min_flow: 0,
+                max_price_change: 20,
+                max_results: 20,
+                strength_filter: strengthFilter !== "all" ? strengthFilter : undefined,
+                price_value: priceValue && priceValue.trim() !== "" ? priceValue : undefined,
+                price_operator: priceValue && priceValue.trim() !== "" ? priceOperator : undefined
+            }) as ScanResponse;
 
             if (data.message) {
                 setError(data.message);
@@ -127,15 +124,7 @@ export default function AnomalyScanTable({ onAddToWatchlist, onAddToInvestigatio
         setCustomLoading(true);
         setCustomError(null);
         try {
-            const res = await fetch(`/api/alpha-hunter/stage1/ticker/${ticker}`);
-            const data = await res.json();
-
-            if (!res.ok) {
-                setCustomError(data?.detail || `Failed to fetch custom ticker ${ticker}`);
-                return;
-            }
-
-            const payload = data as CustomTickerResponse;
+            const payload = await alphaHunterApi.getStage1Ticker(ticker) as CustomTickerResponse;
             if (!payload.signal) {
                 setCustomError(`No signal data found for ${ticker}`);
                 return;
@@ -153,25 +142,21 @@ export default function AnomalyScanTable({ onAddToWatchlist, onAddToInvestigatio
 
     const handleInvestigate = async (item: FlowSignal) => {
         try {
-            await fetch("/api/alpha-hunter/watchlist", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    action: "add",
+            await alphaHunterApi.manageWatchlist({
+                action: "add",
+                ticker: item.symbol,
+                scan_data: {
                     ticker: item.symbol,
-                    scan_data: {
-                        ticker: item.symbol,
-                        total_score: item.signal_score,
-                        signal_level: item.signal_strength,
-                        breakdown: {
-                            flow: item.flow,
-                            change: item.change,
-                            patterns: item.pattern_names,
-                            conviction: item.conviction,
-                            entry_zone: item.entry_zone
-                        }
+                    total_score: item.signal_score,
+                    signal_level: item.signal_strength,
+                    breakdown: {
+                        flow: item.flow,
+                        change: item.change,
+                        patterns: item.pattern_names,
+                        conviction: item.conviction,
+                        entry_zone: item.entry_zone
                     }
-                })
+                }
             });
 
             // Call the new investigation callback if provided

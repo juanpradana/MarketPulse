@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, XCircle, AlertCircle, RefreshCw, Target, Zap, Users, TrendingDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { alphaHunterApi } from "@/services/api/alphaHunter";
 
 interface SupplyData {
     ticker: string;
@@ -88,8 +89,7 @@ export default function SupplyAnalysisPanel({ ticker }: SupplyAnalysisPanelProps
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            const res = await fetch(`/api/alpha-hunter/supply/${ticker}`);
-            const json = await res.json();
+            const json = await alphaHunterApi.getSupplyAnalysis(ticker) as SupplyData;
             setData(json);
         } catch (err) {
             console.error(err);
@@ -107,12 +107,7 @@ export default function SupplyAnalysisPanel({ ticker }: SupplyAnalysisPanelProps
         setIsParsing(true);
         setParseError(null);
         try {
-            const res = await fetch("/api/alpha-hunter/parse-done-detail", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ticker, raw_data: rawData })
-            });
-            const json = await res.json();
+            const json = await alphaHunterApi.parseDoneDetail(ticker, rawData) as SupplyData & { error?: string };
             if (json.error) {
                 setParseError(json.error);
             } else {

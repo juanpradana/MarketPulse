@@ -3,6 +3,7 @@ Test script for Bisnis.com scraper.
 """
 import sys
 import os
+import pytest
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -39,13 +40,16 @@ def test_parse_bisnis_date():
             print(f"  [FAIL] '{input_str}' -> None")
     
     print(f"\n  Results: {passed}/{len(test_cases)} passed\n")
-    return passed == len(test_cases)
+    assert passed == len(test_cases)
 
 
+@pytest.mark.network
 def test_get_index_page():
+    if os.getenv("ALLOW_NETWORK_TESTS") != "1":
+        pytest.skip("Network tests disabled. Set ALLOW_NETWORK_TESTS=1 to run.")
     """Test fetching index page links."""
     print("=== Testing Index Page Fetch ===")
-    
+
     scraper = BisnisScraper()
     links = scraper.get_index_page(page=1)
     
@@ -55,19 +59,21 @@ def test_get_index_page():
         print(f"  Sample links:")
         for link in links[:3]:
             print(f"    - {link}")
-        return True
+        assert True
     else:
-        print("  [WARN] No links found - may be network issue")
-        return False
+        pytest.fail("No links found from fixture or network.")
 
 
+@pytest.mark.network
 def test_get_article_detail():
+    if os.getenv("ALLOW_NETWORK_TESTS") != "1":
+        pytest.skip("Network tests disabled. Set ALLOW_NETWORK_TESTS=1 to run.")
     """Test fetching article detail."""
     print("\n=== Testing Article Detail Fetch ===")
     
     # Use a sample URL
     test_url = "https://market.bisnis.com/read/20260125/7/1946968/ini-biang-kerok-pasar-saham-ri-dilanda-aksi-jual-asing-rp325-triliun"
-    
+
     scraper = BisnisScraper()
     article = scraper.get_article_detail(test_url)
     
@@ -76,13 +82,15 @@ def test_get_article_detail():
         print(f"  Date: {article['timestamp']}")
         print(f"  Ticker: {article['ticker'] or 'None'}")
         print(f"  Content Length: {len(article['clean_text'])} chars")
-        return True
+        assert True
     else:
-        print("  [FAIL] Could not fetch article")
-        return False
+        pytest.fail("Could not fetch article from fixture or network.")
 
 
+@pytest.mark.network
 def test_full_scrape():
+    if os.getenv("ALLOW_NETWORK_TESTS") != "1":
+        pytest.skip("Network tests disabled. Set ALLOW_NETWORK_TESTS=1 to run.")
     """Test full scrape (limited)."""
     print("\n=== Testing Full Scrape (1 day, 1 page) ===")
     
@@ -102,10 +110,9 @@ def test_full_scrape():
         for r in results[:2]:
             print(f"    - {r.get('title', 'N/A')[:50]}...")
             print(f"      Sentiment: {r.get('sentiment_label', 'N/A')}")
-        return True
+        assert True
     else:
-        print("  [WARN] No results - may be expected if no new articles")
-        return True  # Not necessarily a failure
+        pytest.fail("No results from fixture or network.")
 
 
 if __name__ == "__main__":

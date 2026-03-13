@@ -35,6 +35,9 @@ export interface BandarmologyItem {
     total_score: number;
     max_score: number;
     trade_type: 'SWING' | 'INTRADAY' | 'BOTH' | 'WATCH' | '—';
+    total_score_raw?: number;
+    total_score_profile?: number;
+    score_profile?: string;
     pinky: boolean;
     crossing: boolean;
     unusual: boolean;
@@ -522,6 +525,7 @@ export interface WatchlistAlertsResponse {
 
 export interface BandarmologyResponse {
     date: string | null;
+    profile?: string;
     total_stocks: number;
     has_deep_data?: boolean;
     deep_analysis_running?: boolean;
@@ -545,6 +549,7 @@ export interface DeepAnalysisStatus {
     fresh_tickers?: string[];
     errors: string[];
     date?: string;
+    profile?: string;
 }
 
 // Yahoo Finance Enhanced Interfaces for Screening
@@ -650,12 +655,14 @@ export const bandarmologyApi = {
     getScreening: async (
         date?: string,
         minScore: number = 0,
-        tradeType?: string
+        tradeType?: string,
+        profile?: string
     ): Promise<BandarmologyResponse> => {
         const params = buildParams({
             date,
             min_score: minScore.toString(),
-            trade_type: tradeType
+            trade_type: tradeType,
+            profile
         });
         const response = await fetch(`${API_BASE_URL}/api/bandarmology?${params}`);
         if (!response.ok) {
@@ -684,7 +691,8 @@ export const bandarmologyApi = {
         topN: number = 30,
         minBaseScore: number = 20,
         concurrency: number = 4,
-        force: boolean = false
+        force: boolean = false,
+        profile?: string
     ): Promise<{
         message: string;
         tickers: string[];
@@ -700,6 +708,7 @@ export const bandarmologyApi = {
             min_base_score: minBaseScore.toString(),
             concurrency: concurrency.toString(),
             force: force.toString(),
+            profile
         });
         const response = await fetch(`${API_BASE_URL}/api/bandarmology/deep-analyze?${params}`, {
             method: 'POST'
@@ -729,7 +738,8 @@ export const bandarmologyApi = {
         tickers: string,
         date?: string,
         concurrency: number = 4,
-        force: boolean = false
+        force: boolean = false,
+        profile?: string
     ): Promise<{
         message: string;
         tickers: string[];
@@ -739,7 +749,13 @@ export const bandarmologyApi = {
         to_process: number;
         concurrency: number;
     }> => {
-        const params = buildParams({ tickers, date, concurrency: concurrency.toString(), force: force.toString() });
+        const params = buildParams({
+            tickers,
+            date,
+            concurrency: concurrency.toString(),
+            force: force.toString(),
+            profile
+        });
         const response = await fetch(`${API_BASE_URL}/api/bandarmology/deep-analyze-tickers?${params}`, {
             method: 'POST'
         });

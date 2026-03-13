@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ComposedChart, Bar, CartesianGrid, Legend } from 'recharts';
+import { alphaHunterApi } from "@/services/api/alphaHunter";
 
 interface PullbackHealthPanelProps {
     ticker: string;
@@ -85,16 +86,11 @@ export default function PullbackHealthPanel({ ticker }: PullbackHealthPanelProps
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            const res = await fetch(`/api/alpha-hunter/stage2/vpa/${ticker}`);
-            const json = await res.json();
-            if (!res.ok) {
-                console.error(json.detail || "Failed to fetch stage 2 data");
-                setData(null);
-                return;
-            }
+            const json = await alphaHunterApi.getStage2VPA(ticker) as Stage2Data;
             if (!json.error) setData(json);
         } catch (err) {
             console.error(err);
+            setData(null);
         } finally {
             setIsLoading(false);
         }

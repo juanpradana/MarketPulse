@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAlphaHunter } from "../AlphaHunterContext";
 import StageCard from "./StageCard";
+import { alphaHunterApi } from "@/services/api/alphaHunter";
 
 interface Stage4SupplyCardProps {
     ticker: string;
@@ -80,20 +81,7 @@ export default function Stage4SupplyCard({ ticker }: Stage4SupplyCardProps) {
         updateStageStatus(ticker, 4, 'loading');
 
         try {
-            const response = await fetch('/api/alpha-hunter/parse-done-detail', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    ticker,
-                    raw_data: stage4.manualDataInput
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error("Failed to parse data");
-            }
-
-            const data = await response.json();
+            const data = await alphaHunterApi.parseDoneDetail(ticker, stage4.manualDataInput);
 
             if (data.error) {
                 setParseError(data.error);

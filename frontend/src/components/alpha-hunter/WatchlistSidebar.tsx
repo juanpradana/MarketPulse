@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAlphaHunter } from "./AlphaHunterContext";
 import { StageStatus } from "./types";
+import { alphaHunterApi } from "@/services/api/alphaHunter";
 
 interface WatchlistSidebarProps {
     isCollapsed?: boolean;
@@ -49,11 +50,7 @@ export default function WatchlistSidebar({ isCollapsed = false, onToggle }: Watc
 
         try {
             // Also remove from backend watchlist
-            await fetch("/api/alpha-hunter/watchlist", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "remove", ticker })
-            });
+            await alphaHunterApi.manageWatchlist({ action: "remove", ticker });
         } catch (err) {
             console.error("Failed to remove from backend:", err);
         }

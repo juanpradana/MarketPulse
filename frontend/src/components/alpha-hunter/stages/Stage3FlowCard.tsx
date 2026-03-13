@@ -22,6 +22,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useAlphaHunter } from "../AlphaHunterContext";
 import StageCard from "./StageCard";
+import { alphaHunterApi } from "@/services/api/alphaHunter";
+import { neobdmApi } from "@/services/api/neobdm";
 
 interface TradingDateInfo {
     date: string;
@@ -70,9 +72,7 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
     const fetchTradingDates = useCallback(async () => {
         setIsLoadingDates(true);
         try {
-            const res = await fetch(`/api/alpha-hunter/stage3/trading-dates/${ticker}?days=7`);
-            if (!res.ok) throw new Error("Failed to fetch trading dates");
-            const data = await res.json();
+            const data = await alphaHunterApi.getStage3TradingDates(ticker, 7);
 
             const dates: TradingDateInfo[] = (data.dates || []).map((d: { date: string; has_data: boolean }) => ({
                 date: d.date,
@@ -133,16 +133,7 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
             setScrapeLog(prev => [...prev, `Scraping ${dateInfo.date}...`]);
 
             try {
-                const res = await fetch(
-                    `/api/neobdm-broker-summary?ticker=${ticker}&trade_date=${dateInfo.date}&scrape=true`
-                );
-
-                if (!res.ok) {
-                    const errData = await res.json().catch(() => ({ error: "Unknown error" }));
-                    throw new Error(errData.error || `HTTP ${res.status}`);
-                }
-
-                const result = await res.json();
+                const result = await neobdmApi.getNeoBDMBrokerSummary(ticker, dateInfo.date, true);
                 const buyCount = (result.buy || []).length;
                 const sellCount = (result.sell || []).length;
 
@@ -184,8 +175,7 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
         setScrapeLog(prev => [...prev, "Running flow analysis..."]);
 
         try {
-            const response = await fetch(`/api/alpha-hunter/flow/${ticker}?days=7`);
-            const data = await response.json();
+            const data = await alphaHunterApi.getFlowAnalysis(ticker, 7) as any;
 
             if (data.data_available) {
                 updateStage3Data(ticker, {

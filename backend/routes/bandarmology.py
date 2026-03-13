@@ -26,7 +26,8 @@ _deep_analysis_status = {
     "completed_tickers": [],
     "failed_tickers": [],
     "fresh_tickers": [],
-    "errors": []
+    "errors": [],
+    "profile": "balanced"
 }
 _deep_analysis_status_lock = asyncio.Lock()
 
@@ -37,6 +38,7 @@ def _build_deep_analysis_status(
     qualified: int,
     analysis_date: str,
     concurrency: int,
+    profile: str,
 ) -> dict:
     return {
         "running": True,
@@ -55,6 +57,7 @@ def _build_deep_analysis_status(
         "errors": [],
         "date": analysis_date,
         "concurrency": concurrency,
+        "profile": profile,
     }
 
 
@@ -246,6 +249,7 @@ async def get_bandarmology_screening(
     date: Optional[str] = Query(None, description="Analysis date (YYYY-MM-DD). None = latest."),
     min_score: int = Query(0, ge=0, le=100, description="Minimum score filter"),
     trade_type: Optional[str] = Query(None, description="Filter by trade type: SWING, INTRADAY, BOTH, WATCH"),
+    profile: str = Query("balanced", description="Scoring profile: balanced|swing|daytrade"),
     include_deep: bool = Query(True, description="Include deep analysis data if available"),
     include_yahoo_finance: bool = Query(True, description="Include Yahoo Finance enhanced data")
 ):
@@ -257,7 +261,7 @@ async def get_bandarmology_screening(
         from db.bandarmology_repository import BandarmologyRepository
 
         analyzer = BandarmologyAnalyzer()
-        results = analyzer.analyze(target_date=date)
+        results = analyzer.analyze(target_date=date, profile=profile)
 
         # Resolve date for response
         actual_date = analyzer._resolve_date(date)
@@ -312,6 +316,7 @@ async def get_bandarmology_screening(
                 logger.warning(f"Failed to load Yahoo Finance data: {e}")
 
         return sanitize_data({
+            "profile": profile,
             "date": actual_date,
             "total_stocks": len(results),
             "has_deep_data": any(r.get('deep_score', 0) > 0 for r in results),
@@ -353,7 +358,8 @@ async def trigger_deep_analysis(
     top_n: int = Query(30, ge=5, le=500, description="Number of top stocks to deep analyze"),
     min_base_score: int = Query(20, ge=0, description="Minimum base score to qualify for deep analysis"),
     concurrency: int = Query(4, ge=1, le=12, description="Parallel ticker workers for deep analysis"),
-    force: bool = Query(False, description="Force re-analysis even if cache exists")
+    force: bool = Query(False, description="Force re-analysis even if cache exists"),
+    profile: str = Query("balanced", description="Scoring profile: balanced|swing|daytrade")
 ):
     """
     Trigger deep analysis (inventory + transaction chart scraping) for top N stocks.
@@ -374,7 +380,7 @@ async def trigger_deep_analysis(
         from modules.bandarmology_analyzer import BandarmologyAnalyzer
 
         analyzer = BandarmologyAnalyzer()
-        results = analyzer.analyze(target_date=date)
+        results = analyzer.analyze(target_date=date, profile=profile)
         actual_date = analyzer._resolve_date(date)
 
         # Get top N candidates
@@ -404,6 +410,7 @@ async def trigger_deep_analysis(
                     qualified=qualified_count,
                     analysis_date=actual_date,
                     concurrency=concurrency,
+                    profile=profile,
                 )
             )
 
@@ -420,7 +427,8 @@ async def trigger_deep_analysis(
             "requested": top_n,
             "qualified": qualified_count,
             "to_process": len(tickers),
-            "concurrency": concurrency
+            "concurrency": concurrency,
+            "profile": profile
         }
 
     except Exception as e:
@@ -437,7 +445,8 @@ async def trigger_deep_analysis_tickers(
     tickers: str = Query(..., description="Comma-separated ticker symbols to deep analyze"),
     date: Optional[str] = Query(None, description="Analysis date"),
     concurrency: int = Query(4, ge=1, le=12, description="Parallel ticker workers for deep analysis"),
-    force: bool = Query(False, description="Force re-analysis even if cache exists")
+    force: bool = Query(False, description="Force re-analysis even if cache exists"),
+    profile: str = Query("balanced", description="Scoring profile: balanced|swing|daytrade")
 ):
     """
     Trigger deep analysis for specific tickers (manual input).
@@ -458,7 +467,7 @@ async def trigger_deep_analysis_tickers(
 
         analyzer = BandarmologyAnalyzer()
         actual_date = analyzer._resolve_date(date)
-        results = analyzer.analyze(target_date=actual_date)
+        results = analyzer.analyze(target_date=actual_date, profile=profile)
 
         # Parse tickers
         ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
@@ -487,6 +496,7 @@ async def trigger_deep_analysis_tickers(
                     qualified=len(ticker_list),
                     analysis_date=actual_date,
                     concurrency=concurrency,
+                    profile=profile,
                 )
             )
 
@@ -502,7 +512,8 @@ async def trigger_deep_analysis_tickers(
             "requested": len(ticker_list),
             "qualified": len(ticker_list),
             "to_process": len(ticker_list),
-            "concurrency": concurrency
+            "concurrency": concurrency,
+            "profile": profile
         }
 
     except Exception as e:
@@ -595,15 +606,25 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                     _deep_analysis_status["active_tickers"].append(ticker)
 
                 try:
-                    # 1. Fetch Inventory via API
+                    # 1. Fetch Inventory + Transaction Chart via API (concurrent)
                     inv_data = None
                     price_series = None
                     raw_inv = None
-                    try:
-                        raw_inv = await api_client.get_inventory(ticker)
+                    txn_data = None
+                    inv_task = asyncio.create_task(api_client.get_inventory(ticker))
+                    txn_task = asyncio.create_task(api_client.get_transaction_chart(ticker))
+                    inv_result, txn_result = await asyncio.gather(inv_task, txn_task, return_exceptions=True)
+
+                    if isinstance(inv_result, Exception):
+                        logger.warning(f"Inventory API failed for {ticker}: {inv_result}")
+                        async with status_lock:
+                            _deep_analysis_status["errors"].append(f"{ticker} inv: {str(inv_result)[:80]}")
+                    else:
+                        raw_inv = inv_result
                         if raw_inv and raw_inv.get('brokers'):
                             async with db_write_lock:
-                                band_repo.save_inventory_batch(
+                                await asyncio.to_thread(
+                                    band_repo.save_inventory_batch,
                                     ticker,
                                     raw_inv['brokers'],
                                     raw_inv.get('firstDate', ''),
@@ -611,42 +632,40 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                                 )
                             inv_data = raw_inv['brokers']
                             price_series = raw_inv.get('priceSeries')
-                    except Exception as e:
-                        logger.warning(f"Inventory API failed for {ticker}: {e}")
+
+                    if isinstance(txn_result, Exception):
+                        logger.warning(f"Txn chart API failed for {ticker}: {txn_result}")
                         async with status_lock:
-                            _deep_analysis_status["errors"].append(f"{ticker} inv: {str(e)[:80]}")
-
-                    await asyncio.sleep(0.2)
-
-                    # 2. Fetch Transaction Chart via API
-                    txn_data = None
-                    try:
-                        raw_txn = await api_client.get_transaction_chart(ticker)
+                            _deep_analysis_status["errors"].append(f"{ticker} txn: {str(txn_result)[:80]}")
+                    else:
+                        raw_txn = txn_result
                         if raw_txn:
                             async with db_write_lock:
-                                band_repo.save_transaction_chart(ticker, raw_txn)
-                            txn_data = band_repo.get_transaction_chart(ticker)
-                    except Exception as e:
-                        logger.warning(f"Txn chart API failed for {ticker}: {e}")
-                        async with status_lock:
-                            _deep_analysis_status["errors"].append(f"{ticker} txn: {str(e)[:80]}")
-
-                    await asyncio.sleep(0.2)
+                                await asyncio.to_thread(band_repo.save_transaction_chart, ticker, raw_txn)
+                            txn_data = await asyncio.to_thread(band_repo.get_transaction_chart, ticker)
 
                     # 3. Fetch Broker Summary via API (analysis_date + recent days)
                     broksum_data = None
                     try:
                         async with broksum_rate_limiter:
-                            raw_broksum = await api_client.get_broker_summary(ticker, analysis_date)
-                            await asyncio.sleep(2.0)
+                            raw_broksum = await api_client.get_broker_summary(
+                                ticker, analysis_date, fast_fail=True
+                            )
                         if raw_broksum:
                             async with db_write_lock:
-                                neobdm_repo.save_broker_summary_batch(
+                                await asyncio.to_thread(
+                                    neobdm_repo.save_broker_summary_batch,
                                     ticker, analysis_date,
                                     raw_broksum.get('buy', []),
                                     raw_broksum.get('sell', [])
                                 )
                             broksum_data = raw_broksum
+                        else:
+                            existing = await asyncio.to_thread(
+                                neobdm_repo.get_broker_summary, ticker, analysis_date
+                            )
+                            if existing and (existing.get('buy') or existing.get('sell')):
+                                broksum_data = existing
                     except Exception as e:
                         logger.warning(f"Broker summary API failed for {ticker}: {e}")
                         async with status_lock:
@@ -664,18 +683,20 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                                 continue
                             date_str = check_date.strftime('%Y-%m-%d')
                             # Check if we already have this date in DB
-                            existing = neobdm_repo.get_broker_summary(ticker, date_str)
+                            existing = await asyncio.to_thread(neobdm_repo.get_broker_summary, ticker, date_str)
                             if existing and (existing.get('buy') or existing.get('sell')):
                                 recent_dates_fetched.append(date_str)
                                 continue
                             # Fetch from API
                             try:
                                 async with broksum_rate_limiter:
-                                    raw_bs = await api_client.get_broker_summary(ticker, date_str)
-                                    await asyncio.sleep(2.0)
+                                    raw_bs = await api_client.get_broker_summary(
+                                        ticker, date_str, fast_fail=True
+                                    )
                                 if raw_bs and (raw_bs.get('buy') or raw_bs.get('sell')):
                                     async with db_write_lock:
-                                        neobdm_repo.save_broker_summary_batch(
+                                        await asyncio.to_thread(
+                                            neobdm_repo.save_broker_summary_batch,
                                             ticker, date_str,
                                             raw_bs.get('buy', []),
                                             raw_bs.get('sell', [])
@@ -693,8 +714,11 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                     try:
                         if inv_data:
                             # Run controlling broker detection early to get turn/peak dates
-                            ctrl_preview = analyzer.detect_controlling_brokers(
-                                inv_data, price_series=price_series, min_brokers=3
+                            ctrl_preview = await asyncio.to_thread(
+                                analyzer.detect_controlling_brokers,
+                                inv_data,
+                                price_series=price_series,
+                                min_brokers=3
                             )
                             important_date_set = set()
                             for cb in ctrl_preview.get('controlling_brokers', []):
@@ -707,7 +731,7 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
 
                             # Fetch broker summary for each important date
                             for imp_date in sorted(important_date_set):
-                                existing = neobdm_repo.get_broker_summary(ticker, imp_date)
+                                existing = await asyncio.to_thread(neobdm_repo.get_broker_summary, ticker, imp_date)
                                 if existing and (existing.get('buy') or existing.get('sell')):
                                     important_dates_data.append({
                                         'date': imp_date,
@@ -719,11 +743,13 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                                 # Fetch from API
                                 try:
                                     async with broksum_rate_limiter:
-                                        raw_bs = await api_client.get_broker_summary(ticker, imp_date)
-                                        await asyncio.sleep(2.0)
+                                        raw_bs = await api_client.get_broker_summary(
+                                            ticker, imp_date, fast_fail=True
+                                        )
                                     if raw_bs and (raw_bs.get('buy') or raw_bs.get('sell')):
                                         async with db_write_lock:
-                                            neobdm_repo.save_broker_summary_batch(
+                                            await asyncio.to_thread(
+                                                neobdm_repo.save_broker_summary_batch,
                                                 ticker, imp_date,
                                                 raw_bs.get('buy', []),
                                                 raw_bs.get('sell', []),
@@ -742,7 +768,8 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                     # 3d. Fetch multi-day broker summary from DB (now enriched with recent fetches)
                     broksum_multiday = None
                     try:
-                        broksum_multiday = neobdm_repo.get_broker_summary_multiday(
+                        broksum_multiday = await asyncio.to_thread(
+                            neobdm_repo.get_broker_summary_multiday,
                             ticker, analysis_date, days=5
                         )
                     except Exception as e:
@@ -751,7 +778,9 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                     # 3e. Fetch previous deep cache for historical comparison
                     previous_deep = None
                     try:
-                        previous_deep = band_repo.get_previous_deep_cache(ticker, analysis_date)
+                        previous_deep = await asyncio.to_thread(
+                            band_repo.get_previous_deep_cache, ticker, analysis_date
+                        )
                     except Exception as e:
                         logger.warning(f"Previous deep cache fetch failed for {ticker}: {e}")
 
@@ -768,7 +797,8 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
 
                     broker_summary_meta = {'trade_date': analysis_date} if analysis_date else None
 
-                    deep_result = analyzer.analyze_deep(
+                    deep_result = await asyncio.to_thread(
+                        analyzer.analyze_deep,
                         ticker,
                         inventory_data=inv_data,
                         txn_chart_data=txn_data,
@@ -784,7 +814,7 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
 
                     # 5. Save to cache
                     async with db_write_lock:
-                        band_repo.save_deep_cache(ticker, analysis_date, deep_result)
+                        await asyncio.to_thread(band_repo.save_deep_cache, ticker, analysis_date, deep_result)
 
                     async with status_lock:
                         _deep_analysis_status["completed_tickers"].append(ticker)
@@ -981,7 +1011,8 @@ async def get_watchlist_alerts(
 @router.get("/bandarmology/{ticker}/detail")
 async def get_stock_detail(
     ticker: str,
-    date: Optional[str] = Query(None, description="Analysis date")
+    date: Optional[str] = Query(None, description="Analysis date"),
+    profile: str = Query("balanced", description="Scoring profile: balanced|swing|daytrade")
 ):
     """
     Get detailed deep analysis for a single stock.
@@ -1007,7 +1038,7 @@ async def get_stock_detail(
         ticker_upper = ticker.upper()
 
         # 1. Get base screening result
-        results = analyzer.analyze(target_date=actual_date)
+        results = analyzer.analyze(target_date=actual_date, profile=profile)
         base_result = next((r for r in results if r['symbol'] == ticker_upper), None)
 
         # 2. Get deep cache (check early to handle tickers not in screening)

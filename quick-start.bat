@@ -113,7 +113,7 @@ echo   Starting Servers
 echo ========================================
 echo.
 echo [INFO] Backend will start on: http://localhost:8000
-echo [INFO] Frontend will start on: http://localhost:3000
+echo [INFO] Frontend will start on: http://localhost:3001
 echo.
 echo Press any key to start servers...
 pause >nul
@@ -135,7 +135,7 @@ echo   Servers Started!
 echo ========================================
 echo.
 echo Backend:  http://localhost:8000
-echo Frontend: http://localhost:3000
+echo Frontend: http://localhost:3001
 echo API Docs: http://localhost:8000/docs
 echo.
 echo [INFO] Two new windows have been opened

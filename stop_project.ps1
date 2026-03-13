@@ -1,11 +1,37 @@
 Write-Host "Stopping MarketPulse Services..."
 
-$ports = @(3000, 8000)
+$ports = @(3001, 8000)
+
+function Get-ListeningPidsByPort {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$Port
+    )
+
+    try {
+        return Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop |
+            Select-Object -ExpandProperty OwningProcess -Unique
+    } catch {
+        # Fallback when Get-NetTCPConnection is not permitted
+        $lines = netstat -ano | Select-String "LISTENING" | Select-String (":$Port ")
+        $pids = @()
+        foreach ($line in $lines) {
+            $parts = ($line.Line -split "\s+") | Where-Object { $_ -ne "" }
+            if ($parts.Count -gt 0) {
+                $pid = $parts[-1]
+                if ($pid -match '^\d+$') {
+                    $pids += [int]$pid
+                }
+            }
+        }
+        return $pids | Select-Object -Unique
+    }
+}
 
 foreach ($port in $ports) {
     Write-Host "Checking port $port..."
     # Find process ID using NetTCPConnection
-    $processIds = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
+    $processIds = Get-ListeningPidsByPort -Port $port
     
     if ($processIds) {
         foreach ($pid_to_kill in $processIds) {

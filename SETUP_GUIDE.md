@@ -244,15 +244,15 @@ npm run dev
 **Output yang Diharapkan:**
 ```
   ▲ Next.js 16.0.10
-  - Local:        http://localhost:3000
-  - Network:      http://192.168.x.x:3000
+  - Local:        http://localhost:3001
+  - Network:      http://192.168.x.x:3001
 
  ✓ Ready in 2.5s
 ```
 
 ### C. Akses Aplikasi
 
-Buka browser dan akses: **http://localhost:3000**
+Buka browser dan akses: **http://localhost:3001**
 
 **Halaman yang Tersedia:**
 1. **Dashboard** - `/dashboard` - Market overview
@@ -328,7 +328,7 @@ curl "http://localhost:8000/api/broker-stalker/portfolio/YP"
 
 ### C. Frontend Testing
 
-1. Buka http://localhost:3000
+1. Buka http://localhost:3001
 2. Navigate ke setiap halaman
 3. Verifikasi tidak ada error di browser console (F12)
 
@@ -406,7 +406,7 @@ python server.py
 
 ---
 
-### ❌ Problem: Port 8000 atau 3000 sudah digunakan
+### ❌ Problem: Port 8000 atau 3001 sudah digunakan
 
 **Solution Backend (Port 8000):**
 ```bash
@@ -418,7 +418,7 @@ uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=True)
 NEXT_PUBLIC_API_URL=http://localhost:8001
 ```
 
-**Solution Frontend (Port 3000):**
+**Solution Frontend (Port 3001):**
 ```bash
 # Jalankan dengan port berbeda
 npm run dev -- -p 3001
@@ -454,7 +454,7 @@ ollama serve
 Setelah setup, verifikasi semua komponen berjalan:
 
 - [ ] Backend running di http://localhost:8000
-- [ ] Frontend running di http://localhost:3000
+- [ ] Frontend running di http://localhost:3001
 - [ ] Ollama running di http://localhost:11434
 - [ ] Health check mengembalikan status "online"
 - [ ] API docs accessible di http://localhost:8000/docs
@@ -470,7 +470,7 @@ Setelah setup, verifikasi semua komponen berjalan:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                         FRONTEND                            │
-│                    Next.js (Port 3000)                      │
+│                    Next.js (Port 3001)                      │
 │  ┌──────────┬──────────┬──────────┬──────────────────────┐ │
 │  │Dashboard │   News   │NeoBDM    │  Broker Stalker      │ │
 │  └──────────┴──────────┴──────────┴──────────────────────┘ │

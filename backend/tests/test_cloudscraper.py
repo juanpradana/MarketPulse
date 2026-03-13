@@ -1,7 +1,15 @@
-import cloudscraper
+import os
+import pytest
+
+cloudscraper = pytest.importorskip("cloudscraper")
 import json
 
+
+@pytest.mark.network
 def test_cloudscraper():
+    if os.getenv("ALLOW_NETWORK_TESTS") != "1":
+        pytest.skip("Network tests disabled. Set ALLOW_NETWORK_TESTS=1 to run.")
+
     print("Testing cloudscraper...")
     scraper = cloudscraper.create_scraper()  # returns a CloudScraper instance
     

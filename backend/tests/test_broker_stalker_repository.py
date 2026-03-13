@@ -201,9 +201,10 @@ class TestBrokerStalkerRepository:
         watchlist = repo.get_watchlist()
         assert watchlist[0]['broker_code'] == "YP"
         
-        repo.save_tracking_record("yp", "bbca", "2026-02-05", 1000000000, 500000000, 500000000)
+        today = datetime.now().strftime('%Y-%m-%d')
+        repo.save_tracking_record("yp", "bbca", today, 1000000000, 500000000, 500000000)
         
-        records = repo.get_broker_tracking("YP", ticker="BBCA")
+        records = repo.get_broker_tracking("YP", ticker="BBCA", days=7)
         assert len(records) == 1
 
 
