@@ -8,6 +8,7 @@ Manual triggers still work via frontend buttons.
 import logging
 from datetime import datetime
 from urllib.parse import urlparse
+from typing import Optional
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
@@ -17,6 +18,9 @@ logger = logging.getLogger(__name__)
 
 # Global scheduler instance
 _scheduler = None
+
+# Default limit for Yahoo Finance refresh (top N tickers from bandarmology summary)
+DEFAULT_YAHOO_REFRESH_LIMIT = 200
 
 
 def get_scheduler() -> BackgroundScheduler:
@@ -639,6 +643,128 @@ def run_deep_analyze_all():
         return {"status": "failed", "error": str(e)}
 
 
+def run_bandarmology_yahoo_refresh(
+    force_refresh: bool = False,
+    limit: Optional[int] = None,
+    include_float: bool = True,
+    include_power: bool = True,
+    include_volume: bool = True,
+    include_earnings: bool = True,
+    days_ahead: int = 30,
+    concurrency: int = 4,
+):
+    """
+    Refresh Yahoo Finance-derived caches for Bandarmology columns:
+    FLOAT, POWER, VOL, EARN.
+
+    This populates:
+    - stock_float_data (float)
+    - bandar_power_scores (power)
+    - volume_daily_records (volume)
+    - earnings_calendar (earnings)
+
+    Uses latest bandarmology summary tickers as the target universe.
+    """
+    logger.info("[Scheduler] Starting Bandarmology Yahoo Finance cache refresh...")
+    try:
+        results, actual_date = _generate_latest_bandarmology_market_summary()
+        tickers = [r.get('symbol') for r in results if r.get('symbol')]
+        effective_limit = DEFAULT_YAHOO_REFRESH_LIMIT if limit is None else limit
+        if effective_limit and effective_limit > 0:
+            tickers = tickers[:effective_limit]
+
+        if not tickers:
+            logger.warning("[Scheduler] No tickers found for Yahoo refresh")
+            return {"status": "skipped", "reason": "no_tickers"}
+
+        from modules.yahoo_finance_enhanced import get_yahoo_finance_enhanced
+        from modules.volume_analyzer import get_volume_analyzer
+        from modules.bandar_power_calculator import get_bandar_power_calculator
+        from modules.earnings_tracker import get_earnings_tracker
+
+        yf_enhanced = get_yahoo_finance_enhanced()
+        volume_analyzer = get_volume_analyzer()
+        power_calc = get_bandar_power_calculator()
+        earnings_tracker = get_earnings_tracker()
+
+        totals = {
+            "float_ok": 0, "power_ok": 0, "volume_ok": 0, "earnings_ok": 0,
+            "float_fail": 0, "power_fail": 0, "volume_fail": 0, "earnings_fail": 0,
+        }
+        errors = []
+
+        def _process_ticker(ticker: str):
+            per = {"ticker": ticker}
+            try:
+                if include_float:
+                    float_data = yf_enhanced.fetch_float_data(ticker, force_refresh=force_refresh)
+                    per["float"] = bool(float_data)
+                if include_power:
+                    power_data = power_calc.calculate_score(ticker, force_refresh=force_refresh)
+                    per["power"] = bool(power_data)
+                if include_volume:
+                    per["volume"] = volume_analyzer.update_volume_daily_record(ticker)
+                if include_earnings:
+                    earnings = earnings_tracker.fetch_upcoming_earnings(
+                        ticker, days_ahead=days_ahead, force_refresh=force_refresh
+                    )
+                    per["earnings"] = len(earnings) > 0
+            except Exception as exc:
+                per["error"] = str(exc)
+            return per
+
+        # Use limited concurrency to avoid rate limits
+        if concurrency and concurrency > 1:
+            with ThreadPoolExecutor(max_workers=concurrency) as executor:
+                for future in as_completed(executor.submit(_process_ticker, t) for t in tickers):
+                    per = future.result()
+                    if per.get("error"):
+                        errors.append(per)
+                    else:
+                        if include_float:
+                            totals["float_ok" if per.get("float") else "float_fail"] += 1
+                        if include_power:
+                            totals["power_ok" if per.get("power") else "power_fail"] += 1
+                        if include_volume:
+                            totals["volume_ok" if per.get("volume") else "volume_fail"] += 1
+                        if include_earnings:
+                            totals["earnings_ok" if per.get("earnings") else "earnings_fail"] += 1
+        else:
+            for ticker in tickers:
+                per = _process_ticker(ticker)
+                if per.get("error"):
+                    errors.append(per)
+                else:
+                    if include_float:
+                        totals["float_ok" if per.get("float") else "float_fail"] += 1
+                    if include_power:
+                        totals["power_ok" if per.get("power") else "power_fail"] += 1
+                    if include_volume:
+                        totals["volume_ok" if per.get("volume") else "volume_fail"] += 1
+                    if include_earnings:
+                        totals["earnings_ok" if per.get("earnings") else "earnings_fail"] += 1
+
+        logger.info(
+            "[Scheduler] Yahoo refresh done: float_ok=%s power_ok=%s volume_ok=%s earnings_ok=%s (errors=%s)",
+            totals.get("float_ok"), totals.get("power_ok"), totals.get("volume_ok"),
+            totals.get("earnings_ok"), len(errors)
+        )
+
+        return {
+            "status": "success",
+            "date": actual_date,
+            "total_tickers": len(tickers),
+            "totals": totals,
+            "errors": errors[:20],  # truncate to keep payload small
+        }
+
+    except Exception as e:
+        logger.error(f"[Scheduler] Yahoo refresh failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {"status": "failed", "error": str(e)}
+
+
 def cleanup_old_data():
     """
     Clean up old data files and raw records.
@@ -788,6 +914,26 @@ def setup_jobs():
         replace_existing=True
     )
     logger.info("[Scheduler] Job added: Market summary at 08:00, 12:00, 16:00, 20:00 WIB (daily)")
+
+    # 6. Bandarmology Yahoo Finance Cache Refresh - Daily at 18:00 WIB
+    scheduler.add_job(
+        run_bandarmology_yahoo_refresh,
+        trigger=CronTrigger(hour=18, minute=0),
+        id='bandarmology_yahoo_refresh',
+        name='Bandarmology Yahoo Finance Cache Refresh (18:00 WIB, Daily)',
+        replace_existing=True,
+        kwargs={
+            'force_refresh': False,
+            'limit': DEFAULT_YAHOO_REFRESH_LIMIT,
+            'include_float': True,
+            'include_power': True,
+            'include_volume': True,
+            'include_earnings': True,
+            'days_ahead': 30,
+            'concurrency': 4,
+        }
+    )
+    logger.info("[Scheduler] Job added: Bandarmology Yahoo Finance cache refresh at 18:00 WIB (daily)")
 
     # 4. Data Cleanup - Weekly on Sunday at 00:00
     scheduler.add_job(

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { bandarmologyApi, BandarmologyItem, DeepAnalysisStatus } from '@/services/api/bandarmology';
+import { schedulerApi } from '@/services/api/scheduler';
 import {
     RefreshCcw,
     AlertCircle,
@@ -122,6 +123,15 @@ export default function BandarmologyPage() {
     const [manualDeepLoading, setManualDeepLoading] = useState(false);
     const [deepTopN, setDeepTopN] = useState<number>(30);
     const [deepConcurrency, setDeepConcurrency] = useState<number>(4);
+    const [yahooRefreshing, setYahooRefreshing] = useState(false);
+    const [yahooTopN, setYahooTopN] = useState<number>(200);
+    const [yahooRefreshResult, setYahooRefreshResult] = useState<{
+        status: string;
+        total_tickers?: number;
+        totals?: Record<string, number>;
+        errors?: Array<{ ticker: string; error: string }>;
+        error?: string;
+    } | null>(null);
     const [columnMenuOpen, setColumnMenuOpen] = useState(false);
     const columnMenuRef = useRef<HTMLDivElement>(null);
     const deepPollRef = useRef<NodeJS.Timeout | null>(null);
@@ -274,6 +284,28 @@ export default function BandarmologyPage() {
             setError(err instanceof Error ? err.message : 'Failed to trigger deep analysis');
         } finally {
             setDeepLoading(false);
+        }
+    };
+
+    const handleYahooRefresh = async () => {
+        setYahooRefreshing(true);
+        setError(null);
+        setYahooRefreshResult(null);
+        try {
+            const result = await schedulerApi.manualBandarmologyYahooRefresh({
+                limit: yahooTopN,
+                concurrency: 4
+            });
+            setYahooRefreshResult(result);
+            await loadData();
+        } catch (err: unknown) {
+            setYahooRefreshResult({
+                status: 'failed',
+                error: err instanceof Error ? err.message : 'Failed to refresh Yahoo Finance cache'
+            });
+            setError(err instanceof Error ? err.message : 'Failed to refresh Yahoo Finance cache');
+        } finally {
+            setYahooRefreshing(false);
         }
     };
 
@@ -744,6 +776,36 @@ export default function BandarmologyPage() {
                                 )}
                             </button>
                         </div>
+                        <div className="hidden lg:block h-5 w-px bg-zinc-700" />
+                        <div className="flex items-center gap-1">
+                            <div className="space-y-0">
+                                <label className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider block">YF Top N</label>
+                                <select
+                                    value={yahooTopN}
+                                    onChange={(e) => setYahooTopN(Number(e.target.value))}
+                                    disabled={yahooRefreshing}
+                                    className="block w-16 bg-[#23252b] border border-emerald-700/50 text-emerald-300 font-bold text-[10px] rounded-sm py-0.5 px-1 outline-none focus:border-emerald-500/50 cursor-pointer disabled:opacity-50"
+                                >
+                                    <option value={50}>50</option>
+                                    <option value={100}>100</option>
+                                    <option value={200}>200</option>
+                                    <option value={300}>300</option>
+                                    <option value={500}>500</option>
+                                </select>
+                            </div>
+                            <button
+                                onClick={handleYahooRefresh}
+                                disabled={yahooRefreshing}
+                                className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 disabled:opacity-50 text-white px-3 py-1 rounded-sm text-[10px] font-bold shadow-lg transition-all active:scale-95 flex items-center gap-1 mt-3"
+                                title={`Refresh Yahoo Finance cache for top ${yahooTopN} tickers`}
+                            >
+                                {yahooRefreshing ? (
+                                    <><Loader2 className="w-2.5 h-2.5 animate-spin" /> YF Refresh</>
+                                ) : (
+                                    <><RefreshCcw className="w-2.5 h-2.5" /> YF Refresh</>
+                                )}
+                            </button>
+                        </div>
                         <button
                             onClick={() => loadData()}
                             disabled={loading}
@@ -754,6 +816,32 @@ export default function BandarmologyPage() {
                         </button>
                     </div>
                 </div>
+
+                {yahooRefreshing && (
+                    <div className="px-3 py-1 text-[9px] text-emerald-300 border-t border-zinc-800/50 bg-[#10151d]">
+                        YF Refresh running...
+                    </div>
+                )}
+
+                {!yahooRefreshing && yahooRefreshResult && (
+                    <div className="px-3 py-1 text-[9px] border-t border-zinc-800/50 bg-[#10151d]">
+                        {yahooRefreshResult.status !== 'success' ? (
+                            <span className="text-red-400 font-bold">
+                                YF Refresh failed{yahooRefreshResult.error ? `: ${yahooRefreshResult.error}` : ''}
+                            </span>
+                        ) : (
+                            <div className="flex flex-wrap gap-2 items-center text-zinc-300">
+                                <span className="text-emerald-400 font-bold">YF Refresh OK</span>
+                                <span>Tickers: <span className="font-bold text-zinc-100">{yahooRefreshResult.total_tickers ?? 0}</span></span>
+                                <span>Float <span className="font-bold text-emerald-400">{yahooRefreshResult.totals?.float_ok ?? 0}</span>/<span className="font-bold text-red-400">{yahooRefreshResult.totals?.float_fail ?? 0}</span></span>
+                                <span>Power <span className="font-bold text-emerald-400">{yahooRefreshResult.totals?.power_ok ?? 0}</span>/<span className="font-bold text-red-400">{yahooRefreshResult.totals?.power_fail ?? 0}</span></span>
+                                <span>Vol <span className="font-bold text-emerald-400">{yahooRefreshResult.totals?.volume_ok ?? 0}</span>/<span className="font-bold text-red-400">{yahooRefreshResult.totals?.volume_fail ?? 0}</span></span>
+                                <span>Earn <span className="font-bold text-emerald-400">{yahooRefreshResult.totals?.earnings_ok ?? 0}</span>/<span className="font-bold text-red-400">{yahooRefreshResult.totals?.earnings_fail ?? 0}</span></span>
+                                <span>Errors <span className="font-bold text-amber-400">{yahooRefreshResult.errors?.length ?? 0}</span></span>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {deepStatus && (
                     <div className="flex items-center gap-3 px-3 py-1 bg-[#10151d] border-t border-zinc-800/50 text-[9px] overflow-x-auto scrollbar-none">

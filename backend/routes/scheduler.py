@@ -6,7 +6,7 @@ Endpoints for monitoring and controlling the background task scheduler.
 
 import logging
 from fastapi import APIRouter, HTTPException
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,9 @@ from modules.scheduler import (
     run_evening_neobdm_bandarmology_pipeline,
     generate_market_summary,
     cleanup_old_data,
-    run_idx_disclosure_fetch
+    run_idx_disclosure_fetch,
+    run_bandarmology_yahoo_refresh,
+    DEFAULT_YAHOO_REFRESH_LIMIT
 )
 
 router = APIRouter(prefix="/api/scheduler", tags=["Scheduler"])
@@ -85,6 +87,7 @@ async def run_job(job_id: str) -> Dict[str, Any]:
     - market_summary: Generate market summary report
     - weekly_cleanup: Clean up old data
     - idx_disclosure_fetch: Fetch IDX corporate disclosures
+    - bandarmology_yahoo_refresh: Refresh Yahoo Finance caches for Bandarmology
     """
     result = run_job_manually(job_id)
     if result["status"] == "error":
@@ -180,6 +183,39 @@ async def manual_idx_disclosure_fetch(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/manual/bandarmology-yahoo-refresh")
+async def manual_bandarmology_yahoo_refresh(
+    force_refresh: bool = False,
+    limit: Optional[int] = DEFAULT_YAHOO_REFRESH_LIMIT,
+    include_float: bool = True,
+    include_power: bool = True,
+    include_volume: bool = True,
+    include_earnings: bool = True,
+    days_ahead: int = 30,
+    concurrency: int = 4,
+) -> Dict[str, Any]:
+    """
+    Manually trigger Yahoo Finance cache refresh for Bandarmology columns.
+    """
+    try:
+        result = run_bandarmology_yahoo_refresh(
+            force_refresh=force_refresh,
+            limit=limit,
+            include_float=include_float,
+            include_power=include_power,
+            include_volume=include_volume,
+            include_earnings=include_earnings,
+            days_ahead=days_ahead,
+            concurrency=concurrency,
+        )
+        if result.get("status") == "failed":
+            raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
+        return result
+    except Exception as e:
+        logger.error(f"Manual Bandarmology Yahoo refresh failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/schedule")
 async def get_schedule_config() -> Dict[str, Any]:
     """
@@ -218,6 +254,12 @@ async def get_schedule_config() -> Dict[str, Any]:
                 "name": "IDX Disclosure Fetch",
                 "frequency": "Every 6 hours (4x per day)",
                 "description": "Fetches corporate disclosures from IDX website, downloads PDFs, and triggers RAG indexing"
+            },
+            {
+                "job_id": "bandarmology_yahoo_refresh",
+                "name": "Bandarmology Yahoo Finance Cache Refresh",
+                "frequency": "Daily at 18:00 WIB",
+                "description": f"Refreshes Yahoo Finance caches for FLOAT/POWER/VOL/EARN columns (Top {DEFAULT_YAHOO_REFRESH_LIMIT} tickers)"
             }
         ]
     }

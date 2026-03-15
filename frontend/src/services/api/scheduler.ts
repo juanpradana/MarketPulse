@@ -181,4 +181,45 @@ export const schedulerApi = {
         }
         return await response.json();
     }
+
+    ,
+
+    /**
+     * Manually refresh Bandarmology Yahoo Finance caches
+     */
+    manualBandarmologyYahooRefresh: async (params: {
+        force_refresh?: boolean;
+        limit?: number;
+        include_float?: boolean;
+        include_power?: boolean;
+        include_volume?: boolean;
+        include_earnings?: boolean;
+        days_ahead?: number;
+        concurrency?: number;
+    } = {}): Promise<{
+        status: string;
+        total_tickers?: number;
+        totals?: Record<string, number>;
+        errors?: Array<{ ticker: string; error: string }>;
+    }> => {
+        const searchParams = buildParams({
+            force_refresh: params.force_refresh,
+            limit: params.limit,
+            include_float: params.include_float,
+            include_power: params.include_power,
+            include_volume: params.include_volume,
+            include_earnings: params.include_earnings,
+            days_ahead: params.days_ahead,
+            concurrency: params.concurrency
+        });
+        const response = await fetch(
+            `${API_BASE_URL}/api/scheduler/manual/bandarmology-yahoo-refresh?${searchParams}`,
+            { method: 'POST' }
+        );
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Failed to refresh Yahoo Finance cache');
+        }
+        return await response.json();
+    }
 };
