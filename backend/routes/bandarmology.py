@@ -594,6 +594,108 @@ def _classify_broksum_outcome(raw_result, error, context) -> str:
     return "non_retryable"
 
 
+async def _fetch_broksum_with_deferred_retry(fetch_fn, ticker, date_str, status, status_lock=None):
+    """Fetch broker summary with fixed deferred retry policy."""
+    delay_seconds = 120
+    max_attempts = 10
+
+    status = status or {}
+
+    async def _mutate_status(mutator):
+        if status_lock:
+            async with status_lock:
+                mutator(status)
+        else:
+            mutator(status)
+
+    def _upsert_retrying_item(s, attempt):
+        retrying = s.setdefault("retrying_items", [])
+        updated = False
+        for item in retrying:
+            if item.get("ticker") == ticker and item.get("date") == date_str:
+                item["attempt"] = attempt
+                item["max_attempts"] = max_attempts
+                item["delay_seconds"] = delay_seconds
+                updated = True
+                break
+        if not updated:
+            retrying.append({
+                "ticker": ticker,
+                "date": date_str,
+                "attempt": attempt,
+                "max_attempts": max_attempts,
+                "delay_seconds": delay_seconds,
+            })
+        s["retry_waiting_count"] = len(retrying)
+
+    def _remove_retrying_item(s):
+        retrying = s.setdefault("retrying_items", [])
+        s["retrying_items"] = [
+            item for item in retrying
+            if not (item.get("ticker") == ticker and item.get("date") == date_str)
+        ]
+        s["retry_waiting_count"] = len(s["retrying_items"])
+
+    for attempt in range(1, max_attempts + 1):
+        raw_result = None
+        error = None
+        context = {}
+
+        try:
+            fetch_result = await fetch_fn(ticker, date_str)
+            if isinstance(fetch_result, tuple) and len(fetch_result) == 3:
+                raw_result, error, context = fetch_result
+            else:
+                raw_result = fetch_result
+        except Exception as fetch_exc:
+            raw_result = None
+            error = fetch_exc
+            context = {}
+
+        outcome = _classify_broksum_outcome(raw_result, error, context)
+
+        if outcome == "success":
+            def _on_success(s):
+                _remove_retrying_item(s)
+                stats = s.setdefault("broksum_fetch_stats", {})
+                key = "success" if attempt == 1 else "retried_success"
+                stats[key] = stats.get(key, 0) + 1
+            await _mutate_status(_on_success)
+            return raw_result
+
+        if outcome == "non_retryable":
+            def _on_non_retryable(s):
+                _remove_retrying_item(s)
+                s.setdefault("non_retryable_skips", []).append({
+                    "ticker": ticker,
+                    "date": date_str,
+                    "attempt": attempt,
+                    "reason": str(error or context.get("reason") or "non_retryable"),
+                })
+                stats = s.setdefault("broksum_fetch_stats", {})
+                stats["non_retryable"] = stats.get("non_retryable", 0) + 1
+            await _mutate_status(_on_non_retryable)
+            return None
+
+        if attempt >= max_attempts:
+            def _on_exhausted(s):
+                _remove_retrying_item(s)
+                s.setdefault("retry_exhausted", []).append({
+                    "ticker": ticker,
+                    "date": date_str,
+                    "attempts": attempt,
+                })
+                stats = s.setdefault("broksum_fetch_stats", {})
+                stats["exhausted"] = stats.get("exhausted", 0) + 1
+            await _mutate_status(_on_exhausted)
+            return None
+
+        await _mutate_status(lambda s: _upsert_retrying_item(s, attempt))
+        await asyncio.sleep(delay_seconds)
+
+    return None
+
+
 async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: list, concurrency: int = 4, force: bool = False):
     """Background task: scrape inventory + txn chart and run deep scoring."""
     logger.info(f"_run_deep_analysis started: {len(tickers)} tickers, force={force}")
