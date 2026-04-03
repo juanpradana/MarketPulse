@@ -407,9 +407,9 @@ export default function Stage2VPACard({ ticker }: Stage2VPACardProps) {
                                         key={idx}
                                         className={cn(
                                             "w-6 h-6 rounded flex items-center justify-center text-[10px] font-medium cursor-pointer transition-all hover:scale-110",
-                                            entry.status === "HEALTHY_PULLBACK" ? "bg-emerald-500/40 text-emerald-300" :
-                                                entry.status === "DISTRIBUTION_RISK" ? "bg-red-500/40 text-red-300" :
-                                                    entry.status === "WEAK_UP" ? "bg-amber-500/40 text-amber-300" :
+                                            entry.status === "HEALTHY" ? "bg-emerald-500/40 text-emerald-300" :
+                                                entry.status === "OK" ? "bg-amber-500/40 text-amber-300" :
+                                                    entry.status === "DANGER" ? "bg-red-500/40 text-red-300" :
                                                         "bg-slate-700 text-slate-400"
                                         )}
                                         title={`${entry.date}: ${entry.status}\nPrice: ${entry.price_chg?.toFixed(1)}%\nVol: ${entry.vol_chg?.toFixed(0)}%`}

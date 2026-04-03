@@ -139,10 +139,28 @@ class TestBrokerStalkerAPI:
         """Test getting broker analysis."""
         response = client.get("/api/broker-stalker/analysis/YP/BBCA")
         assert response.status_code == 200
-        
+
         data = response.json()
         assert data["status"] == "success"
         assert "analysis" in data
+
+    def test_get_broker_analysis_returns_500_when_analyzer_fails(self, client, monkeypatch):
+        """Analyzer error should propagate as HTTP 500, not success payload."""
+        from routes import broker_stalker as broker_stalker_route
+
+        def _fake_analyze(_broker_code, _ticker, _lookback_days):
+            return {
+                "broker_code": _broker_code,
+                "ticker": _ticker,
+                "error": "forced failure"
+            }
+
+        monkeypatch.setattr(broker_stalker_route.analyzer, "analyze_broker_activity", _fake_analyze)
+
+        response = client.get("/api/broker-stalker/analysis/YP/BBCA")
+        assert response.status_code == 500
+        body = response.json()
+        assert body.get("detail") == "forced failure"
     
     def test_get_broker_analysis_with_lookback(self, client):
         """Test getting broker analysis with custom lookback."""
@@ -202,12 +220,34 @@ class TestBrokerStalkerAPI:
     def test_sync_broker_data_with_ticker(self, client):
         """Test syncing broker data for specific ticker."""
         payload = {"ticker": "BBCA", "days": 7}
-        
+
         response = client.post("/api/broker-stalker/sync/YP", json=payload)
         assert response.status_code == 200
-        
+
         data = response.json()
         assert data["status"] == "success"
+
+    def test_sync_broker_data_propagates_partial_status(self, client, monkeypatch):
+        """Top-level status should follow analyzer sync status."""
+        from routes import broker_stalker as broker_stalker_route
+
+        def _fake_sync(_broker_code, _ticker, _days):
+            return {
+                "broker_code": _broker_code,
+                "synced_records": 3,
+                "errors": ["BBCA on 2026-01-02"],
+                "power_level": 42.0,
+                "status": "partial",
+            }
+
+        monkeypatch.setattr(broker_stalker_route.analyzer, "sync_broker_data", _fake_sync)
+
+        response = client.post("/api/broker-stalker/sync/YP", json={"days": 7})
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["status"] == "partial"
+        assert data["sync_result"]["status"] == "partial"
     
     def test_get_ticker_broker_activity(self, client):
         """Test getting ticker broker activity."""

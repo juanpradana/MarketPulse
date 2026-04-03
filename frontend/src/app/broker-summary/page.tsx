@@ -307,7 +307,7 @@ export default function BrokerSummaryPage() {
             setSellData(data.sell || []);
 
             if (forceScrape) {
-                setSuccess(data.source === 'scraper' ? "Sync completed successfully!" : "Data fetched from database.");
+                setSuccess(data.source === 'api' ? "Sync completed successfully!" : "Data fetched from database.");
             }
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : "Failed to load broker summary");

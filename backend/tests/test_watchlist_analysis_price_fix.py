@@ -131,6 +131,52 @@ def test_watchlist_latest_price_falls_back_to_neobdm_records():
             pass
 
 
+def test_watchlist_latest_price_normalizes_null_price_volume_data_values():
+    db_path = _create_temp_db_path()
+    try:
+        DatabaseConnection(db_path=db_path)
+        watchlist_repo = WatchlistRepository(db_path=db_path)
+
+        assert watchlist_repo.add_ticker("SMGA", user_id="default") is True
+
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS price_volume_data (
+                    ticker TEXT,
+                    close REAL,
+                    change_percent REAL,
+                    volume REAL,
+                    date TEXT
+                )
+                """
+            )
+            conn.execute(
+                """
+                INSERT INTO price_volume_data (ticker, close, change_percent, volume, date)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                ("SMGA", None, None, None, "2026-02-18"),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        data = watchlist_repo.get_watchlist("default")
+        assert len(data) == 1
+        assert data[0]["latest_price"] is not None
+        assert data[0]["latest_price"]["price"] == 0.0
+        assert data[0]["latest_price"]["change_percent"] == 0.0
+        assert data[0]["latest_price"]["volume"] == 0.0
+        assert data[0]["latest_price"]["date"] == "2026-02-18"
+    finally:
+        try:
+            os.unlink(db_path)
+        except OSError:
+            pass
+
+
 def test_bandarmology_stock_summary_supports_deep_only_rows():
     db_path = _create_temp_db_path()
     try:

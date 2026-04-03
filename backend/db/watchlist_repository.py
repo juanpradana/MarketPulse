@@ -470,10 +470,10 @@ class WatchlistRepository(BaseRepository):
             row = cursor.fetchone()
             if row:
                 return {
-                    "price": row[0],
-                    "change_percent": row[1],
-                    "volume": row[2],
-                    "date": row[3]
+                    "price": _parse_num(row[0], 0.0),
+                    "change_percent": _parse_num(row[1], 0.0),
+                    "volume": _parse_num(row[2], 0.0),
+                    "date": row[3] or ""
                 }
 
             # Current table exists but has no row for this ticker.
@@ -495,10 +495,10 @@ class WatchlistRepository(BaseRepository):
                 row = cursor.fetchone()
                 if row:
                     return {
-                        "price": row[0],
-                        "change_percent": row[1],
-                        "volume": row[2],
-                        "date": row[3]
+                        "price": _parse_num(row[0], 0.0),
+                        "change_percent": _parse_num(row[1], 0.0),
+                        "volume": _parse_num(row[2], 0.0),
+                        "date": row[3] or ""
                     }
             except Exception:
                 pass

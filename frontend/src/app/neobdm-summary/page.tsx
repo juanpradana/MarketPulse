@@ -80,7 +80,7 @@ export default function NeoBDMSummaryPage() {
         setError(null);
         try {
             const result = await api.runNeoBDMBatchScrape();
-            if (result.status === 'success') {
+            if (result.status === 'processing' || result.status === 'success') {
                 const dateJson = await api.getNeoBDMDates();
                 if (dateJson.dates) setAvailableDates(dateJson.dates);
                 loadData();

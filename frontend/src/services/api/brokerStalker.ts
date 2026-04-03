@@ -196,7 +196,17 @@ export const brokerStalkerApi = {
         brokerCode: string,
         ticker?: string,
         days: number = 7
-    ): Promise<{ status: string; sync_result: unknown }> => {
+    ): Promise<{
+        status: string;
+        sync_result: {
+            broker_code?: string;
+            synced_records?: number;
+            errors?: string[];
+            power_level?: number;
+            status?: string;
+            error?: string;
+        };
+    }> => {
         const response = await fetch(
             `${API_BASE_URL}/api/broker-stalker/sync/${encodeURIComponent(brokerCode)}`,
             {

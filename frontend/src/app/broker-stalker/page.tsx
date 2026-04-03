@@ -57,6 +57,7 @@ export default function BrokerStalkerAdvanced() {
     const [detailLoading, setDetailLoading] = useState(false);
     const [syncing, setSyncing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState<string | null>(null);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [newBrokerCode, setNewBrokerCode] = useState('');
@@ -169,9 +170,22 @@ export default function BrokerStalkerAdvanced() {
         if (!selectedBroker) return;
         setSyncing(true);
         setError(null);
+        setSuccess(null);
         try {
-            await brokerStalkerApi.syncBrokerData(selectedBroker, undefined, 14);
-            await loadBrokers();
+            const result = await brokerStalkerApi.syncBrokerData(selectedBroker, undefined, 14);
+            const syncResult = result.sync_result || {};
+            const topStatus = result.status || syncResult.status || 'success';
+
+            if (topStatus === 'failed') {
+                setError(syncResult.error || 'Broker sync failed');
+            } else if (topStatus === 'partial') {
+                const errCount = Array.isArray(syncResult.errors) ? syncResult.errors.length : 0;
+                setError(`Sync completed with ${errCount} issue(s).`);
+                await loadBrokers();
+            } else {
+                setSuccess(`Sync completed. ${syncResult.synced_records ?? 0} record(s) updated.`);
+                await loadBrokers();
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to sync broker data');
         } finally {
@@ -285,6 +299,12 @@ export default function BrokerStalkerAdvanced() {
                     <div className="flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
                         <AlertTriangle className="w-4 h-4" />
                         {error}
+                    </div>
+                )}
+                {success && (
+                    <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+                        <TrendingUp className="w-4 h-4" />
+                        {success}
                     </div>
                 )}
 

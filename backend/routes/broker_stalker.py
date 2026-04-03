@@ -248,7 +248,7 @@ async def sync_broker_data(broker_code: str, request: SyncRequest):
         )
         
         return {
-            "status": "success",
+            "status": result.get("status", "success") if isinstance(result, dict) else "success",
             "sync_result": result
         }
     except Exception as e:
