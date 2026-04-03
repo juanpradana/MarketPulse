@@ -201,4 +201,5 @@ jspm_packages/
 .vscode-test
 
 # Project Specific
+.worktrees/
 # Add any project-specific patterns below
