@@ -845,32 +845,71 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                                         broksum_data = existing_latest
                                         broksum_used_date = dstr
                                         break
-                                    try:
-                                        async with broksum_rate_limiter:
-                                            raw_latest = await api_client.get_broker_summary(
-                                                ticker, dstr, fast_fail=True
-                                            )
-                                        if raw_latest and (raw_latest.get('buy') or raw_latest.get('sell')):
-                                            async with db_write_lock:
-                                                await asyncio.to_thread(
-                                                    neobdm_repo.save_broker_summary_batch,
-                                                    ticker, dstr,
-                                                    raw_latest.get('buy', []),
-                                                    raw_latest.get('sell', [])
+                                    async def _fetch_latest_with_limiter(fetch_ticker, fetch_date):
+                                        try:
+                                            async with broksum_rate_limiter:
+                                                raw = await api_client.get_broker_summary(
+                                                    fetch_ticker, fetch_date, fast_fail=True
                                                 )
-                                            broksum_data = raw_latest
-                                            broksum_used_date = dstr
-                                            break
-                                    except Exception as e2:
-                                        logger.debug(f"Latest broksum fetch failed for {ticker} on {dstr}: {e2}")
+                                            return raw, None, {
+                                                "ticker": fetch_ticker,
+                                                "date": fetch_date,
+                                                "source": "latest_forward_lookup",
+                                            }
+                                        except Exception as fetch_exc:
+                                            return None, fetch_exc, {
+                                                "ticker": fetch_ticker,
+                                                "date": fetch_date,
+                                                "source": "latest_forward_lookup",
+                                            }
+
+                                    raw_latest = await _fetch_broksum_with_deferred_retry(
+                                        fetch_fn=_fetch_latest_with_limiter,
+                                        ticker=ticker,
+                                        date_str=dstr,
+                                        status=_deep_analysis_status,
+                                        status_lock=status_lock,
+                                    )
+                                    if raw_latest and (raw_latest.get('buy') or raw_latest.get('sell')):
+                                        async with db_write_lock:
+                                            await asyncio.to_thread(
+                                                neobdm_repo.save_broker_summary_batch,
+                                                ticker, dstr,
+                                                raw_latest.get('buy', []),
+                                                raw_latest.get('sell', [])
+                                            )
+                                        broksum_data = raw_latest
+                                        broksum_used_date = dstr
+                                        break
                     except Exception as e:
                         logger.warning(f"Latest broksum lookup failed for {ticker}: {e}")
                     if broksum_data is None and analysis_date:
                         try:
-                            async with broksum_rate_limiter:
-                                raw_broksum = await api_client.get_broker_summary(
-                                    ticker, analysis_date, fast_fail=True
-                                )
+                            async def _fetch_analysis_date_with_limiter(fetch_ticker, fetch_date):
+                                try:
+                                    async with broksum_rate_limiter:
+                                        raw = await api_client.get_broker_summary(
+                                            fetch_ticker, fetch_date, fast_fail=True
+                                        )
+                                    return raw, None, {
+                                        "ticker": fetch_ticker,
+                                        "date": fetch_date,
+                                        "source": "analysis_date",
+                                    }
+                                except Exception as fetch_exc:
+                                    return None, fetch_exc, {
+                                        "ticker": fetch_ticker,
+                                        "date": fetch_date,
+                                        "source": "analysis_date",
+                                    }
+
+                            raw_broksum = await _fetch_broksum_with_deferred_retry(
+                                fetch_fn=_fetch_analysis_date_with_limiter,
+                                ticker=ticker,
+                                date_str=analysis_date,
+                                status=_deep_analysis_status,
+                                status_lock=status_lock,
+                            )
                             if raw_broksum:
                                 async with db_write_lock:
                                     await asyncio.to_thread(
@@ -910,22 +949,40 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                                 recent_dates_fetched.append(date_str)
                                 continue
                             # Fetch from API
-                            try:
-                                async with broksum_rate_limiter:
-                                    raw_bs = await api_client.get_broker_summary(
-                                        ticker, date_str, fast_fail=True
-                                    )
-                                if raw_bs and (raw_bs.get('buy') or raw_bs.get('sell')):
-                                    async with db_write_lock:
-                                        await asyncio.to_thread(
-                                            neobdm_repo.save_broker_summary_batch,
-                                            ticker, date_str,
-                                            raw_bs.get('buy', []),
-                                            raw_bs.get('sell', [])
+                            async def _fetch_recent_with_limiter(fetch_ticker, fetch_date):
+                                try:
+                                    async with broksum_rate_limiter:
+                                        raw = await api_client.get_broker_summary(
+                                            fetch_ticker, fetch_date, fast_fail=True
                                         )
-                                    recent_dates_fetched.append(date_str)
-                            except Exception as e2:
-                                logger.debug(f"Broksum fetch for {ticker} on {date_str}: {e2}")
+                                    return raw, None, {
+                                        "ticker": fetch_ticker,
+                                        "date": fetch_date,
+                                        "source": "recent_dates",
+                                    }
+                                except Exception as fetch_exc:
+                                    return None, fetch_exc, {
+                                        "ticker": fetch_ticker,
+                                        "date": fetch_date,
+                                        "source": "recent_dates",
+                                    }
+
+                            raw_bs = await _fetch_broksum_with_deferred_retry(
+                                fetch_fn=_fetch_recent_with_limiter,
+                                ticker=ticker,
+                                date_str=date_str,
+                                status=_deep_analysis_status,
+                                status_lock=status_lock,
+                            )
+                            if raw_bs and (raw_bs.get('buy') or raw_bs.get('sell')):
+                                async with db_write_lock:
+                                    await asyncio.to_thread(
+                                        neobdm_repo.save_broker_summary_batch,
+                                        ticker, date_str,
+                                        raw_bs.get('buy', []),
+                                        raw_bs.get('sell', [])
+                                    )
+                                recent_dates_fetched.append(date_str)
                             if len(recent_dates_fetched) >= 4:
                                 break
                     except Exception as e:
@@ -963,27 +1020,45 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                                     })
                                     continue
                                 # Fetch from API
-                                try:
-                                    async with broksum_rate_limiter:
-                                        raw_bs = await api_client.get_broker_summary(
-                                            ticker, imp_date, fast_fail=True
-                                        )
-                                    if raw_bs and (raw_bs.get('buy') or raw_bs.get('sell')):
-                                        async with db_write_lock:
-                                            await asyncio.to_thread(
-                                                neobdm_repo.save_broker_summary_batch,
-                                                ticker, imp_date,
-                                                raw_bs.get('buy', []),
-                                                raw_bs.get('sell', []),
+                                async def _fetch_important_with_limiter(fetch_ticker, fetch_date):
+                                    try:
+                                        async with broksum_rate_limiter:
+                                            raw = await api_client.get_broker_summary(
+                                                fetch_ticker, fetch_date, fast_fail=True
                                             )
-                                        important_dates_data.append({
-                                            'date': imp_date,
-                                            'date_type': 'turn_or_peak',
-                                            'buy': raw_bs.get('buy', []),
-                                            'sell': raw_bs.get('sell', []),
-                                        })
-                                except Exception as e2:
-                                    logger.debug(f"Important date broksum for {ticker} on {imp_date}: {e2}")
+                                        return raw, None, {
+                                            "ticker": fetch_ticker,
+                                            "date": fetch_date,
+                                            "source": "important_dates",
+                                        }
+                                    except Exception as fetch_exc:
+                                        return None, fetch_exc, {
+                                            "ticker": fetch_ticker,
+                                            "date": fetch_date,
+                                            "source": "important_dates",
+                                        }
+
+                                raw_bs = await _fetch_broksum_with_deferred_retry(
+                                    fetch_fn=_fetch_important_with_limiter,
+                                    ticker=ticker,
+                                    date_str=imp_date,
+                                    status=_deep_analysis_status,
+                                    status_lock=status_lock,
+                                )
+                                if raw_bs and (raw_bs.get('buy') or raw_bs.get('sell')):
+                                    async with db_write_lock:
+                                        await asyncio.to_thread(
+                                            neobdm_repo.save_broker_summary_batch,
+                                            ticker, imp_date,
+                                            raw_bs.get('buy', []),
+                                            raw_bs.get('sell', []),
+                                        )
+                                    important_dates_data.append({
+                                        'date': imp_date,
+                                        'date_type': 'turn_or_peak',
+                                        'buy': raw_bs.get('buy', []),
+                                        'sell': raw_bs.get('sell', []),
+                                    })
                     except Exception as e:
                         logger.warning(f"Important dates broksum failed for {ticker}: {e}")
 
