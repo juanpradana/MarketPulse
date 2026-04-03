@@ -643,8 +643,15 @@ async def _fetch_broksum_with_deferred_retry(fetch_fn, ticker, date_str, status,
 
         try:
             fetch_result = await fetch_fn(ticker, date_str)
-            if isinstance(fetch_result, tuple) and len(fetch_result) == 3:
-                raw_result, error, context = fetch_result
+            if isinstance(fetch_result, tuple):
+                if len(fetch_result) >= 3:
+                    raw_result, error, context = fetch_result[0], fetch_result[1], fetch_result[2]
+                elif len(fetch_result) == 2:
+                    raw_result, error = fetch_result
+                elif len(fetch_result) == 1:
+                    raw_result = fetch_result[0]
+                else:
+                    raw_result = None
             else:
                 raw_result = fetch_result
         except Exception as fetch_exc:
