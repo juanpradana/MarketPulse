@@ -221,11 +221,12 @@ export interface CombinedAnalysis {
     };
     // DEPRECATED: These fields have been removed from the API to prevent
     // socket hang up errors from massive payloads. Use separate endpoints instead:
-    // - doneDetailApi.getImposterAnalysis() 
+    // - doneDetailApi.getImposterAnalysis()
     // - doneDetailApi.getSpeedAnalysis()
     imposter_analysis?: ImposterAnalysis;
     speed_analysis?: SpeedAnalysis;
     error?: string;
+    message?: string;
 }
 
 export interface BrokerProfile {

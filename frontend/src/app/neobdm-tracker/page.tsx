@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { api, SignalItem } from '@/services/api';
+import type { NeoBDMHistoryPoint, VolumeDailyPoint } from '@/services/api/neobdm';
 import {
     Search,
     TrendingUp,
@@ -28,7 +29,7 @@ import {
     ComposedChart,
     Cell,
     ReferenceDot,
-    Area
+    Area,
 } from 'recharts';
 import { cn } from '@/lib/utils';
 import { cleanTickerSymbol } from '@/lib/string-utils';
@@ -41,7 +42,7 @@ export default function NeoBDMTrackerPage() {
     const [period] = useState('c'); // Locked to Cumulative for background data, but UI focuses on daily flow
     const [limit, setLimit] = useState(30);
     const [loading, setLoading] = useState(false);
-    const [data, setData] = useState<any[]>([]);
+    const [data, setData] = useState<NeoBDMHistoryPoint[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [availableTickers, setAvailableTickers] = useState<string[]>([]);
     const [flowMetric, setFlowMetric] = useState<string>('flow_d0');
@@ -54,9 +55,27 @@ export default function NeoBDMTrackerPage() {
     const [showLegend, setShowLegend] = useState(false);
 
     // Volume Daily State
-    const [volumeData, setVolumeData] = useState<any[]>([]);
+    const [volumeData, setVolumeData] = useState<VolumeDailyPoint[]>([]);
     const [volumeLoading, setVolumeLoading] = useState(false);
     const [volumeError, setVolumeError] = useState<string | null>(null);
+    const [isChartReady, setIsChartReady] = useState(false);
+
+    type ChartPoint = NeoBDMHistoryPoint & {
+        activeFlow: number;
+        date: string;
+        fullDate: string;
+        isCrossing: boolean;
+        isUnusual: boolean;
+        isPinky: boolean;
+        crossingVal: string | null;
+        unusualVal: string | null;
+        pinkyVal: string | null;
+    };
+
+    type VolumeChartPoint = VolumeDailyPoint & {
+        date: string;
+        fullDate: string;
+    };
 
     // Filter tickers based on input
     const filteredTickers = useMemo(() => {
@@ -148,6 +167,10 @@ export default function NeoBDMTrackerPage() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    useEffect(() => {
+        setIsChartReady(true);
+    }, []);
+
     // Sync searchInput with symbol on initial load or symbol change
     useEffect(() => {
         setSearchInput(symbol);
@@ -178,7 +201,7 @@ export default function NeoBDMTrackerPage() {
         try {
             const result = await api.getVolumeDaily(symbol);
             // Reverse to show oldest on left, newest on right (consistent with flow chart)
-            const formattedData = result.data.map(item => ({
+            const formattedData: VolumeChartPoint[] = result.data.map(item => ({
                 ...item,
                 date: new Date(item.trade_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }),
                 fullDate: item.trade_date
@@ -197,21 +220,26 @@ export default function NeoBDMTrackerPage() {
     }, [symbol, method, period, limit, flowMetric]);
 
     // Prepare data for Chart
-    const chartData = useMemo(() => {
-        return data.map(item => ({
-            ...item,
-            activeFlow: item[flowMetric] || item.flow, // Use selected metric
-            date: new Date(item.scraped_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }),
-            fullDate: item.scraped_at,
-            // Add a synthetic field for markers
-            isCrossing: item.crossing && item.crossing.toLowerCase() !== 'x' && item.crossing.toLowerCase() !== 'null',
-            isUnusual: item.unusual && item.unusual.toLowerCase() !== 'x' && item.unusual.toLowerCase() !== 'null',
-            isPinky: item.pinky && item.pinky.toLowerCase() !== 'x' && item.pinky.toLowerCase() !== 'null',
-            // Store raw values for tooltip display
-            crossingVal: item.crossing,
-            unusualVal: item.unusual,
-            pinkyVal: item.pinky
-        })).reverse(); // Reverse to show oldest on left, newest on right
+    const chartData = useMemo<ChartPoint[]>(() => {
+        return data.map(item => {
+            const metricValue = item[flowMetric];
+            const activeFlow = typeof metricValue === 'number' ? metricValue : (item.flow ?? 0);
+
+            return {
+                ...item,
+                activeFlow,
+                date: new Date(item.scraped_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }),
+                fullDate: item.scraped_at,
+                // Add a synthetic field for markers
+                isCrossing: !!(item.crossing && item.crossing.toLowerCase() !== 'x' && item.crossing.toLowerCase() !== 'null'),
+                isUnusual: !!(item.unusual && item.unusual.toLowerCase() !== 'x' && item.unusual.toLowerCase() !== 'null'),
+                isPinky: !!(item.pinky && item.pinky.toLowerCase() !== 'x' && item.pinky.toLowerCase() !== 'null'),
+                // Store raw values for tooltip display
+                crossingVal: item.crossing ?? null,
+                unusualVal: item.unusual ?? null,
+                pinkyVal: item.pinky ?? null,
+            };
+        }).reverse(); // Reverse to show oldest on left, newest on right
     }, [data, flowMetric]);
 
     const getMetricLabel = (m: string) => {
@@ -744,16 +772,16 @@ export default function NeoBDMTrackerPage() {
                                                     )}
 
                                                     {/* Warning Badge - IF APPLICABLE */}
-                                                    {sig.warning_status !== "NO_WARNINGS" && sig.warnings?.length > 0 && (
-                                                        <span className="text-[8px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 font-black uppercase whitespace-nowrap" title={sig.warnings.map((w: any) => w.message).join(', ')}>
-                                                            ⚠ {sig.warnings.length}
+                                                    {sig.warning_status !== "NO_WARNINGS" && (sig.warnings?.length ?? 0) > 0 && (
+                                                        <span className="text-[8px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 font-black uppercase whitespace-nowrap" title={sig.warnings?.map((w) => w.message).join(', ')}>
+                                                            ⚠ {sig.warnings?.length}
                                                         </span>
                                                     )}
 
                                                     {/* Pattern Badge - IF APPLICABLE */}
-                                                    {sig.patterns?.length > 0 && (
-                                                        <span className="text-[8px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 font-black uppercase whitespace-nowrap" title={sig.patterns.map((p: any) => p.display).join(', ')}>
-                                                            {sig.patterns[0].icon} {sig.patterns.length > 1 ? `+${sig.patterns.length - 1}` : ''}
+                                                    {(sig.patterns?.length ?? 0) > 0 && (
+                                                        <span className="text-[8px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 font-black uppercase whitespace-nowrap" title={sig.patterns?.map((p) => p.display).join(', ')}>
+                                                            {sig.patterns?.[0]?.icon} {(sig.patterns?.length ?? 0) > 1 ? `+${(sig.patterns?.length ?? 0) - 1}` : ''}
                                                         </span>
                                                     )}
                                                 </div>
@@ -844,87 +872,91 @@ export default function NeoBDMTrackerPage() {
                         </div>
                     ) : (
                         <div className="flex-1 w-full">
-                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                                <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                                    <defs>
-                                        <linearGradient id="colorFlow" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
-                                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-                                    <XAxis
-                                        dataKey="date"
-                                        stroke="#52525b"
-                                        fontSize={9}
-                                        tickLine={false}
-                                        axisLine={false}
-                                        dy={10}
-                                    />
-                                    <YAxis
-                                        yAxisId="left"
-                                        stroke="#52525b"
-                                        fontSize={9}
-                                        tickLine={false}
-                                        axisLine={false}
-                                        tickFormatter={(val) => val.toLocaleString()}
-                                        domain={['auto', 'auto']}
-                                    />
-                                    <YAxis
-                                        yAxisId="right"
-                                        orientation="right"
-                                        stroke="#52525b"
-                                        fontSize={9}
-                                        tickLine={false}
-                                        axisLine={false}
-                                        tickFormatter={(val) => val.toLocaleString() + 'B'}
-                                    />
-                                    <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#3f3f46', strokeWidth: 1 }} />
+                            {isChartReady ? (
+                                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                                    <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                                        <defs>
+                                            <linearGradient id="colorFlow" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
+                                                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                                        <XAxis
+                                            dataKey="date"
+                                            stroke="#52525b"
+                                            fontSize={9}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            dy={10}
+                                        />
+                                        <YAxis
+                                            yAxisId="left"
+                                            stroke="#52525b"
+                                            fontSize={9}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            tickFormatter={(val) => val.toLocaleString()}
+                                            domain={['auto', 'auto']}
+                                        />
+                                        <YAxis
+                                            yAxisId="right"
+                                            orientation="right"
+                                            stroke="#52525b"
+                                            fontSize={9}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            tickFormatter={(val) => val.toLocaleString() + 'B'}
+                                        />
+                                        <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#3f3f46', strokeWidth: 1 }} />
 
-                                    {/* Bar Chart for Flow */}
-                                    <Bar yAxisId="right" dataKey="activeFlow">
-                                        {chartData.map((entry, index) => (
-                                            <Cell
-                                                key={`cell-${index}`}
-                                                fill={entry.activeFlow >= 0 ? '#10b981' : '#ef4444'}
-                                                fillOpacity={0.3}
-                                                stroke={entry.activeFlow >= 0 ? '#10b981' : '#ef4444'}
-                                                strokeWidth={1}
-                                                strokeOpacity={0.5}
-                                            />
-                                        ))}
-                                    </Bar>
+                                        {/* Bar Chart for Flow */}
+                                        <Bar yAxisId="right" dataKey="activeFlow">
+                                            {chartData.map((entry, index) => (
+                                                <Cell
+                                                    key={`cell-${index}`}
+                                                    fill={entry.activeFlow >= 0 ? '#10b981' : '#ef4444'}
+                                                    fillOpacity={0.3}
+                                                    stroke={entry.activeFlow >= 0 ? '#10b981' : '#ef4444'}
+                                                    strokeWidth={1}
+                                                    strokeOpacity={0.5}
+                                                />
+                                            ))}
+                                        </Bar>
 
-                                    {/* Line Chart for Price */}
-                                    <Line
-                                        yAxisId="left"
-                                        type="monotone"
-                                        dataKey="price"
-                                        stroke="#3b82f6"
-                                        strokeWidth={3}
-                                        dot={(props: any) => {
-                                            const { cx, cy, payload } = props;
-                                            const hasMarker = payload.isCrossing || payload.isUnusual || payload.isPinky;
-                                            if (hasMarker) {
-                                                return (
-                                                    <circle
-                                                        key={`marker-${payload.scraped_at}`}
-                                                        cx={cx}
-                                                        cy={cy}
-                                                        r={6}
-                                                        fill="#ec4899"
-                                                        strokeWidth={2}
-                                                        stroke="#fff"
-                                                        className="animate-pulse cursor-help"
-                                                    />
-                                                );
-                                            }
-                                            return <circle key={`dot-${payload.scraped_at}`} cx={cx} cy={cy} r={2} fill="#3b82f6" stroke="none" />;
-                                        }}
-                                        activeDot={{ r: 6, strokeWidth: 0, fill: '#60a5fa' }}
-                                    />
-                                </ComposedChart>
-                            </ResponsiveContainer>
+                                        {/* Line Chart for Price */}
+                                        <Line
+                                            yAxisId="left"
+                                            type="monotone"
+                                            dataKey="price"
+                                            stroke="#3b82f6"
+                                            strokeWidth={3}
+                                            dot={({ cx, cy, payload }: { cx?: number; cy?: number; payload?: ChartPoint }) => {
+                                                if (cx === undefined || cy === undefined || !payload) return null;
+                                                const hasMarker = payload.isCrossing || payload.isUnusual || payload.isPinky;
+                                                if (hasMarker) {
+                                                    return (
+                                                        <circle
+                                                            key={`marker-${payload.scraped_at}`}
+                                                            cx={cx}
+                                                            cy={cy}
+                                                            r={6}
+                                                            fill="#ec4899"
+                                                            strokeWidth={2}
+                                                            stroke="#fff"
+                                                            className="animate-pulse cursor-help"
+                                                        />
+                                                    );
+                                                }
+                                                return <circle key={`dot-${payload.scraped_at}`} cx={cx} cy={cy} r={2} fill="#3b82f6" stroke="none" />;
+                                            }}
+                                            activeDot={{ r: 6, strokeWidth: 0, fill: '#60a5fa' }}
+                                        />
+                                    </ComposedChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="h-full w-full rounded border border-zinc-800 bg-[#14161a]" />
+                            )}
                         </div>
                     )}
                 </div>
@@ -953,51 +985,56 @@ export default function NeoBDMTrackerPage() {
                         </div>
                     ) : (
                         <div className="flex-1 w-full">
-                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                                <BarChart data={volumeData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-                                    <XAxis
-                                        dataKey="date"
-                                        stroke="#52525b"
-                                        fontSize={9}
-                                        tickLine={false}
-                                        axisLine={false}
-                                        dy={10}
-                                    />
-                                    <YAxis
-                                        stroke="#52525b"
-                                        fontSize={9}
-                                        tickLine={false}
-                                        axisLine={false}
-                                        tickFormatter={(val) => `${(val / 1000000).toFixed(1)}M`}
-                                    />
-                                    <Tooltip
-                                        content={({ active, payload, label }: any) => {
-                                            if (active && payload && payload.length) {
-                                                const item = payload[0].payload;
-                                                return (
-                                                    <div className="bg-[#181a1f] border border-zinc-700 p-3 rounded-md shadow-xl font-mono text-[10px] min-w-[200px]">
-                                                        <p className="text-zinc-400 mb-1 border-b border-zinc-800 pb-1">{item.fullDate}</p>
-                                                        <div className="space-y-1 mt-2">
-                                                            <div className="flex justify-between gap-4">
-                                                                <span className="text-zinc-500">Volume:</span>
-                                                                <span className="text-purple-400 font-bold">{item.volume.toLocaleString()}</span>
-                                                            </div>
-                                                            <div className="flex justify-between gap-4">
-                                                                <span className="text-zinc-500">Close:</span>
-                                                                <span className="text-zinc-300 font-bold">{item.close_price?.toLocaleString()}</span>
+                            {isChartReady ? (
+                                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                                    <BarChart data={volumeData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                                        <XAxis
+                                            dataKey="date"
+                                            stroke="#52525b"
+                                            fontSize={9}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            dy={10}
+                                        />
+                                        <YAxis
+                                            stroke="#52525b"
+                                            fontSize={9}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            tickFormatter={(val) => `${(val / 1000000).toFixed(1)}M`}
+                                        />
+                                        <Tooltip
+                                            content={({ active, payload }) => {
+                                                if (active && payload && payload.length) {
+                                                    const raw = payload[0]?.payload as VolumeChartPoint | undefined;
+                                                    if (!raw) return null;
+                                                    return (
+                                                        <div className="bg-[#181a1f] border border-zinc-700 p-3 rounded-md shadow-xl font-mono text-[10px] min-w-[200px]">
+                                                            <p className="text-zinc-400 mb-1 border-b border-zinc-800 pb-1">{raw.fullDate}</p>
+                                                            <div className="space-y-1 mt-2">
+                                                                <div className="flex justify-between gap-4">
+                                                                    <span className="text-zinc-500">Volume:</span>
+                                                                    <span className="text-purple-400 font-bold">{raw.volume.toLocaleString()}</span>
+                                                                </div>
+                                                                <div className="flex justify-between gap-4">
+                                                                    <span className="text-zinc-500">Close:</span>
+                                                                    <span className="text-zinc-300 font-bold">{raw.close_price?.toLocaleString()}</span>
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                );
-                                            }
-                                            return null;
-                                        }}
-                                        cursor={{ fill: '#3f3f46', fillOpacity: 0.3 }}
-                                    />
-                                    <Bar dataKey="volume" fill="#a855f7" fillOpacity={0.6} radius={[4, 4, 0, 0]} />
-                                </BarChart>
-                            </ResponsiveContainer>
+                                                    );
+                                                }
+                                                return null;
+                                            }}
+                                            cursor={{ fill: '#3f3f46', fillOpacity: 0.3 }}
+                                        />
+                                        <Bar dataKey="volume" fill="#a855f7" fillOpacity={0.6} radius={[4, 4, 0, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="h-full w-full rounded border border-zinc-800 bg-[#14161a]" />
+                            )}
                         </div>
                     )}
                 </div>
@@ -1029,10 +1066,10 @@ export default function NeoBDMTrackerPage() {
                                     <tr key={idx} className="hover:bg-zinc-800/40 transition-colors h-[32px]">
                                         <td className="px-4 py-1.5 border-r border-zinc-800 text-zinc-400 font-mono">{row.scraped_at}</td>
                                         <td className="px-4 py-1.5 border-r border-zinc-800 text-zinc-200 font-bold">{row.price?.toLocaleString()}</td>
-                                        <td className={cn("px-4 py-1.5 border-r border-zinc-800 font-bold", (row.change || 0) >= 0 ? "text-emerald-400" : "text-red-400")}>
+                                        <td className={cn("px-4 py-1.5 border-r border-zinc-800 font-bold", ((typeof row.change === 'number' ? row.change : 0) >= 0) ? "text-emerald-400" : "text-red-400")}>
                                             <div className="flex flex-col leading-tight">
-                                                <span>{(row.change || 0) > 0 && '+'}{row.change?.toLocaleString()}</span>
-                                                <span className="text-[9px] opacity-70">({(row.pct_change || 0) > 0 && '+'}{row.pct_change?.toFixed(2)}%)</span>
+                                                <span>{(typeof row.change === 'number' ? row.change : 0) > 0 && '+'}{typeof row.change === 'number' ? row.change.toLocaleString() : '0'}</span>
+                                                <span className="text-[9px] opacity-70">({(typeof row.pct_change === 'number' ? row.pct_change : 0) > 0 && '+'}{typeof row.pct_change === 'number' ? row.pct_change.toFixed(2) : '0.00'}%)</span>
                                             </div>
                                         </td>
                                         <td className={cn("px-4 py-1.5 border-r border-zinc-800 font-bold", row.activeFlow >= 0 ? "text-emerald-400" : "text-red-400")}>

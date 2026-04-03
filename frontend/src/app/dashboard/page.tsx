@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp, Users, Newspaper, Zap, Calendar as CalendarIcon, Search, HelpCircle } from 'lucide-react';
 import { api } from '@/services/api';
 import { useFilter } from '@/context/filter-context';
-import { Line, LineChart, ResponsiveContainer } from 'recharts';
+import { Line, LineChart } from 'recharts';
 import { DashboardStatsSkeleton, ChartSkeleton, PageSkeleton } from '@/components/shared';
 
 export default function DashboardPage() {
@@ -195,12 +195,14 @@ export default function DashboardPage() {
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:gap-6">
                 <div className="xl:col-span-2 min-h-[300px] lg:min-h-[400px]">
-                    <SentimentChart
-                        key={refreshKey}
-                        ticker={ticker}
-                        startDate={dateRange.start}
-                        endDate={dateRange.end}
-                    />
+                    {typeof window !== 'undefined' && (
+                        <SentimentChart
+                            key={refreshKey}
+                            ticker={ticker}
+                            startDate={dateRange.start}
+                            endDate={dateRange.end}
+                        />
+                    )}
                 </div>
                 <div className="xl:col-span-1 min-h-[200px]">
                     <TickerCloud />
@@ -239,18 +241,16 @@ function MetricCard({ title, value, delta, icon: Icon, trend, sparklineData, too
                     </div>
                     {hasData && chartData.length > 0 && (
                         <div className="h-8 sm:h-10 w-16 sm:w-20 mb-1 opacity-50 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                                <LineChart data={chartData}>
-                                    <Line
-                                        type="monotone"
-                                        dataKey="val"
-                                        stroke={trend === 'up' ? '#10b981' : trend === 'down' ? '#f43f5e' : '#3b82f6'}
-                                        strokeWidth={2}
-                                        dot={false}
-                                        isAnimationActive={true}
-                                    />
-                                </LineChart>
-                            </ResponsiveContainer>
+                            <LineChart width={80} height={40} data={chartData}>
+                                <Line
+                                    type="monotone"
+                                    dataKey="val"
+                                    stroke={trend === 'up' ? '#10b981' : trend === 'down' ? '#f43f5e' : '#3b82f6'}
+                                    strokeWidth={2}
+                                    dot={false}
+                                    isAnimationActive={true}
+                                />
+                            </LineChart>
                         </div>
                     )}
                 </div>

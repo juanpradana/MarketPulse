@@ -39,8 +39,8 @@ interface VisualizationData {
         ma10: Array<{ date: string; value: number | null }>;
         ma20: Array<{ date: string; value: number | null }>;
         markers: {
-            selling_climax: any;
-            volume_spikes: Array<any>;
+            selling_climax: unknown;
+            volume_spikes: Array<unknown>;
         };
     };
     volume_chart: {

@@ -51,6 +51,7 @@ interface ScanStats {
 interface ScanResponse {
     total_signals: number;
     filtered_count: number;
+    total_matches?: number;
     signals: FlowSignal[];
     stats: ScanStats;
     message?: string;
@@ -107,7 +108,7 @@ export default function AnomalyScanTable({ onAddToWatchlist, onAddToInvestigatio
                 setResults(data.signals || []);
                 setStats(data.stats || null);
                 setTotalSignals(data.total_signals || 0);
-                setTotalMatches((data as any).total_matches || data.filtered_count || 0);
+                setTotalMatches(data.total_matches || data.filtered_count || 0);
             }
         } catch (err) {
             console.error(err);

@@ -209,16 +209,16 @@ export default function AdimologyPage() {
     const [totalOffer, setTotalOffer] = useState('');
 
     // History
-    const [history, setHistory] = useState<AdimologyResult[]>([]);
-    const [showHistory, setShowHistory] = useState(true);
-
-    // Load history from localStorage
-    useEffect(() => {
+    const [history, setHistory] = useState<AdimologyResult[]>(() => {
+        if (typeof window === 'undefined') return [];
         try {
             const saved = localStorage.getItem('adimology_history');
-            if (saved) setHistory(JSON.parse(saved));
-        } catch { /* ignore */ }
-    }, []);
+            return saved ? JSON.parse(saved) as AdimologyResult[] : [];
+        } catch {
+            return [];
+        }
+    });
+    const [showHistory, setShowHistory] = useState(true);
 
     // Save history to localStorage
     useEffect(() => {

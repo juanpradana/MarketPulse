@@ -61,6 +61,7 @@ export default function BrokerStalkerAdvanced() {
 
     const [searchTerm, setSearchTerm] = useState('');
     const [newBrokerCode, setNewBrokerCode] = useState('');
+    const [isChartReady, setIsChartReady] = useState(false);
 
     const selectedBrokerData = useMemo(
         () => brokers.find((b) => b.broker_code === selectedBroker) || null,
@@ -112,6 +113,10 @@ export default function BrokerStalkerAdvanced() {
 
     useEffect(() => {
         void loadBrokers();
+    }, []);
+
+    useEffect(() => {
+        setIsChartReady(true);
     }, []);
 
     useEffect(() => {
@@ -474,24 +479,28 @@ export default function BrokerStalkerAdvanced() {
                                 </div>
 
                                 <div className="h-[250px] w-full">
-                                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                                        <BarChart data={chartWithLabel}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff05" />
-                                            <XAxis
-                                                dataKey="day"
-                                                axisLine={false}
-                                                tickLine={false}
-                                                tick={{ fill: '#475569', fontSize: 10, fontWeight: 700 }}
-                                            />
-                                            <YAxis hide />
-                                            <Tooltip
-                                                contentStyle={{ backgroundColor: '#0c0c0e', border: '1px solid #ffffff10', borderRadius: '12px' }}
-                                                itemStyle={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }}
-                                            />
-                                            <Bar dataKey="buy" fill="#10b981" radius={[4, 4, 0, 0]} barSize={12} />
-                                            <Bar dataKey="sell" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={12} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
+                                    {isChartReady ? (
+                                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                                            <BarChart data={chartWithLabel}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff05" />
+                                                <XAxis
+                                                    dataKey="day"
+                                                    axisLine={false}
+                                                    tickLine={false}
+                                                    tick={{ fill: '#475569', fontSize: 10, fontWeight: 700 }}
+                                                />
+                                                <YAxis hide />
+                                                <Tooltip
+                                                    contentStyle={{ backgroundColor: '#0c0c0e', border: '1px solid #ffffff10', borderRadius: '12px' }}
+                                                    itemStyle={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }}
+                                                />
+                                                <Bar dataKey="buy" fill="#10b981" radius={[4, 4, 0, 0]} barSize={12} />
+                                                <Bar dataKey="sell" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={12} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    ) : (
+                                        <div className="h-full w-full rounded border border-white/10 bg-[#141417]" />
+                                    )}
                                 </div>
                             </div>
 
@@ -508,27 +517,31 @@ export default function BrokerStalkerAdvanced() {
                                 </div>
 
                                 <div className="h-[250px] w-full">
-                                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                                        <LineChart data={chartWithLabel}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff05" />
-                                            <XAxis
-                                                dataKey="day"
-                                                axisLine={false}
-                                                tickLine={false}
-                                                tick={{ fill: '#475569', fontSize: 10, fontWeight: 700 }}
-                                            />
-                                            <YAxis hide />
-                                            <Tooltip />
-                                            <Line
-                                                type="monotone"
-                                                dataKey="net"
-                                                stroke="#10b981"
-                                                strokeWidth={3}
-                                                dot={{ r: 4, fill: '#10b981', strokeWidth: 0 }}
-                                                activeDot={{ r: 6, strokeWidth: 0 }}
-                                            />
-                                        </LineChart>
-                                    </ResponsiveContainer>
+                                    {isChartReady ? (
+                                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                                            <LineChart data={chartWithLabel}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff05" />
+                                                <XAxis
+                                                    dataKey="day"
+                                                    axisLine={false}
+                                                    tickLine={false}
+                                                    tick={{ fill: '#475569', fontSize: 10, fontWeight: 700 }}
+                                                />
+                                                <YAxis hide />
+                                                <Tooltip />
+                                                <Line
+                                                    type="monotone"
+                                                    dataKey="net"
+                                                    stroke="#10b981"
+                                                    strokeWidth={3}
+                                                    dot={{ r: 4, fill: '#10b981', strokeWidth: 0 }}
+                                                    activeDot={{ r: 6, strokeWidth: 0 }}
+                                                />
+                                            </LineChart>
+                                        </ResponsiveContainer>
+                                    ) : (
+                                        <div className="h-full w-full rounded border border-white/10 bg-[#141417]" />
+                                    )}
                                 </div>
                             </div>
                         </div>

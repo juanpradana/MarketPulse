@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import {
     doneDetailApi, SavedHistory, DateRangeInfo,
-    ImposterAnalysis, TradeRecord, SpeedAnalysis, CombinedAnalysis, RangeAnalysis
+    ImposterAnalysis, TradeRecord, SpeedAnalysis, CombinedAnalysis, RangeAnalysis,
 } from '@/services/api/doneDetail';
 import { BrokerProfileModal } from './BrokerProfileModal';
 import { ImposterTreeMap } from './ImposterTreeMap';
@@ -194,8 +194,8 @@ export function DoneDetailSection({ ticker, onTickerChange }: DoneDetailSectionP
             const combined = await doneDetailApi.getCombinedAnalysis(selectedTicker, startDate, endDate);
 
             // Check if response contains an error (no synthesis available)
-            if ((combined as any).error === 'no_synthesis') {
-                console.warn('No synthesis data available:', (combined as any).message);
+            if (combined.error === 'no_synthesis') {
+                console.warn('No synthesis data available:', combined.message);
                 // Set empty/default data instead of crashing
                 setCombinedData(null);
                 setAnalysisData(null);
@@ -213,7 +213,7 @@ export function DoneDetailSection({ ticker, onTickerChange }: DoneDetailSectionP
                 // Fallback if backend doesn't return it (shouldn't happen with new backend)
                 const imposter = await doneDetailApi.getImposterAnalysis(selectedTicker, startDate, endDate);
                 // Also check for error in imposter response
-                if (!(imposter as any).error) {
+                if (!imposter.error) {
                     setAnalysisData(imposter);
                 }
             }
@@ -224,7 +224,7 @@ export function DoneDetailSection({ ticker, onTickerChange }: DoneDetailSectionP
                 // Fallback
                 const speed = await doneDetailApi.getSpeedAnalysis(selectedTicker, startDate, endDate);
                 // Also check for error in speed response
-                if (!(speed as any).error) {
+                if (!speed.error) {
                     setSpeedData(speed);
                 }
             }
@@ -413,7 +413,7 @@ export function DoneDetailSection({ ticker, onTickerChange }: DoneDetailSectionP
         selectedSpeedBrokers.forEach(broker => {
             const brokerTimeline = speedData.broker_timelines?.[broker];
             if (brokerTimeline) {
-                brokerTimeline.forEach((point: any) => {
+                brokerTimeline.forEach((point) => {
                     const current = combinedTimelineMap.get(point.time) || 0;
                     combinedTimelineMap.set(point.time, current + point.trades);
                 });
@@ -463,18 +463,27 @@ export function DoneDetailSection({ ticker, onTickerChange }: DoneDetailSectionP
         // Apply sorting
         if (sortConfig) {
             trades.sort((a, b) => {
-                let aVal: any = a[sortConfig.key];
-                let bVal: any = b[sortConfig.key];
+                const getSortableValue = (trade: TradeRecord, key: NonNullable<SortConfig>['key']): string | number => {
+                    const value = trade[key];
+                    if (value === undefined || value === null) return '';
+                    if (typeof value === 'string' || typeof value === 'number') return value;
+                    return String(value);
+                };
 
-                // String comparison for codes
-                if (typeof aVal === 'string') {
+                const aVal = getSortableValue(a, sortConfig.key);
+                const bVal = getSortableValue(b, sortConfig.key);
+
+                // String comparison for codes/time
+                if (typeof aVal === 'string' && typeof bVal === 'string') {
                     return sortConfig.direction === 'asc'
                         ? aVal.localeCompare(bVal)
                         : bVal.localeCompare(aVal);
                 }
 
                 // Number comparison
-                return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+                const aNum = Number(aVal);
+                const bNum = Number(bVal);
+                return sortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
             });
         }
 
@@ -656,7 +665,7 @@ export function DoneDetailSection({ ticker, onTickerChange }: DoneDetailSectionP
                                     className={`px-3 py-1.5 text-xs rounded-t ${activeTab === tab.id
                                         ? 'bg-slate-800 text-teal-400 border border-b-0 border-slate-600'
                                         : 'text-slate-500 hover:text-slate-300'}`}
-                                    onClick={() => setActiveTab(tab.id as any)}
+                                    onClick={() => setActiveTab(tab.id as 'overview' | 'imposter' | 'speed')}
                                 >{tab.label}</button>
                             ))}
 
@@ -750,7 +759,7 @@ export function DoneDetailSection({ ticker, onTickerChange }: DoneDetailSectionP
                                         <div className="text-xs text-slate-400 font-medium">Strong / Possible Impostor</div>
                                     </CardContent>
                                     <div className="absolute bottom-0 left-0 right-0 h-10 opacity-30">
-                                        <MetricSparkline data={imposterSparklineData} dataKey="count" color="#ef4444" height={40} />
+                                        {typeof window !== 'undefined' && <MetricSparkline data={imposterSparklineData} dataKey="count" color="#ef4444" height={40} />}
                                     </div>
                                 </Card>
 
@@ -761,7 +770,7 @@ export function DoneDetailSection({ ticker, onTickerChange }: DoneDetailSectionP
                                         <div className="text-xs text-slate-400 font-medium">Avg Trades/Sec</div>
                                     </CardContent>
                                     <div className="absolute bottom-0 left-0 right-0 h-10 opacity-30">
-                                        <MetricSparkline data={combinedData.timeline} dataKey="trades" color="#14b8a6" height={40} />
+                                        {typeof window !== 'undefined' && <MetricSparkline data={combinedData.timeline} dataKey="trades" color="#14b8a6" height={40} />}
                                     </div>
                                 </Card>
 
@@ -773,7 +782,7 @@ export function DoneDetailSection({ ticker, onTickerChange }: DoneDetailSectionP
                                     </CardContent>
                                     <div className="absolute bottom-0 left-0 right-0 h-10 opacity-30">
                                         {/* Use same timeline but maybe different color or filtered only for bursts? Keeping simple for visual consistency */}
-                                        <MetricSparkline data={combinedData.timeline} dataKey="trades" color="#eab308" height={40} />
+                                        {typeof window !== 'undefined' && <MetricSparkline data={combinedData.timeline} dataKey="trades" color="#eab308" height={40} />}
                                     </div>
                                 </Card>
 
@@ -784,7 +793,7 @@ export function DoneDetailSection({ ticker, onTickerChange }: DoneDetailSectionP
                                         <div className="text-xs text-slate-400 font-medium">Total Trades</div>
                                     </CardContent>
                                     <div className="absolute bottom-0 left-0 right-0 h-10 opacity-20">
-                                        <MetricSparkline data={combinedData.timeline} dataKey="trades" color="#ffffff" height={40} />
+                                        {typeof window !== 'undefined' && <MetricSparkline data={combinedData.timeline} dataKey="trades" color="#ffffff" height={40} />}
                                     </div>
                                 </Card>
                             </div>
@@ -1273,7 +1282,7 @@ export function DoneDetailSection({ ticker, onTickerChange }: DoneDetailSectionP
                                             {selectedSpeedBrokers.length > 0 && !speedData.broker_timelines && (
                                                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/80 z-10 text-center p-4">
                                                     <p className="text-orange-400 font-bold mb-2">⚠️ Detailed Data Missing</p>
-                                                    <p className="text-slate-400 text-sm">To filter by specific brokers, the backend must be updated to return "broker_timelines".</p>
+                                                    <p className="text-slate-400 text-sm">To filter by specific brokers, the backend must be updated to return &quot;broker_timelines&quot;.</p>
                                                     <p className="text-slate-500 text-xs mt-2">Try restarting the backend server.</p>
                                                 </div>
                                             )}
@@ -1402,7 +1411,7 @@ export function DoneDetailSection({ ticker, onTickerChange }: DoneDetailSectionP
                 <div className="flex flex-col items-center justify-center h-48 text-slate-400">
                     <Clipboard className="w-10 h-10 mb-2 text-slate-600" />
                     <p className="text-sm">No Done Detail data yet</p>
-                    <p className="text-xs text-slate-500 mt-1">Click "Paste New" to add data</p>
+                    <p className="text-xs text-slate-500 mt-1">Click &quot;Paste New&quot; to add data</p>
                 </div>
             ) : (
                 <div className="flex flex-col items-center justify-center h-48 text-slate-400">

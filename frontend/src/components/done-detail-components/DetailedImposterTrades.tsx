@@ -148,12 +148,15 @@ export const DetailedImposterTrades: React.FC<DetailedImposterTradesProps> = ({
 
         // Apply sorting
         filtered.sort((a, b) => {
-            let aVal: any = a[sortConfig.key as keyof ImposterTrade];
-            let bVal: any = b[sortConfig.key as keyof ImposterTrade];
+            const getSortableValue = (trade: ImposterTrade, key: SortKey): string | number => {
+                const value = trade[key as keyof ImposterTrade];
+                if (value === undefined || value === null) return '';
+                if (typeof value === 'string' || typeof value === 'number') return value;
+                return String(value);
+            };
 
-            // Handle undefined
-            if (aVal === undefined) aVal = '';
-            if (bVal === undefined) bVal = '';
+            const aVal = getSortableValue(a, sortConfig.key);
+            const bVal = getSortableValue(b, sortConfig.key);
 
             // Number comparison
             if (typeof aVal === 'number' && typeof bVal === 'number') {

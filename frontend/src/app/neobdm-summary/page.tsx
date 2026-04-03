@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '@/services/api';
+import type { NeoBDMHistoryPoint } from '@/services/api/neobdm';
 import { useFilter } from '@/context/filter-context';
 import {
     RefreshCcw,
@@ -20,7 +21,7 @@ export default function NeoBDMSummaryPage() {
     const [period, setPeriod] = useState('d');
     const [loading, setLoading] = useState(false);
     const [scrapedAt, setScrapedAt] = useState<string | null>(null);
-    const [data, setData] = useState<any[]>([]);
+    const [data, setData] = useState<NeoBDMHistoryPoint[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [filters, setFilters] = useState<Record<string, string>>({});
     const [isBatchLoading, setIsBatchLoading] = useState(false);
@@ -184,7 +185,7 @@ export default function NeoBDMSummaryPage() {
 
     const processedData = useMemo(() => {
         // 1. Filter with advanced logic
-        let result = data.filter(row => {
+        const result = data.filter(row => {
             return Object.entries(filters).every(([col, val]) => {
                 if (!val) return true;
                 return evaluateFilter(row[col], val);

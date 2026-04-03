@@ -11,7 +11,6 @@ import {
     Tooltip,
     ResponsiveContainer,
     Cell,
-    LineChart,
     Scatter
 } from 'recharts';
 import { GripVertical, MessageSquare } from 'lucide-react';
@@ -241,6 +240,22 @@ export const SentimentChart = ({ ticker, startDate, endDate }: SentimentChartPro
 
     if (loading) {
         return <div className="h-[600px] w-full flex items-center justify-center text-zinc-500 font-mono animate-pulse">Initializing Market & Sentiment Engines...</div>;
+    }
+
+    if (typeof window === 'undefined') {
+        return (
+            <Card className="w-full bg-zinc-950 border-zinc-900 shadow-2xl overflow-hidden">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-6 px-6">
+                    <CardTitle className="text-sm font-bold text-zinc-100 italic tracking-widest flex items-center gap-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                        CORRELATION ENGINE: <span className="text-blue-500">{ticker}</span>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                    <div className="h-[600px] w-full rounded-lg border border-zinc-800 bg-zinc-900/30" />
+                </CardContent>
+            </Card>
+        );
     }
 
     return (

@@ -84,10 +84,6 @@ export const Sidebar = ({ mobile }: SidebarProps) => {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const pathname = usePathname();
 
-    // Close mobile menu when route changes
-    useEffect(() => {
-        setIsMobileMenuOpen(false);
-    }, [pathname]);
 
     // Prevent body scroll when mobile menu is open
     useEffect(() => {
@@ -151,6 +147,7 @@ export const Sidebar = ({ mobile }: SidebarProps) => {
                                             <Link
                                                 key={item.href}
                                                 href={item.href}
+                                                onClick={() => setIsMobileMenuOpen(false)}
                                                 className={cn(
                                                     "flex items-center gap-3 px-3 py-4 sm:py-3 rounded-lg transition-all whitespace-nowrap border border-transparent min-h-[52px]",
                                                     isActive

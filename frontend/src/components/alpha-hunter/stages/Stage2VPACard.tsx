@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAlphaHunter } from "../AlphaHunterContext";
+import type { Stage2Data } from "../types";
 import StageCard from "./StageCard";
 import Stage2VisualizationPanel from "./Stage2VisualizationPanel";
 import { Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ComposedChart, Bar, CartesianGrid, ReferenceLine } from 'recharts';
@@ -67,7 +68,7 @@ export default function Stage2VPACard({ ticker }: Stage2VPACardProps) {
             setProgress(60);
             await new Promise(r => setTimeout(r, 300));
 
-            const data = await alphaHunterApi.getStage2VPA(ticker);
+            const data = await alphaHunterApi.getStage2VPA(ticker) as Stage2Data;
 
             setCurrentStep("Analyzing pullback health...");
             setProgress(80);

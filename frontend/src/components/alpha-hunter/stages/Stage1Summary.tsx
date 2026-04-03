@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { TrendingUp, Zap, Target, Activity } from "lucide-react";
@@ -15,6 +15,15 @@ export default function Stage1Summary({ ticker }: Stage1SummaryProps) {
     const { investigations } = useAlphaHunter();
     const investigation = investigations[ticker];
     const stage1 = investigation?.stage1;
+    const [now, setNow] = useState(() => Date.now());
+
+    useEffect(() => {
+        const interval = window.setInterval(() => {
+            setNow(Date.now());
+        }, 60000);
+
+        return () => window.clearInterval(interval);
+    }, []);
 
     if (!stage1?.data) {
         return null;
@@ -59,7 +68,7 @@ export default function Stage1Summary({ ticker }: Stage1SummaryProps) {
     };
 
     const getRelativeTime = (isoString: string) => {
-        const diff = Date.now() - new Date(isoString).getTime();
+        const diff = now - new Date(isoString).getTime();
         const minutes = Math.floor(diff / 60000);
         if (minutes < 1) return "Just now";
         if (minutes < 60) return `${minutes}m ago`;

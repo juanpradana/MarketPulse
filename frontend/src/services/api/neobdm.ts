@@ -9,30 +9,163 @@ import { API_BASE_URL, buildParams } from './base';
 // Re-export from brokerFive for backward compatibility
 export { type BrokerFiveItem } from './brokerFive';
 
+export interface NeoBDMHistoryPoint {
+    scraped_at: string;
+    price: number;
+    flow: number;
+    flow_d0?: number;
+    flow_w1?: number;
+    flow_c3?: number;
+    flow_c5?: number;
+    flow_c10?: number;
+    flow_c20?: number;
+    crossing?: string;
+    unusual?: string;
+    pinky?: string;
+    pct_change?: number;
+    [key: string]: unknown;
+}
+
+export interface VolumeDailyPoint {
+    trade_date: string;
+    volume: number;
+    open_price?: number;
+    high_price?: number;
+    low_price?: number;
+    close_price?: number;
+}
+
 export interface NeoBDMData {
     scraped_at: string | null;
-    data: unknown[];
+    data: NeoBDMHistoryPoint[];
 }
 
 export interface NeoBDMHistory {
     symbol: string;
-    history: unknown[];
+    history: NeoBDMHistoryPoint[];
 }
+
+export interface SignalWarning {
+    message: string;
+    [key: string]: unknown;
+}
+
+export interface SignalPattern {
+    icon: string;
+    display: string;
+    [key: string]: unknown;
+}
+
+export type SignalAlignmentStatus =
+    | 'PERFECT_ALIGNMENT'
+    | 'STRONG_ALIGNMENT'
+    | 'PARTIAL_ALIGNMENT'
+    | 'WEAK_ALIGNMENT'
+    | string;
+
+export type SignalMomentumStatus =
+    | 'ACCELERATING'
+    | 'INCREASING'
+    | 'STABLE'
+    | 'WEAKENING'
+    | 'DECLINING'
+    | string;
+
+export type SignalConfluenceStatus =
+    | 'SINGLE_METHOD'
+    | 'DOUBLE_CONFLUENCE'
+    | 'TRIPLE_CONFLUENCE'
+    | string;
+
+export type SignalRelativeStatus =
+    | 'NORMAL'
+    | 'INSUFFICIENT_DATA'
+    | 'MODERATE_ANOMALY'
+    | 'STRONG_ANOMALY'
+    | 'EXTREME_ANOMALY'
+    | string;
+
+export type SignalWarningStatus = 'NO_WARNINGS' | string;
 
 export interface SignalItem {
     symbol: string;
     signal_score: number;
     signal_strength: 'VERY_STRONG' | 'STRONG' | 'MODERATE' | 'WEAK' | 'AVOID';
     momentum_icon: string;
-    momentum_status: string;
+    momentum_status: SignalMomentumStatus;
+    alignment_status?: SignalAlignmentStatus;
+    alignment_label?: string;
     flow: number;
     price: number;
     change: number;
-    [key: string]: any;
+    confluence_status?: SignalConfluenceStatus;
+    confluence_methods?: string[];
+    relative_status?: SignalRelativeStatus;
+    warning_status?: SignalWarningStatus;
+    warnings?: SignalWarning[];
+    patterns?: SignalPattern[];
+    z_score?: number;
+    [key: string]: unknown;
 }
 
 export interface HotSignal {
     signals: SignalItem[];
+}
+
+export interface BrokerSummaryRow {
+    side?: 'BUY' | 'SELL';
+    broker: string;
+    nlot: number;
+    nval: number;
+    avg_price: number;
+}
+
+export interface BrokerJourneyDayData {
+    date: string;
+    buy_lot: number;
+    buy_value: number;
+    buy_avg_price: number;
+    sell_lot: number;
+    sell_value: number;
+    sell_avg_price: number;
+    net_lot: number;
+    net_value: number;
+    cumulative_net_lot: number;
+    cumulative_net_value: number;
+}
+
+export interface BrokerJourneySummary {
+    total_buy_lot: number;
+    total_buy_value: number;
+    total_sell_lot: number;
+    total_sell_value: number;
+    net_lot: number;
+    net_value: number;
+    avg_buy_price: number;
+    avg_sell_price: number;
+    days_active: number;
+    is_accumulating: boolean;
+}
+
+export interface BrokerJourneyBroker {
+    broker_code: string;
+    daily_data: BrokerJourneyDayData[];
+    summary: BrokerJourneySummary;
+}
+
+export interface BrokerJourneyPriceData {
+    date: string;
+    close_price: number;
+}
+
+export interface BrokerJourneyResponse {
+    ticker: string;
+    date_range: {
+        start: string;
+        end: string;
+    };
+    brokers: BrokerJourneyBroker[];
+    price_data: BrokerJourneyPriceData[];
 }
 
 export interface TopHolderItem {
@@ -142,8 +275,8 @@ export const neobdmApi = {
     ): Promise<{
         ticker: string;
         trade_date: string;
-        buy: unknown[];
-        sell: unknown[];
+        buy: BrokerSummaryRow[];
+        sell: BrokerSummaryRow[];
         source: string;
     }> => {
         const params = buildParams({
@@ -180,14 +313,7 @@ export const neobdmApi = {
      */
     getVolumeDaily: async (ticker: string): Promise<{
         ticker: string;
-        data: Array<{
-            trade_date: string;
-            volume: number;
-            open_price?: number;
-            high_price?: number;
-            low_price?: number;
-            close_price?: number;
-        }>;
+        data: VolumeDailyPoint[];
         source: string;
         records_added: number;
     }> => {
@@ -224,38 +350,7 @@ export const neobdmApi = {
         brokers: string[],
         startDate: string,
         endDate: string
-    ): Promise<{
-        ticker: string;
-        date_range: { start: string; end: string };
-        brokers: Array<{
-            broker_code: string;
-            daily_data: Array<{
-                date: string;
-                buy_lot: number;
-                buy_value: number;
-                buy_avg_price: number;
-                sell_lot: number;
-                sell_value: number;
-                sell_avg_price: number;
-                net_lot: number;
-                net_value: number;
-                cumulative_net_lot: number;
-                cumulative_net_value: number;
-            }>;
-            summary: {
-                total_buy_lot: number;
-                total_buy_value: number;
-                total_sell_lot: number;
-                total_sell_value: number;
-                net_lot: number;
-                net_value: number;
-                avg_buy_price: number;
-                avg_sell_price: number;
-                days_active: number;
-                is_accumulating: boolean;
-            };
-        }>;
-    }> => {
+    ): Promise<BrokerJourneyResponse> => {
         const response = await fetch(`${API_BASE_URL}/api/neobdm-broker-summary/journey`, {
             method: 'POST',
             headers: {

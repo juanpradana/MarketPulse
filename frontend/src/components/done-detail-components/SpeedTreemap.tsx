@@ -62,7 +62,7 @@ const CustomizeContent = (props: any) => {
 
     // Determine color based on TPS
     let fillColor = '#334155'; // Default Slate (Low Speed)
-    let textColor = '#fff';
+    const textColor = '#fff';
 
     if (tps && tps >= 15) {
         fillColor = '#dc2626'; // Red-600 (High Speed)

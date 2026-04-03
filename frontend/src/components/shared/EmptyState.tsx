@@ -19,7 +19,7 @@ interface EmptyStateProps {
     };
 }
 
-const iconMap: Record<IconType, React.ComponentType<any>> = {
+const iconMap: Record<IconType, React.ComponentType<{ className?: string }>> = {
     search: Search,
     file: FileQuestion,
     database: Database

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,6 @@ import {
     BarChart3,
     ChevronDown,
     ChevronRight,
-    ChevronLeft,
     Loader2,
     CheckCircle2,
     Lock,
@@ -39,6 +38,15 @@ export default function WatchlistSidebar({ isCollapsed = false, onToggle }: Watc
     } = useAlphaHunter();
 
     const [showCompleted, setShowCompleted] = useState(false);
+    const [now, setNow] = useState(() => Date.now());
+
+    useEffect(() => {
+        const interval = window.setInterval(() => {
+            setNow(Date.now());
+        }, 60000);
+
+        return () => window.clearInterval(interval);
+    }, []);
 
     // Separate active and completed investigations
     const activeInvestigations = Object.values(investigations).filter(inv => !inv.isComplete);
@@ -90,7 +98,7 @@ export default function WatchlistSidebar({ isCollapsed = false, onToggle }: Watc
     };
 
     const getRelativeTime = (isoString: string) => {
-        const diff = Date.now() - new Date(isoString).getTime();
+        const diff = now - new Date(isoString).getTime();
         const minutes = Math.floor(diff / 60000);
         if (minutes < 1) return "Just now";
         if (minutes < 60) return `${minutes}m ago`;

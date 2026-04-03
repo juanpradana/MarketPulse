@@ -5,7 +5,11 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { disclosuresApi, type Disclosure } from '@/services/api/disclosures';
+import {
+    disclosuresApi,
+    type Disclosure,
+    type SyncDisclosuresResult,
+} from '@/services/api/disclosures';
 import { useApi } from './useApi';
 
 /**
@@ -94,7 +98,7 @@ export function useFileOpener() {
  */
 export function useDisclosureSync() {
     const [isSyncing, setIsSyncing] = useState(false);
-    const [result, setResult] = useState<any>(null);
+    const [result, setResult] = useState<SyncDisclosuresResult | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     const sync = useCallback(async () => {

@@ -21,7 +21,13 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api as generalApi } from '@/services/api';
-import { neobdmApi, type BrokerFiveItem } from '@/services/api/neobdm';
+import {
+    neobdmApi,
+    type BrokerFiveItem,
+    type BrokerSummaryRow,
+    type BrokerJourneyResponse,
+    type TopHolderItem,
+} from '@/services/api/neobdm';
 import type { FloorPriceAnalysis } from '@/services/api/neobdm';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -154,8 +160,8 @@ export default function BrokerSummaryPage() {
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
     const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
 
-    const [buyData, setBuyData] = useState<any[]>([]);
-    const [sellData, setSellData] = useState<any[]>([]);
+    const [buyData, setBuyData] = useState<BrokerSummaryRow[]>([]);
+    const [sellData, setSellData] = useState<BrokerSummaryRow[]>([]);
 
     // Broker Journey State
     const [availableDates, setAvailableDates] = useState<string[]>([]);
@@ -163,12 +169,12 @@ export default function BrokerSummaryPage() {
     const [journeyEndDate, setJourneyEndDate] = useState('');
     const [selectedBrokers, setSelectedBrokers] = useState<string[]>([]);
     const [newBrokerCode, setNewBrokerCode] = useState('');
-    const [journeyData, setJourneyData] = useState<any>(null);
+    const [journeyData, setJourneyData] = useState<BrokerJourneyResponse | null>(null);
     const [loadingJourney, setLoadingJourney] = useState(false);
     const [showAllDates, setShowAllDates] = useState(false);
 
     // Top Holders State
-    const [topHolders, setTopHolders] = useState<any[]>([]);
+    const [topHolders, setTopHolders] = useState<TopHolderItem[]>([]);
     const [loadingTopHolders, setLoadingTopHolders] = useState(false);
 
     // Broker 5% State
@@ -1125,15 +1131,15 @@ export default function BrokerSummaryPage() {
                                         const allDates = new Set<string>();
 
                                         // Collect all unique dates from all brokers
-                                        journeyData.brokers.forEach((broker: any) => {
-                                            broker.daily_data.forEach((day: any) => {
+                                        journeyData.brokers.forEach((broker) => {
+                                            broker.daily_data.forEach((day) => {
                                                 allDates.add(day.date);
                                             });
                                         });
 
                                         // Also add dates from price data
                                         if (journeyData.price_data) {
-                                            journeyData.price_data.forEach((p: any) => {
+                                            journeyData.price_data.forEach((p) => {
                                                 allDates.add(p.date);
                                             });
                                         }
@@ -1143,17 +1149,17 @@ export default function BrokerSummaryPage() {
 
                                         // Build shared dataset
                                         return sortedDates.map(date => {
-                                            const dataPoint: any = { date };
+                                            const dataPoint: Record<string, number | string | null> = { date };
 
                                             // For each broker, find the cumulative value on this date
-                                            journeyData.brokers.forEach((broker: any) => {
-                                                const dayData = broker.daily_data.find((d: any) => d.date === date);
+                                            journeyData.brokers.forEach((broker) => {
+                                                const dayData = broker.daily_data.find((d) => d.date === date);
                                                 dataPoint[broker.broker_code] = dayData ? dayData.cumulative_net_value : null;
                                             });
 
                                             // Add price data if available
                                             if (journeyData.price_data) {
-                                                const priceEntry = journeyData.price_data.find((p: any) => p.date === date);
+                                                const priceEntry = journeyData.price_data.find((p) => p.date === date);
                                                 dataPoint['Harga'] = priceEntry ? priceEntry.close_price : null;
                                             }
 
@@ -1189,18 +1195,18 @@ export default function BrokerSummaryPage() {
                                                 borderRadius: '8px',
                                                 fontSize: '12px'
                                             }}
-                                            formatter={(value: any, name?: string) => {
+                                            formatter={(value: number | string | undefined, name?: string) => {
                                                 if (name === 'Harga') {
-                                                    return [value ? `Rp ${value.toLocaleString()}` : '-', 'Harga Saham'];
+                                                    return [typeof value === 'number' ? `Rp ${value.toLocaleString()}` : '-', 'Harga Saham'];
                                                 }
-                                                return [value !== null ? `${value.toFixed(2)}B` : '-', name ?? ''];
+                                                return [typeof value === 'number' ? `${value.toFixed(2)}B` : '-', name ?? ''];
                                             }}
                                         />
                                         <Legend
                                             wrapperStyle={{ fontSize: '12px', fontWeight: 'bold' }}
                                         />
 
-                                        {journeyData.brokers.map((broker: any, idx: number) => {
+                                        {journeyData.brokers.map((broker, idx: number) => {
                                             const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
                                             return (
                                                 <Line
@@ -1258,7 +1264,7 @@ export default function BrokerSummaryPage() {
 
                         {journeyData && journeyData.brokers && journeyData.brokers.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-                                {journeyData.brokers.map((broker: any, idx: number) => {
+                                {journeyData.brokers.map((broker, idx: number) => {
                                     const colors = [
                                         { bg: 'bg-blue-500/5', border: 'border-blue-500/20', text: 'text-blue-400', badge: 'bg-blue-500' },
                                         { bg: 'bg-emerald-500/5', border: 'border-emerald-500/20', text: 'text-emerald-400', badge: 'bg-emerald-500' },

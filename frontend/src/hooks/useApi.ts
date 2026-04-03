@@ -12,7 +12,7 @@ export interface UseApiState<T> {
     error: string | null;
 }
 
-export interface UseApiReturn<T, Args extends any[]> {
+export interface UseApiReturn<T, Args extends unknown[]> {
     data: T | null;
     loading: boolean;
     error: string | null;
@@ -35,7 +35,7 @@ export interface UseApiReturn<T, Args extends any[]> {
  * }, [ticker]);
  * ```
  */
-export function useApi<T, Args extends any[]>(
+export function useApi<T, Args extends unknown[]>(
     apiFunction: (...args: Args) => Promise<T>,
     options?: {
         initialData?: T;

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { api } from '@/services/api';
+import { api, SignalItem } from '@/services/api';
 import { useFilter } from '@/context/filter-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { motion } from 'framer-motion';
@@ -9,7 +9,7 @@ import { cleanTickerSymbol } from '@/lib/string-utils';
 
 export const TickerCloud = () => {
     const { ticker: activeTicker, setTicker } = useFilter();
-    const [signals, setSignals] = useState<any[]>([]);
+    const [signals, setSignals] = useState<SignalItem[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {

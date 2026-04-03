@@ -16,10 +16,10 @@ import {
 
 interface ChartDataPoint {
     date: string;
-    open: number;
-    high: number;
-    low: number;
-    close: number;
+    open?: number;
+    high?: number;
+    low?: number;
+    close?: number;
     volume: number;
 }
 
@@ -89,16 +89,18 @@ export const HybridChart: React.FC<HybridChartProps> = ({ data, supports, resist
         paddedData.push({
             ...lastPoint,
             date: nextDate.toISOString().split('T')[0],
-            close: undefined as any,
-            open: undefined as any,
-            high: undefined as any,
-            low: undefined as any,
+            close: undefined,
+            open: undefined,
+            high: undefined,
+            low: undefined,
             volume: 0
         });
     }
 
-    const minPrice = Math.min(...data.map(d => d.low)) * 0.95;
-    const maxPrice = Math.max(...data.map(d => d.high), ...(tradePlan?.targets || [])) * 1.05;
+    const lowPrices = data.map(d => d.low).filter((v): v is number => typeof v === 'number');
+    const highPrices = data.map(d => d.high).filter((v): v is number => typeof v === 'number');
+    const minPrice = Math.min(...lowPrices) * 0.95;
+    const maxPrice = Math.max(...highPrices, ...(tradePlan?.targets || [])) * 1.05;
 
     return (
         <div className="w-full h-full bg-zinc-900/30 border border-zinc-800 rounded-2xl p-4 flex flex-col relative overflow-hidden">

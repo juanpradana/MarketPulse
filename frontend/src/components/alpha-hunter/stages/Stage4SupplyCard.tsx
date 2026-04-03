@@ -25,6 +25,35 @@ interface Stage4SupplyCardProps {
     ticker: string;
 }
 
+interface Stage4ParseResponse {
+    error?: string;
+    data_available?: boolean;
+    fifty_pct_rule?: {
+        passed: boolean;
+        retail_buy: number;
+        retail_sell: number;
+        depletion_pct: number;
+    };
+    floor_price_rule?: {
+        passed: boolean;
+        floor_price: number;
+        close_price: number;
+        gap_pct: number;
+    };
+    broker_concentration?: {
+        passed: boolean;
+        top_n_concentration: number;
+    };
+    entry_strategy?: {
+        zone_low: number;
+        zone_high: number;
+        stop_loss: number;
+        target_1: number;
+        target_2: number;
+        risk_reward: number;
+    };
+}
+
 export default function Stage4SupplyCard({ ticker }: Stage4SupplyCardProps) {
     const {
         investigations,
@@ -81,7 +110,7 @@ export default function Stage4SupplyCard({ ticker }: Stage4SupplyCardProps) {
         updateStageStatus(ticker, 4, 'loading');
 
         try {
-            const data = await alphaHunterApi.parseDoneDetail(ticker, stage4.manualDataInput);
+            const data = await alphaHunterApi.parseDoneDetail(ticker, stage4.manualDataInput) as Stage4ParseResponse;
 
             if (data.error) {
                 setParseError(data.error);

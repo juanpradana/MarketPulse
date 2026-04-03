@@ -1,7 +1,12 @@
 'use client';
 
 import React from 'react';
-import { DoneDetailSection } from "@/components/done-detail-components/DoneDetailSection";
+import dynamic from 'next/dynamic';
+
+const DoneDetailSection = dynamic(
+    () => import('@/components/done-detail-components/DoneDetailSection').then((mod) => mod.DoneDetailSection),
+    { ssr: false }
+);
 
 export default function DoneDetailPage() {
     return (

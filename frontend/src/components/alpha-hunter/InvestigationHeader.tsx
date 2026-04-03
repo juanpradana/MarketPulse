@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { ArrowLeft, RefreshCw, Settings, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,15 @@ interface InvestigationHeaderProps {
 
 export default function InvestigationHeader({ onRefresh }: InvestigationHeaderProps) {
     const { selectedTicker, investigations, isAtScanner, goToScanner } = useAlphaHunter();
+    const [now, setNow] = useState(() => Date.now());
+
+    useEffect(() => {
+        const interval = window.setInterval(() => {
+            setNow(Date.now());
+        }, 60000);
+
+        return () => window.clearInterval(interval);
+    }, []);
 
     // Scanner view header
     if (isAtScanner) {
@@ -73,7 +82,7 @@ export default function InvestigationHeader({ onRefresh }: InvestigationHeaderPr
 
     const getRelativeTime = (isoString: string | null) => {
         if (!isoString) return "Never";
-        const diff = Date.now() - new Date(isoString).getTime();
+        const diff = now - new Date(isoString).getTime();
         const minutes = Math.floor(diff / 60000);
         if (minutes < 1) return "Just now";
         if (minutes < 60) return `${minutes}m ago`;

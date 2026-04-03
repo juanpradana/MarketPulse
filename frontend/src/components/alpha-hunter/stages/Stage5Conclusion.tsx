@@ -45,8 +45,8 @@ export default function Stage5Conclusion({ ticker }: Stage5ConclusionProps) {
 
         let score = 0;
         let maxScore = 0;
-        let reasons: string[] = [];
-        let warnings: string[] = [];
+        const reasons: string[] = [];
+        const warnings: string[] = [];
 
         // Stage 1: Initial Signal (20 points)
         maxScore += 20;

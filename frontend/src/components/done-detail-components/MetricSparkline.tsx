@@ -1,11 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useId } from 'react';
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface MetricSparklineProps {
-    data: any[];
+    data: object[];
     dataKey: string;
     color?: string; // Hex color
     height?: number;
@@ -13,9 +12,10 @@ interface MetricSparklineProps {
 }
 
 export function MetricSparkline({ data, dataKey, color = '#14b8a6', height = 40, showGradient = true }: MetricSparklineProps) {
-    if (!data || data.length === 0) return null;
+    const reactId = useId();
+    const id = `gradient-${reactId.replace(/:/g, '')}`;
 
-    const id = `gradient-${Math.random().toString(36).substr(2, 9)}`;
+    if (!data || data.length === 0) return null;
 
     return (
         <div style={{ height: height, width: '100%' }}>

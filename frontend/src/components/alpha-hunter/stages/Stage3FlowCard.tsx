@@ -24,6 +24,7 @@ import { useAlphaHunter } from "../AlphaHunterContext";
 import StageCard from "./StageCard";
 import { alphaHunterApi } from "@/services/api/alphaHunter";
 import { neobdmApi } from "@/services/api/neobdm";
+import type { Stage3Data } from "../types";
 
 interface TradingDateInfo {
     date: string;
@@ -64,12 +65,12 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
         }
     };
 
-    if (!investigation) return null;
-
     const canStart = canProceedToStage(ticker, 3);
 
     // Fetch trading dates from backend
     const fetchTradingDates = useCallback(async () => {
+        if (!stage3) return;
+
         setIsLoadingDates(true);
         try {
             const data = await alphaHunterApi.getStage3TradingDates(ticker, 7);
@@ -86,14 +87,17 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
         } finally {
             setIsLoadingDates(false);
         }
-    }, [ticker]);
+    }, [ticker, stage3]);
 
     // Load dates when Stage 2 completes
     useEffect(() => {
-        if (canStart && stage3?.status === 'idle' && tradingDates.length === 0) {
+        if (!investigation || !stage3) return;
+        if (canStart && stage3.status === 'idle' && tradingDates.length === 0) {
             fetchTradingDates();
         }
-    }, [canStart, stage3?.status, tradingDates.length, fetchTradingDates]);
+    }, [investigation, canStart, stage3, tradingDates.length, fetchTradingDates]);
+
+    if (!investigation || !stage3) return null;
 
     // Toggle date selection
     const toggleDateSelection = (date: string) => {
@@ -175,7 +179,16 @@ export default function Stage3FlowCard({ ticker }: Stage3FlowCardProps) {
         setScrapeLog(prev => [...prev, "Running flow analysis..."]);
 
         try {
-            const data = await alphaHunterApi.getFlowAnalysis(ticker, 7) as any;
+            const data = await alphaHunterApi.getFlowAnalysis(ticker, 7) as {
+                data_available?: boolean;
+                floor_price_safe?: { floor_price?: number; current_price?: number; gap_pct?: number };
+                overall_conviction?: string;
+                smart_money_accumulation: Stage3Data['smart_money_accumulation'];
+                retail_capitulation: Stage3Data['retail_capitulation'];
+                smart_vs_retail: Stage3Data['smart_vs_retail'];
+                checks_passed?: number;
+                total_checks?: number;
+            };
 
             if (data.data_available) {
                 updateStage3Data(ticker, {

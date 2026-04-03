@@ -14,7 +14,17 @@ export interface DashboardStats {
     market_mood: string;
     correlation: number;
     news_volume: number;
-    [key: string]: any;
+    price?: number;
+    price_delta?: number;
+    volume?: number;
+    mood_score?: number;
+    mood_label?: string;
+    trends?: {
+        price: number[];
+        mood: number[];
+        correlation: number[];
+        volume: number[];
+    };
 }
 
 export interface SentimentDataPoint {

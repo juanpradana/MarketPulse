@@ -75,26 +75,61 @@ interface Stage2Data {
     verdict: string;
 }
 
+interface Stage2Error {
+    error: string;
+}
+
+function isStage2Data(payload: unknown): payload is Stage2Data {
+    if (!payload || typeof payload !== "object") return false;
+    const candidate = payload as Partial<Stage2Data>;
+    return (
+        typeof candidate.ticker === "string" &&
+        typeof candidate.verdict === "string" &&
+        !!candidate.scores &&
+        typeof candidate.scores === "object" &&
+        typeof (candidate.scores as Partial<ScoreData>).stage2_score === "number" &&
+        !!candidate.pullback &&
+        typeof candidate.pullback === "object" &&
+        Array.isArray((candidate.pullback as Partial<PullbackData>).log)
+    );
+}
 export default function PullbackHealthPanel({ ticker }: PullbackHealthPanelProps) {
     const [data, setData] = useState<Stage2Data | null>(null);
     const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
-        if (ticker) fetchData();
-    }, [ticker]);
+        if (!ticker) return;
 
-    const fetchData = async () => {
-        setIsLoading(true);
-        try {
-            const json = await alphaHunterApi.getStage2VPA(ticker) as Stage2Data;
-            if (!json.error) setData(json);
-        } catch (err) {
-            console.error(err);
-            setData(null);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+        let isActive = true;
+
+        const fetchData = async () => {
+            setIsLoading(true);
+            try {
+                const json = await alphaHunterApi.getStage2VPA(ticker) as Stage2Data | Stage2Error;
+                if (!isActive) return;
+
+                if (isStage2Data(json)) {
+                    setData(json);
+                } else {
+                    setData(null);
+                }
+            } catch (err) {
+                if (!isActive) return;
+                console.error(err);
+                setData(null);
+            } finally {
+                if (isActive) {
+                    setIsLoading(false);
+                }
+            }
+        };
+
+        fetchData();
+
+        return () => {
+            isActive = false;
+        };
+    }, [ticker]);
 
     if (isLoading) return <div className="p-10 text-center animate-pulse text-slate-500">Analyzing Stage 2 VPA...</div>;
     if (!data) return <div className="p-10 text-center text-slate-500">No stage 2 data available.</div>;
