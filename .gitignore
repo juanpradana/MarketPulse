@@ -46,6 +46,15 @@ backend/*.bak
 backend/*.db
 backend/*.sqlite
 backend/*.sqlite3
+backend/*.db-wal
+backend/*.db-shm
+backend/*.db-journal
+backend/*.sqlite-wal
+backend/*.sqlite-shm
+backend/*.sqlite-journal
+backend/*.sqlite3-wal
+backend/*.sqlite3-shm
+backend/*.sqlite3-journal
 backend/downloads/
 backend/chroma_db/
 backend/data/*.json
