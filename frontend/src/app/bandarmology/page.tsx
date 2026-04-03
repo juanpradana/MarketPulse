@@ -852,6 +852,15 @@ export default function BandarmologyPage() {
                         <span className="text-zinc-300">FAIL <span className="font-bold text-red-400">{deepStatus.failed ?? deepStatus.failed_tickers?.length ?? 0}</span></span>
                         <span className="text-zinc-300">FRESH <span className="font-bold text-amber-400">{deepStatus.already_fresh_today ?? deepStatus.fresh_tickers?.length ?? 0}</span></span>
                         <span className="text-zinc-300">WORKER <span className="font-bold text-cyan-300">{deepStatus.concurrency ?? deepConcurrency}</span></span>
+                        {deepStatus.retry_waiting_count !== undefined && (
+                            <span className="text-zinc-300">Retrying: <span className="font-bold text-amber-400">{deepStatus.retry_waiting_count}</span></span>
+                        )}
+                        {deepStatus.non_retryable_skips !== undefined && (
+                            <span className="text-zinc-300">Non-retryable skips: <span className="font-bold text-red-400">{deepStatus.non_retryable_skips.length}</span></span>
+                        )}
+                        {deepStatus.retry_exhausted !== undefined && (
+                            <span className="text-zinc-300">Retry exhausted: <span className="font-bold text-red-400">{deepStatus.retry_exhausted.length}</span></span>
+                        )}
                         {deepStatus.running && deepStatus.active_tickers && deepStatus.active_tickers.length > 0 && (
                             <span className="text-zinc-500">ACTIVE: <span className="text-zinc-300 font-bold">{deepStatus.active_tickers.join(', ')}</span></span>
                         )}
