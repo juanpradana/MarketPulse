@@ -644,32 +644,80 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                                 await asyncio.to_thread(band_repo.save_transaction_chart, ticker, raw_txn)
                             txn_data = await asyncio.to_thread(band_repo.get_transaction_chart, ticker)
 
-                    # 3. Fetch Broker Summary via API (analysis_date + recent days)
+                    # 3. Fetch Broker Summary via API (prefer latest available)
                     broksum_data = None
+                    broksum_used_date = analysis_date
                     try:
-                        async with broksum_rate_limiter:
-                            raw_broksum = await api_client.get_broker_summary(
-                                ticker, analysis_date, fast_fail=True
-                            )
-                        if raw_broksum:
-                            async with db_write_lock:
-                                await asyncio.to_thread(
-                                    neobdm_repo.save_broker_summary_batch,
-                                    ticker, analysis_date,
-                                    raw_broksum.get('buy', []),
-                                    raw_broksum.get('sell', [])
-                                )
-                            broksum_data = raw_broksum
-                        else:
-                            existing = await asyncio.to_thread(
-                                neobdm_repo.get_broker_summary, ticker, analysis_date
-                            )
-                            if existing and (existing.get('buy') or existing.get('sell')):
-                                broksum_data = existing
+                        from datetime import datetime as dt, timedelta
+                        if analysis_date:
+                            analysis_dt = dt.strptime(analysis_date, '%Y-%m-%d').date()
+                            today = dt.now().date()
+                            if today > analysis_dt:
+                                max_forward_days = min(5, (today - analysis_dt).days)
+                                candidate_dates = []
+                                for offset in range(0, max_forward_days + 1):
+                                    d = today - timedelta(days=offset)
+                                    if d.weekday() >= 5:
+                                        continue
+                                    if d <= analysis_dt:
+                                        continue
+                                    candidate_dates.append(d.strftime('%Y-%m-%d'))
+
+                                for dstr in candidate_dates:
+                                    existing_latest = await asyncio.to_thread(
+                                        neobdm_repo.get_broker_summary, ticker, dstr
+                                    )
+                                    if existing_latest and (existing_latest.get('buy') or existing_latest.get('sell')):
+                                        broksum_data = existing_latest
+                                        broksum_used_date = dstr
+                                        break
+                                    try:
+                                        async with broksum_rate_limiter:
+                                            raw_latest = await api_client.get_broker_summary(
+                                                ticker, dstr, fast_fail=True
+                                            )
+                                        if raw_latest and (raw_latest.get('buy') or raw_latest.get('sell')):
+                                            async with db_write_lock:
+                                                await asyncio.to_thread(
+                                                    neobdm_repo.save_broker_summary_batch,
+                                                    ticker, dstr,
+                                                    raw_latest.get('buy', []),
+                                                    raw_latest.get('sell', [])
+                                                )
+                                            broksum_data = raw_latest
+                                            broksum_used_date = dstr
+                                            break
+                                    except Exception as e2:
+                                        logger.debug(f"Latest broksum fetch failed for {ticker} on {dstr}: {e2}")
                     except Exception as e:
-                        logger.warning(f"Broker summary API failed for {ticker}: {e}")
-                        async with status_lock:
-                            _deep_analysis_status["errors"].append(f"{ticker} broksum: {str(e)[:80]}")
+                        logger.warning(f"Latest broksum lookup failed for {ticker}: {e}")
+                    if broksum_data is None and analysis_date:
+                        try:
+                            async with broksum_rate_limiter:
+                                raw_broksum = await api_client.get_broker_summary(
+                                    ticker, analysis_date, fast_fail=True
+                                )
+                            if raw_broksum:
+                                async with db_write_lock:
+                                    await asyncio.to_thread(
+                                        neobdm_repo.save_broker_summary_batch,
+                                        ticker, analysis_date,
+                                        raw_broksum.get('buy', []),
+                                        raw_broksum.get('sell', [])
+                                    )
+                                broksum_data = raw_broksum
+                                broksum_used_date = analysis_date
+                            else:
+                                existing = await asyncio.to_thread(
+                                    neobdm_repo.get_broker_summary, ticker, analysis_date
+                                )
+                                if existing and (existing.get('buy') or existing.get('sell')):
+                                    broksum_data = existing
+                                    broksum_used_date = analysis_date
+                        except Exception as e:
+                            logger.warning(f"Broker summary API failed for {ticker}: {e}")
+                            async with status_lock:
+                                _deep_analysis_status["errors"].append(f"{ticker} broksum: {str(e)[:80]}")
 
                     # 3b. Fetch broker summary for recent trading days (last 4 days before analysis_date)
                     recent_dates_fetched = []
@@ -784,6 +832,10 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                     except Exception as e:
                         logger.warning(f"Previous deep cache fetch failed for {ticker}: {e}")
 
+                    # Log broker summary date used (if any)
+                    if broksum_data and broksum_used_date:
+                        logger.info(f"Broker summary used for {ticker}: {broksum_used_date}")
+
                     # 4. Run deep analysis
                     base_result = base_lookup.get(ticker)
 
@@ -795,7 +847,7 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                             'lastDate': raw_inv.get('lastDate')
                         }
 
-                    broker_summary_meta = {'trade_date': analysis_date} if analysis_date else None
+                    broker_summary_meta = {'trade_date': broksum_used_date} if broksum_used_date else None
 
                     deep_result = await asyncio.to_thread(
                         analyzer.analyze_deep,
@@ -1061,8 +1113,43 @@ async def get_stock_detail(
         # 4. Get transaction chart from DB
         txn_chart = band_repo.get_transaction_chart(ticker_upper)
 
-        # 5. Get broker summary from DB
-        broker_summary = neobdm_repo.get_broker_summary(ticker_upper, actual_date)
+        # 5. Get broker summary from DB (prefer latest available if newer than analysis date)
+        broker_summary = {"buy": [], "sell": []}
+        broker_summary_date = actual_date
+        latest_broksum_date = None
+        try:
+            available_dates = neobdm_repo.get_available_dates_for_ticker(ticker_upper)
+            if available_dates:
+                latest_broksum_date = available_dates[0]
+        except Exception as e:
+            logger.debug(f"Failed to get available broker summary dates for {ticker_upper}: {e}")
+
+        if actual_date:
+            broker_summary = neobdm_repo.get_broker_summary(ticker_upper, actual_date)
+
+        # If no data for analysis date OR a newer date exists, use latest available
+        use_latest = False
+        if latest_broksum_date:
+            if not actual_date or latest_broksum_date > actual_date:
+                use_latest = True
+            elif (not broker_summary.get("buy") and not broker_summary.get("sell")) and latest_broksum_date != actual_date:
+                use_latest = True
+
+        if use_latest and latest_broksum_date:
+            latest_summary = neobdm_repo.get_broker_summary(ticker_upper, latest_broksum_date)
+            if latest_summary.get("buy") or latest_summary.get("sell"):
+                broker_summary = latest_summary
+                broker_summary_date = latest_broksum_date
+
+        # Fallback to recent multiday <= actual_date if still empty
+        if actual_date and (not broker_summary.get("buy") and not broker_summary.get("sell")):
+            recent_broksum = neobdm_repo.get_broker_summary_multiday(ticker_upper, actual_date, days=5)
+            if recent_broksum:
+                broker_summary = {
+                    "buy": recent_broksum[0].get("buy", []),
+                    "sell": recent_broksum[0].get("sell", []),
+                }
+                broker_summary_date = recent_broksum[0].get("date")
 
         # 6. Get floor price analysis (historical)
         floor_analysis = neobdm_repo.get_floor_price_analysis(ticker_upper, days=30)
@@ -1282,6 +1369,90 @@ async def get_stock_detail(
 
         # Broker summary detail
         detail["broker_summary"] = broker_summary if broker_summary else {"buy": [], "sell": []}
+        detail["broker_summary_date"] = broker_summary_date
+
+        # Keep broker-summary-derived metrics synchronized with the broker_summary block shown in response.
+        buy_list = detail["broker_summary"].get("buy", [])
+        sell_list = detail["broker_summary"].get("sell", [])
+        parse_num = analyzer._parse_broksum_num
+
+        # Reset broker-summary-derived fields first to avoid leaking stale deep-cache values.
+        detail["broksum_total_buy_lot"] = 0
+        detail["broksum_total_sell_lot"] = 0
+        detail["broksum_avg_buy_price"] = 0
+        detail["broksum_avg_sell_price"] = 0
+        detail["broksum_top_buyers"] = []
+        detail["broksum_top_sellers"] = []
+        detail["broksum_net_institutional"] = 0
+        detail["broksum_net_foreign"] = 0
+        detail["broksum_floor_price"] = 0
+
+        if buy_list or sell_list:
+            total_buy_lot = sum(parse_num(b.get("nlot", 0)) for b in buy_list)
+            total_sell_lot = sum(parse_num(s.get("nlot", 0)) for s in sell_list)
+            total_buy_val = sum(parse_num(b.get("nval", 0)) for b in buy_list)
+            total_sell_val = sum(parse_num(s.get("nval", 0)) for s in sell_list)
+
+            detail["broksum_total_buy_lot"] = total_buy_lot
+            detail["broksum_total_sell_lot"] = total_sell_lot
+
+            if total_buy_lot > 0 and total_buy_val > 0:
+                detail["broksum_avg_buy_price"] = round((total_buy_val * 1e9) / (total_buy_lot * 100), 0)
+            if total_sell_lot > 0 and total_sell_val > 0:
+                detail["broksum_avg_sell_price"] = round((total_sell_val * 1e9) / (total_sell_lot * 100), 0)
+
+            detail["broksum_top_buyers"] = [
+                {
+                    "broker": b.get("broker", ""),
+                    "nlot": parse_num(b.get("nlot", 0)),
+                    "avg_price": parse_num(b.get("avg_price", b.get("bavg", 0))),
+                }
+                for b in buy_list[:5]
+            ]
+            detail["broksum_top_sellers"] = [
+                {
+                    "broker": s.get("broker", ""),
+                    "nlot": parse_num(s.get("nlot", 0)),
+                    "avg_price": parse_num(s.get("avg_price", s.get("savg", 0))),
+                }
+                for s in sell_list[:5]
+            ]
+
+            inst_net = 0
+            foreign_net = 0
+            for b in buy_list:
+                code = b.get("broker", "")
+                info = analyzer.broker_classes.get(code, {})
+                cats = info.get("categories", [])
+                nlot = parse_num(b.get("nlot", 0))
+                if "institutional" in cats:
+                    inst_net += nlot
+                if "foreign" in cats:
+                    foreign_net += nlot
+            for s in sell_list:
+                code = s.get("broker", "")
+                info = analyzer.broker_classes.get(code, {})
+                cats = info.get("categories", [])
+                nlot = parse_num(s.get("nlot", 0))
+                if "institutional" in cats:
+                    inst_net -= nlot
+                if "foreign" in cats:
+                    foreign_net -= nlot
+
+            detail["broksum_net_institutional"] = inst_net
+            detail["broksum_net_foreign"] = foreign_net
+
+            inst_buy_lot = 0
+            inst_buy_val = 0
+            for b in buy_list:
+                code = b.get("broker", "")
+                info = analyzer.broker_classes.get(code, {})
+                cats = info.get("categories", [])
+                if "institutional" in cats or "foreign" in cats:
+                    inst_buy_lot += parse_num(b.get("nlot", 0))
+                    inst_buy_val += parse_num(b.get("nval", 0))
+            if inst_buy_lot > 0 and inst_buy_val > 0:
+                detail["broksum_floor_price"] = round((inst_buy_val * 1e9) / (inst_buy_lot * 100), 0)
 
         # Floor price analysis
         detail["floor_analysis"] = floor_analysis if floor_analysis else {}

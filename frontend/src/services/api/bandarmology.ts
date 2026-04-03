@@ -347,6 +347,7 @@ export interface StockDetailResponse {
     broksum_net_foreign?: number;
     broksum_top_buyers?: { broker: string; nlot: number; avg_price: number }[];
     broksum_top_sellers?: { broker: string; nlot: number; avg_price: number }[];
+    broker_summary_date?: string;
 
     // Entry/target
     entry_price?: number;

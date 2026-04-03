@@ -104,6 +104,7 @@ function generateChatText(data: StockDetailResponse): string {
     const fmt = (n: number | undefined | null) => n != null ? n.toLocaleString('id-ID') : '—';
     const pct = (n: number | undefined | null) => n != null ? `${n > 0 ? '+' : ''}${n.toFixed(1)}%` : '—';
     const lines: string[] = [];
+    const broksumDate = data.broker_summary_date || data.date;
 
     lines.push(`📊 *BANDARMOLOGY INSIGHT: ${data.ticker}*`);
     lines.push(`📅 ${data.date}`);
@@ -300,7 +301,7 @@ function generateChatText(data: StockDetailResponse): string {
     }
 
     if (data.broker_summary && (data.broker_summary.buy.length > 0 || data.broker_summary.sell.length > 0)) {
-        lines.push(`💹 *BROKER SUMMARY (Today)*`);
+        lines.push(`💹 *BROKER SUMMARY (${broksumDate || 'Latest'})*`);
         if (data.broker_summary.buy.length > 0) {
             lines.push(`  Top Buyers: ${data.broker_summary.buy.slice(0, 5).map(b => `${b.broker}(${fmt(Number(b.nlot))})`).join(', ')}`);
         }
@@ -331,6 +332,8 @@ function generatePdfHtml(data: StockDetailResponse): string {
         const p = (v / max) * 100;
         return p >= 70 ? '#34d399' : p >= 50 ? '#60a5fa' : p >= 30 ? '#fb923c' : '#ef4444';
     };
+
+    const broksumDate = data.broker_summary_date || data.date;
 
     let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bandarmology - ${data.ticker}</title>
 <style>
@@ -490,7 +493,7 @@ function generatePdfHtml(data: StockDetailResponse): string {
 
     // Broker Summary
     if (data.broker_summary && (data.broker_summary.buy.length > 0 || data.broker_summary.sell.length > 0)) {
-        html += `<div class="section"><div class="section-title">Broker Summary (Today)</div><div class="grid2">`;
+        html += `<div class="section"><div class="section-title">Broker Summary (${broksumDate || 'Latest'})</div><div class="grid2">`;
         // Buy side
         html += `<div><div style="font-size:9px;font-weight:700;color:#059669;margin-bottom:4px">NET BUYERS</div><table><thead><tr><th>Broker</th><th style="text-align:right">Net Lot</th><th style="text-align:right">Value</th><th style="text-align:right">Avg</th></tr></thead><tbody>`;
         data.broker_summary.buy.slice(0, 8).forEach(b => {
@@ -628,6 +631,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
+    const broksumLabel = data?.broker_summary_date || data?.date;
 
     const handleDownloadPdf = () => {
         if (!data) return;
@@ -1822,7 +1826,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                             <div className="bg-zinc-800/20 rounded-lg p-4 border border-zinc-700/20">
                                 <h3 className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                                     <DollarSign className="w-3.5 h-3.5 text-yellow-400" />
-                                    Broker Summary (Today)
+                                    Broker Summary{broksumLabel ? ` (${broksumLabel})` : ''}
                                 </h3>
                                 {data.broker_summary && (data.broker_summary.buy.length > 0 || data.broker_summary.sell.length > 0) ? (
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1891,7 +1895,7 @@ export default function StockDetailModal({ ticker, date, onClose }: StockDetailM
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="text-zinc-600 text-[10px] text-center py-4">No broker summary data. Run Deep Analyze to scrape.</div>
+                                    <div className="text-zinc-600 text-[10px] text-center py-4">No broker summary data{broksumLabel ? ` for ${broksumLabel}` : ''}. Run Deep Analyze to scrape.</div>
                                 )}
 
                                 {/* Institutional/Foreign Net */}
