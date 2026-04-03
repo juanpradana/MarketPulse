@@ -92,3 +92,31 @@ async def test_fetch_broksum_with_deferred_retry_supports_two_tuple_contract(mon
 
     assert result is not None
     assert call_counter["count"] == 3
+
+
+@pytest.mark.asyncio
+async def test_fetch_broksum_with_deferred_retry_preserves_passed_empty_status_dict(monkeypatch):
+    async def fake_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr("routes.bandarmology.asyncio.sleep", fake_sleep)
+
+    async def fake_fetch(ticker, date_str):
+        return {"buy": [{"code": "YB", "lot": "100"}], "sell": []}, None, {
+            "ticker": ticker,
+            "date": date_str,
+        }
+
+    status = {}
+    status_ref = status
+
+    result = await _fetch_broksum_with_deferred_retry(
+        fetch_fn=fake_fetch,
+        ticker="BBCA",
+        date_str="2026-04-03",
+        status=status,
+    )
+
+    assert result is not None
+    assert status is status_ref
+    assert status["broksum_fetch_stats"]["success"] == 1

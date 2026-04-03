@@ -599,7 +599,8 @@ async def _fetch_broksum_with_deferred_retry(fetch_fn, ticker, date_str, status,
     delay_seconds = 120
     max_attempts = 10
 
-    status = status or {}
+    if status is None:
+        status = {}
 
     async def _mutate_status(mutator):
         if status_lock:
