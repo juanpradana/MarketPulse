@@ -27,6 +27,17 @@ _deep_analysis_status = {
     "failed_tickers": [],
     "fresh_tickers": [],
     "errors": [],
+    "retry_policy": {"delay_seconds": 120, "max_attempts": 10},
+    "retrying_items": [],
+    "retry_waiting_count": 0,
+    "non_retryable_skips": [],
+    "retry_exhausted": [],
+    "broksum_fetch_stats": {
+        "success": 0,
+        "retried_success": 0,
+        "non_retryable": 0,
+        "exhausted": 0,
+    },
     "profile": "balanced"
 }
 _deep_analysis_status_lock = asyncio.Lock()
@@ -55,6 +66,17 @@ def _build_deep_analysis_status(
         "failed_tickers": [],
         "fresh_tickers": [],
         "errors": [],
+        "retry_policy": {"delay_seconds": 120, "max_attempts": 10},
+        "retrying_items": [],
+        "retry_waiting_count": 0,
+        "non_retryable_skips": [],
+        "retry_exhausted": [],
+        "broksum_fetch_stats": {
+            "success": 0,
+            "retried_success": 0,
+            "non_retryable": 0,
+            "exhausted": 0,
+        },
         "date": analysis_date,
         "concurrency": concurrency,
         "profile": profile,
