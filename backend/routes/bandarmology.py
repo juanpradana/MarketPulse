@@ -564,7 +564,10 @@ def _classify_broksum_outcome(raw_result, error, context) -> str:
             return "success"
 
     reason = str(context.get("reason") or "").lower()
+    source = str(context.get("source") or "").lower()
     if reason in {"no_data", "invalid_ticker", "invalid_date", "invalid_context"}:
+        return "non_retryable"
+    if source in {"explicit_no_data"}:
         return "non_retryable"
 
     text = " ".join([

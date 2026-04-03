@@ -26,3 +26,13 @@ def test_classify_broksum_outcome_retryable_rate_limit_429():
     )
 
     assert result == "retryable"
+
+
+def test_classify_broksum_outcome_non_retryable_explicit_source_precedence():
+    result = _classify_broksum_outcome(
+        raw_result=None,
+        error="429 Too Many Requests",
+        context={"source": "explicit_no_data", "ticker": "BBCA", "date": "2026-04-03"},
+    )
+
+    assert result == "non_retryable"
