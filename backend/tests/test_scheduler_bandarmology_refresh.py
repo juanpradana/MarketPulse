@@ -43,11 +43,13 @@ def test_run_deep_analyze_all_refreshes_summary_and_uses_fresh_rows(monkeypatch)
     fake_routes = types.ModuleType("routes")
     fake_bandarmology = types.ModuleType("routes.bandarmology")
 
-    async def _fake_run_deep_analysis(tickers, actual_date, base_results, concurrency=12):
-        captured["tickers"] = tickers
-        captured["date"] = actual_date
-        captured["base_results"] = base_results
-        captured["concurrency"] = concurrency
+    async def _fake_run_deep_analysis(*args, **kwargs):
+        captured["args_len"] = len(args)
+        captured["kwargs"] = dict(kwargs)
+        captured["tickers"] = args[0]
+        captured["date"] = args[1]
+        captured["base_results"] = args[2]
+        captured["concurrency"] = kwargs.get("concurrency")
 
     fake_bandarmology._run_deep_analysis = _fake_run_deep_analysis
 
@@ -60,6 +62,7 @@ def test_run_deep_analyze_all_refreshes_summary_and_uses_fresh_rows(monkeypatch)
     assert result["total_stocks"] == 2
     assert result["date"] == "2026-02-18"
 
+    assert captured["args_len"] == 3
     assert captured["tickers"] == ["SMGA", "BBCA"]
     assert captured["date"] == "2026-02-18"
     assert len(captured["base_results"]) == 4

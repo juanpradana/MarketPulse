@@ -551,6 +551,12 @@ export interface DeepAnalysisStatus {
     errors: string[];
     date?: string;
     profile?: string;
+    retry_policy?: { delay_seconds: number; max_attempts: number };
+    retrying_items?: Array<{ ticker: string; date: string; attempt: number; next_retry_at?: string }>;
+    retry_waiting_count?: number;
+    non_retryable_skips?: Array<{ ticker: string; date: string; reason: string }>;
+    retry_exhausted?: Array<{ ticker: string; date: string; attempts: number }>;
+    broksum_fetch_stats?: { success: number; retried_success: number; non_retryable: number; exhausted: number };
 }
 
 // Yahoo Finance Enhanced Interfaces for Screening

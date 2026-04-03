@@ -27,6 +27,17 @@ _deep_analysis_status = {
     "failed_tickers": [],
     "fresh_tickers": [],
     "errors": [],
+    "retry_policy": {"delay_seconds": 120, "max_attempts": 10},
+    "retrying_items": [],
+    "retry_waiting_count": 0,
+    "non_retryable_skips": [],
+    "retry_exhausted": [],
+    "broksum_fetch_stats": {
+        "success": 0,
+        "retried_success": 0,
+        "non_retryable": 0,
+        "exhausted": 0,
+    },
     "profile": "balanced"
 }
 _deep_analysis_status_lock = asyncio.Lock()
@@ -55,6 +66,17 @@ def _build_deep_analysis_status(
         "failed_tickers": [],
         "fresh_tickers": [],
         "errors": [],
+        "retry_policy": {"delay_seconds": 120, "max_attempts": 10},
+        "retrying_items": [],
+        "retry_waiting_count": 0,
+        "non_retryable_skips": [],
+        "retry_exhausted": [],
+        "broksum_fetch_stats": {
+            "success": 0,
+            "retried_success": 0,
+            "non_retryable": 0,
+            "exhausted": 0,
+        },
         "date": analysis_date,
         "concurrency": concurrency,
         "profile": profile,
@@ -531,6 +553,158 @@ async def get_deep_analysis_status():
         return copy.deepcopy(_deep_analysis_status)
 
 
+def _classify_broksum_outcome(raw_result, error, context) -> str:
+    """Classify broker summary fetch outcome for retry policy."""
+    context = context or {}
+
+    if isinstance(raw_result, dict):
+        buy = raw_result.get("buy") or []
+        sell = raw_result.get("sell") or []
+        if buy or sell:
+            return "success"
+
+    reason = str(context.get("reason") or "").lower()
+    source = str(context.get("source") or "").lower()
+    if reason in {"no_data", "invalid_ticker", "invalid_date", "invalid_context"}:
+        return "non_retryable"
+    if source in {"explicit_no_data"}:
+        return "non_retryable"
+
+    text = " ".join([
+        str(error or ""),
+        str(context.get("status") or ""),
+        str(context.get("error") or ""),
+        str(context.get("message") or ""),
+    ]).lower()
+
+    retryable_markers = (
+        "429",
+        "too many requests",
+        "cooldown",
+        "timeout",
+        "timed out",
+        "connection",
+        "network",
+        "tempor",
+        "transient",
+    )
+    if any(marker in text for marker in retryable_markers):
+        return "retryable"
+
+    return "non_retryable"
+
+
+async def _fetch_broksum_with_deferred_retry(fetch_fn, ticker, date_str, status, status_lock=None):
+    """Fetch broker summary with fixed deferred retry policy."""
+    delay_seconds = 120
+    max_attempts = 10
+
+    if status is None:
+        status = {}
+
+    async def _mutate_status(mutator):
+        if status_lock:
+            async with status_lock:
+                mutator(status)
+        else:
+            mutator(status)
+
+    def _upsert_retrying_item(s, attempt):
+        retrying = s.setdefault("retrying_items", [])
+        updated = False
+        for item in retrying:
+            if item.get("ticker") == ticker and item.get("date") == date_str:
+                item["attempt"] = attempt
+                item["max_attempts"] = max_attempts
+                item["delay_seconds"] = delay_seconds
+                updated = True
+                break
+        if not updated:
+            retrying.append({
+                "ticker": ticker,
+                "date": date_str,
+                "attempt": attempt,
+                "max_attempts": max_attempts,
+                "delay_seconds": delay_seconds,
+            })
+        s["retry_waiting_count"] = len(retrying)
+
+    def _remove_retrying_item(s):
+        retrying = s.setdefault("retrying_items", [])
+        s["retrying_items"] = [
+            item for item in retrying
+            if not (item.get("ticker") == ticker and item.get("date") == date_str)
+        ]
+        s["retry_waiting_count"] = len(s["retrying_items"])
+
+    for attempt in range(1, max_attempts + 1):
+        raw_result = None
+        error = None
+        context = {}
+
+        try:
+            fetch_result = await fetch_fn(ticker, date_str)
+            if isinstance(fetch_result, tuple):
+                if len(fetch_result) >= 3:
+                    raw_result, error, context = fetch_result[0], fetch_result[1], fetch_result[2]
+                elif len(fetch_result) == 2:
+                    raw_result, error = fetch_result
+                elif len(fetch_result) == 1:
+                    raw_result = fetch_result[0]
+                else:
+                    raw_result = None
+            else:
+                raw_result = fetch_result
+        except Exception as fetch_exc:
+            raw_result = None
+            error = fetch_exc
+            context = {}
+
+        context = context if isinstance(context, dict) else {}
+        outcome = _classify_broksum_outcome(raw_result, error, context)
+
+        if outcome == "success":
+            def _on_success(s):
+                _remove_retrying_item(s)
+                stats = s.setdefault("broksum_fetch_stats", {})
+                key = "success" if attempt == 1 else "retried_success"
+                stats[key] = stats.get(key, 0) + 1
+            await _mutate_status(_on_success)
+            return raw_result
+
+        if outcome == "non_retryable":
+            def _on_non_retryable(s):
+                _remove_retrying_item(s)
+                s.setdefault("non_retryable_skips", []).append({
+                    "ticker": ticker,
+                    "date": date_str,
+                    "attempt": attempt,
+                    "reason": str(error or context.get("reason") or "non_retryable"),
+                })
+                stats = s.setdefault("broksum_fetch_stats", {})
+                stats["non_retryable"] = stats.get("non_retryable", 0) + 1
+            await _mutate_status(_on_non_retryable)
+            return None
+
+        if attempt >= max_attempts:
+            def _on_exhausted(s):
+                _remove_retrying_item(s)
+                s.setdefault("retry_exhausted", []).append({
+                    "ticker": ticker,
+                    "date": date_str,
+                    "attempts": attempt,
+                })
+                stats = s.setdefault("broksum_fetch_stats", {})
+                stats["exhausted"] = stats.get("exhausted", 0) + 1
+            await _mutate_status(_on_exhausted)
+            return None
+
+        await _mutate_status(lambda s: _upsert_retrying_item(s, attempt))
+        await asyncio.sleep(delay_seconds)
+
+    return None
+
+
 async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: list, concurrency: int = 4, force: bool = False):
     """Background task: scrape inventory + txn chart and run deep scoring."""
     logger.info(f"_run_deep_analysis started: {len(tickers)} tickers, force={force}")
@@ -671,32 +845,71 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                                         broksum_data = existing_latest
                                         broksum_used_date = dstr
                                         break
-                                    try:
-                                        async with broksum_rate_limiter:
-                                            raw_latest = await api_client.get_broker_summary(
-                                                ticker, dstr, fast_fail=True
-                                            )
-                                        if raw_latest and (raw_latest.get('buy') or raw_latest.get('sell')):
-                                            async with db_write_lock:
-                                                await asyncio.to_thread(
-                                                    neobdm_repo.save_broker_summary_batch,
-                                                    ticker, dstr,
-                                                    raw_latest.get('buy', []),
-                                                    raw_latest.get('sell', [])
+                                    async def _fetch_latest_with_limiter(fetch_ticker, fetch_date):
+                                        try:
+                                            async with broksum_rate_limiter:
+                                                raw = await api_client.get_broker_summary(
+                                                    fetch_ticker, fetch_date, fast_fail=True
                                                 )
-                                            broksum_data = raw_latest
-                                            broksum_used_date = dstr
-                                            break
-                                    except Exception as e2:
-                                        logger.debug(f"Latest broksum fetch failed for {ticker} on {dstr}: {e2}")
+                                            return raw, None, {
+                                                "ticker": fetch_ticker,
+                                                "date": fetch_date,
+                                                "source": "latest_forward_lookup",
+                                            }
+                                        except Exception as fetch_exc:
+                                            return None, fetch_exc, {
+                                                "ticker": fetch_ticker,
+                                                "date": fetch_date,
+                                                "source": "latest_forward_lookup",
+                                            }
+
+                                    raw_latest = await _fetch_broksum_with_deferred_retry(
+                                        fetch_fn=_fetch_latest_with_limiter,
+                                        ticker=ticker,
+                                        date_str=dstr,
+                                        status=_deep_analysis_status,
+                                        status_lock=status_lock,
+                                    )
+                                    if raw_latest and (raw_latest.get('buy') or raw_latest.get('sell')):
+                                        async with db_write_lock:
+                                            await asyncio.to_thread(
+                                                neobdm_repo.save_broker_summary_batch,
+                                                ticker, dstr,
+                                                raw_latest.get('buy', []),
+                                                raw_latest.get('sell', [])
+                                            )
+                                        broksum_data = raw_latest
+                                        broksum_used_date = dstr
+                                        break
                     except Exception as e:
                         logger.warning(f"Latest broksum lookup failed for {ticker}: {e}")
                     if broksum_data is None and analysis_date:
                         try:
-                            async with broksum_rate_limiter:
-                                raw_broksum = await api_client.get_broker_summary(
-                                    ticker, analysis_date, fast_fail=True
-                                )
+                            async def _fetch_analysis_date_with_limiter(fetch_ticker, fetch_date):
+                                try:
+                                    async with broksum_rate_limiter:
+                                        raw = await api_client.get_broker_summary(
+                                            fetch_ticker, fetch_date, fast_fail=True
+                                        )
+                                    return raw, None, {
+                                        "ticker": fetch_ticker,
+                                        "date": fetch_date,
+                                        "source": "analysis_date",
+                                    }
+                                except Exception as fetch_exc:
+                                    return None, fetch_exc, {
+                                        "ticker": fetch_ticker,
+                                        "date": fetch_date,
+                                        "source": "analysis_date",
+                                    }
+
+                            raw_broksum = await _fetch_broksum_with_deferred_retry(
+                                fetch_fn=_fetch_analysis_date_with_limiter,
+                                ticker=ticker,
+                                date_str=analysis_date,
+                                status=_deep_analysis_status,
+                                status_lock=status_lock,
+                            )
                             if raw_broksum:
                                 async with db_write_lock:
                                     await asyncio.to_thread(
@@ -736,22 +949,40 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                                 recent_dates_fetched.append(date_str)
                                 continue
                             # Fetch from API
-                            try:
-                                async with broksum_rate_limiter:
-                                    raw_bs = await api_client.get_broker_summary(
-                                        ticker, date_str, fast_fail=True
-                                    )
-                                if raw_bs and (raw_bs.get('buy') or raw_bs.get('sell')):
-                                    async with db_write_lock:
-                                        await asyncio.to_thread(
-                                            neobdm_repo.save_broker_summary_batch,
-                                            ticker, date_str,
-                                            raw_bs.get('buy', []),
-                                            raw_bs.get('sell', [])
+                            async def _fetch_recent_with_limiter(fetch_ticker, fetch_date):
+                                try:
+                                    async with broksum_rate_limiter:
+                                        raw = await api_client.get_broker_summary(
+                                            fetch_ticker, fetch_date, fast_fail=True
                                         )
-                                    recent_dates_fetched.append(date_str)
-                            except Exception as e2:
-                                logger.debug(f"Broksum fetch for {ticker} on {date_str}: {e2}")
+                                    return raw, None, {
+                                        "ticker": fetch_ticker,
+                                        "date": fetch_date,
+                                        "source": "recent_dates",
+                                    }
+                                except Exception as fetch_exc:
+                                    return None, fetch_exc, {
+                                        "ticker": fetch_ticker,
+                                        "date": fetch_date,
+                                        "source": "recent_dates",
+                                    }
+
+                            raw_bs = await _fetch_broksum_with_deferred_retry(
+                                fetch_fn=_fetch_recent_with_limiter,
+                                ticker=ticker,
+                                date_str=date_str,
+                                status=_deep_analysis_status,
+                                status_lock=status_lock,
+                            )
+                            if raw_bs and (raw_bs.get('buy') or raw_bs.get('sell')):
+                                async with db_write_lock:
+                                    await asyncio.to_thread(
+                                        neobdm_repo.save_broker_summary_batch,
+                                        ticker, date_str,
+                                        raw_bs.get('buy', []),
+                                        raw_bs.get('sell', [])
+                                    )
+                                recent_dates_fetched.append(date_str)
                             if len(recent_dates_fetched) >= 4:
                                 break
                     except Exception as e:
@@ -789,27 +1020,45 @@ async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: li
                                     })
                                     continue
                                 # Fetch from API
-                                try:
-                                    async with broksum_rate_limiter:
-                                        raw_bs = await api_client.get_broker_summary(
-                                            ticker, imp_date, fast_fail=True
-                                        )
-                                    if raw_bs and (raw_bs.get('buy') or raw_bs.get('sell')):
-                                        async with db_write_lock:
-                                            await asyncio.to_thread(
-                                                neobdm_repo.save_broker_summary_batch,
-                                                ticker, imp_date,
-                                                raw_bs.get('buy', []),
-                                                raw_bs.get('sell', []),
+                                async def _fetch_important_with_limiter(fetch_ticker, fetch_date):
+                                    try:
+                                        async with broksum_rate_limiter:
+                                            raw = await api_client.get_broker_summary(
+                                                fetch_ticker, fetch_date, fast_fail=True
                                             )
-                                        important_dates_data.append({
-                                            'date': imp_date,
-                                            'date_type': 'turn_or_peak',
-                                            'buy': raw_bs.get('buy', []),
-                                            'sell': raw_bs.get('sell', []),
-                                        })
-                                except Exception as e2:
-                                    logger.debug(f"Important date broksum for {ticker} on {imp_date}: {e2}")
+                                        return raw, None, {
+                                            "ticker": fetch_ticker,
+                                            "date": fetch_date,
+                                            "source": "important_dates",
+                                        }
+                                    except Exception as fetch_exc:
+                                        return None, fetch_exc, {
+                                            "ticker": fetch_ticker,
+                                            "date": fetch_date,
+                                            "source": "important_dates",
+                                        }
+
+                                raw_bs = await _fetch_broksum_with_deferred_retry(
+                                    fetch_fn=_fetch_important_with_limiter,
+                                    ticker=ticker,
+                                    date_str=imp_date,
+                                    status=_deep_analysis_status,
+                                    status_lock=status_lock,
+                                )
+                                if raw_bs and (raw_bs.get('buy') or raw_bs.get('sell')):
+                                    async with db_write_lock:
+                                        await asyncio.to_thread(
+                                            neobdm_repo.save_broker_summary_batch,
+                                            ticker, imp_date,
+                                            raw_bs.get('buy', []),
+                                            raw_bs.get('sell', []),
+                                        )
+                                    important_dates_data.append({
+                                        'date': imp_date,
+                                        'date_type': 'turn_or_peak',
+                                        'buy': raw_bs.get('buy', []),
+                                        'sell': raw_bs.get('sell', []),
+                                    })
                     except Exception as e:
                         logger.warning(f"Important dates broksum failed for {ticker}: {e}")
 
