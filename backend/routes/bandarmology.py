@@ -553,6 +553,44 @@ async def get_deep_analysis_status():
         return copy.deepcopy(_deep_analysis_status)
 
 
+def _classify_broksum_outcome(raw_result, error, context) -> str:
+    """Classify broker summary fetch outcome for retry policy."""
+    context = context or {}
+
+    if isinstance(raw_result, dict):
+        buy = raw_result.get("buy") or []
+        sell = raw_result.get("sell") or []
+        if buy or sell:
+            return "success"
+
+    reason = str(context.get("reason") or "").lower()
+    if reason in {"no_data", "invalid_ticker", "invalid_date", "invalid_context"}:
+        return "non_retryable"
+
+    text = " ".join([
+        str(error or ""),
+        str(context.get("status") or ""),
+        str(context.get("error") or ""),
+        str(context.get("message") or ""),
+    ]).lower()
+
+    retryable_markers = (
+        "429",
+        "too many requests",
+        "cooldown",
+        "timeout",
+        "timed out",
+        "connection",
+        "network",
+        "tempor",
+        "transient",
+    )
+    if any(marker in text for marker in retryable_markers):
+        return "retryable"
+
+    return "non_retryable"
+
+
 async def _run_deep_analysis(tickers: list, analysis_date: str, base_results: list, concurrency: int = 4, force: bool = False):
     """Background task: scrape inventory + txn chart and run deep scoring."""
     logger.info(f"_run_deep_analysis started: {len(tickers)} tickers, force={force}")
