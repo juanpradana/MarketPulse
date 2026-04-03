@@ -660,6 +660,7 @@ async def _fetch_broksum_with_deferred_retry(fetch_fn, ticker, date_str, status,
             error = fetch_exc
             context = {}
 
+        context = context if isinstance(context, dict) else {}
         outcome = _classify_broksum_outcome(raw_result, error, context)
 
         if outcome == "success":
